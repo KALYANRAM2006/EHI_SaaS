@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { generateAISummary, providers } from '../data/sampleData'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -1190,142 +1191,225 @@ export default function Dashboard() {
         )}
 
         {/* ===== INSIGHTS VIEW ===== */}
-        {activeView === 'insights' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Lightbulb className="w-5 h-5 text-amber-500" />
-                  <h2 className="text-2xl font-bold text-gray-900">AI-Generated Health Insights</h2>
-                </div>
-                <p className="text-gray-500">Personalized recommendations based on your health data</p>
-              </div>
-            </div>
+        {activeView === 'insights' && (() => {
+          // Encounter frequency data for bar chart
+          const encounterFrequency = (() => {
+            const freq = {}
+            stats.encounters.forEach(e => {
+              const type = e.encType || 'Other'
+              freq[type] = (freq[type] || 0) + 1
+            })
+            return Object.entries(freq).map(([type, count]) => ({ type, count }))
+          })()
 
-            {/* AI Insights Card */}
-            <div className="bg-white rounded-2xl shadow-lg border border-purple-100 overflow-hidden">
-              <div className="p-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Key AI Insights</h3>
-                    <p className="text-sm text-gray-500">{healthInsights.length} insights generated</p>
-                  </div>
+          // Lab results over time for trend charts
+          const labTrendData = stats.results
+            .filter(r => r.resultTime)
+            .sort((a, b) => new Date(a.resultTime) - new Date(b.resultTime))
+            .map(r => ({
+              date: new Date(r.resultTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              component: r.component,
+              value: parseFloat(r.value) || 0,
+              flag: r.flag,
+            }))
+
+          // Health score calculation
+          const healthScore = Math.min(100, Math.max(0, 100 - stats.abnormalResults.length * 10))
+          const medAdherence = stats.medications.length > 0 ? 85 : 0
+          const vitalScore = stats.results.length > 0 ? Math.round((1 - stats.abnormalResults.length / Math.max(1, stats.results.length)) * 100) : 72
+          const preventiveScore = stats.encounters.length > 2 ? 90 : stats.encounters.length * 30
+          const conditionScore = stats.conditions.filter(c => c.status === 'Active').length > 0 ? 65 : 80
+
+          return (
+          <div className="space-y-6">
+            {/* AI Insights Card — Figma: purple border card */}
+            <div className="rounded-2xl border-2 border-purple-200 bg-purple-50/50 overflow-hidden">
+              <div className="p-6 border-b border-purple-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <Lightbulb className="w-5 h-5 text-purple-600" />
+                  <h2 className="text-lg font-bold text-gray-900">AI-Generated Health Insights</h2>
                 </div>
+                <p className="text-sm text-gray-500">Personalized recommendations based on your health data</p>
               </div>
               <div className="p-6 space-y-4">
                 {healthInsights.map((insight, index) => {
                   const Icon = insight.icon
-                  const severityStyles = {
-                    warning: 'bg-orange-50 border-orange-200',
-                    positive: 'bg-green-50 border-green-200',
-                    info: 'bg-blue-50 border-blue-200',
-                  }
-                  const badgeStyles = {
-                    warning: 'bg-orange-100 text-orange-700',
-                    positive: 'bg-green-100 text-green-700',
-                    info: 'bg-blue-100 text-blue-700',
-                  }
+                  const badgeBorder = insight.severity === 'positive' ? 'border-green-300 text-green-700' : insight.severity === 'warning' ? 'border-orange-300 text-orange-700' : 'border-blue-300 text-blue-700'
                   return (
-                    <div key={index} className={`rounded-xl border p-4 transition-all hover:shadow-md ${severityStyles[insight.severity] || 'border-gray-200 bg-white'}`}>
-                      <div className="flex items-start gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${insight.severity === 'warning' ? 'bg-orange-100' : insight.severity === 'positive' ? 'bg-green-100' : 'bg-blue-100'}`}>
-                          <Icon className={`w-5 h-5 ${insight.iconColor}`} />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold text-gray-900">{insight.title}</h4>
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${badgeStyles[insight.severity] || 'bg-gray-100 text-gray-600'}`}>
-                              {insight.severity === 'warning' ? '⚠️ Warning' : insight.severity === 'positive' ? '✅ Positive' : 'ℹ️ Info'}
-                            </span>
-                          </div>
-                          <p className="text-gray-600 mt-1 text-sm">{insight.description}</p>
-                        </div>
+                    <div key={index} className="flex items-start gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-all">
+                      <div className={`mt-1 ${insight.iconColor}`}>
+                        <Icon className="w-6 h-6" />
                       </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold mb-1">{insight.title}</h4>
+                        <p className="text-sm text-gray-600">{insight.description}</p>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${badgeBorder} whitespace-nowrap`}>
+                        {insight.severity}
+                      </span>
                     </div>
                   )
                 })}
               </div>
             </div>
 
-            {/* Health Score Card */}
+            {/* Charts — 2×2 grid matching Figma */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-2xl shadow-lg p-8">
-                <h3 className="text-lg font-bold text-gray-900 mb-6">Health Score</h3>
+              {/* Healthcare Visit Distribution (Bar Chart) */}
+              {encounterFrequency.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+                  <div className="p-6 border-b border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-900">Healthcare Visit Distribution</h3>
+                    <p className="text-sm text-gray-500">Breakdown of encounter types</p>
+                  </div>
+                  <div className="p-6">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={encounterFrequency}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="type" tick={{ fontSize: 12 }} />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="count" fill="#10b981" name="Number of Visits" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Lab Results Trend */}
+              {labTrendData.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+                  <div className="p-6 border-b border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-900">Lab Results Overview</h3>
+                    <p className="text-sm text-gray-500">Recent lab values plotted over time</p>
+                  </div>
+                  <div className="p-6">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={labTrendData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="component" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="value" name="Value" radius={[4, 4, 0, 0]}>
+                          {labTrendData.map((entry, i) => (
+                            <Cell key={i} fill={entry.flag === 'Normal' ? '#10b981' : '#ef4444'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-600">
+                        <strong>Note:</strong> Green bars indicate normal results. Red bars indicate abnormal values requiring attention.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Condition Severity Breakdown */}
+              {stats.conditions.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+                  <div className="p-6 border-b border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-900">Condition Status Overview</h3>
+                    <p className="text-sm text-gray-500">Active vs resolved conditions</p>
+                  </div>
+                  <div className="p-6">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={stats.conditions.map(c => ({ name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name, severity: c.severity === 'Moderate' ? 2 : c.severity === 'Mild' ? 1 : 3 }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" height={60} />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="severity" name="Severity Level" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Medication Timeline */}
+              {stats.medications.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+                  <div className="p-6 border-b border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-900">Medication Timeline</h3>
+                    <p className="text-sm text-gray-500">When medications were started</p>
+                  </div>
+                  <div className="p-6">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={stats.medications.map(m => ({
+                        name: m.name.split(' ')[0],
+                        months: Math.max(1, Math.round((Date.now() - new Date(m.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30))),
+                      })).sort((a, b) => b.months - a.months)} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="months" name="Months on Medication" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Health Score Analysis — Figma: blue border card */}
+            <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/50 overflow-hidden">
+              <div className="p-6 border-b border-blue-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <Activity className="w-5 h-5 text-blue-600" />
+                  <h2 className="text-lg font-bold text-gray-900">Health Score Analysis</h2>
+                </div>
+                <p className="text-sm text-gray-500">AI-calculated overall health assessment</p>
+              </div>
+              <div className="p-6">
                 <div className="flex items-center justify-center mb-6">
-                  <div className="relative w-48 h-48">
-                    <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 120 120">
-                      <circle cx="60" cy="60" r="50" fill="none" stroke="#e5e7eb" strokeWidth="10" />
-                      <circle cx="60" cy="60" r="50" fill="none" stroke="url(#scoreGrad)" strokeWidth="10" strokeLinecap="round"
-                        strokeDasharray={`${(Math.min(100, Math.max(0, 100 - stats.abnormalResults.length * 10)) / 100) * 314} 314`}
+                  <div className="relative w-40 h-40">
+                    <svg className="transform -rotate-90 w-40 h-40">
+                      <circle cx="80" cy="80" r="70" stroke="#e5e7eb" strokeWidth="12" fill="transparent" />
+                      <circle cx="80" cy="80" r="70" stroke="#3b82f6" strokeWidth="12" fill="transparent"
+                        strokeDasharray={`${2 * Math.PI * 70}`}
+                        strokeDashoffset={`${2 * Math.PI * 70 * (1 - healthScore / 100)}`}
+                        strokeLinecap="round"
                       />
-                      <defs>
-                        <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#3b82f6" />
-                          <stop offset="100%" stopColor="#8b5cf6" />
-                        </linearGradient>
-                      </defs>
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-4xl font-bold text-gray-900">{Math.min(100, Math.max(0, 100 - stats.abnormalResults.length * 10))}</span>
-                      <span className="text-sm text-gray-500">/100</span>
+                      <span className="text-4xl font-bold text-blue-600">{healthScore}</span>
+                      <span className="text-sm text-gray-600">out of 100</span>
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Medication Adherence', value: stats.medications.length > 0 ? 85 : 0, color: 'text-purple-600' },
-                    { label: 'Lab Values', value: stats.results.length > 0 ? Math.round((1 - stats.abnormalResults.length / Math.max(1, stats.results.length)) * 100) : 0, color: 'text-green-600' },
-                    { label: 'Care Continuity', value: stats.encounters.length > 2 ? 90 : stats.encounters.length * 30, color: 'text-blue-600' },
-                    { label: 'Preventive Care', value: stats.orders.filter(o => o.orderType === 'Immunization').length > 0 ? 75 : 40, color: 'text-orange-600' },
-                  ].map((item, i) => (
-                    <div key={i} className="bg-gray-50 rounded-xl p-3">
-                      <p className="text-xs text-gray-500 mb-1">{item.label}</p>
-                      <p className={`text-lg font-bold ${item.color}`}>{item.value}%</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Lab Values Summary */}
-              <div className="bg-white rounded-2xl shadow-lg p-8">
-                <h3 className="text-lg font-bold text-gray-900 mb-6">Lab Values Summary</h3>
-                {stats.results.length > 0 ? (
-                  <div className="space-y-4">
-                    {stats.results.filter(r => r.numValue != null).slice(0, 6).map((result, i) => {
-                      const pct = result.refHigh && result.refLow ? Math.min(100, Math.max(0, ((result.numValue - result.refLow) / (result.refHigh - result.refLow)) * 100)) : 50
-                      const isNormal = result.flag === 'Normal'
-                      return (
-                        <div key={i}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium text-gray-700">{result.component}</span>
-                            <span className={`text-sm font-bold ${isNormal ? 'text-green-600' : 'text-red-600'}`}>
-                              {result.value} {result.unit}
-                            </span>
-                          </div>
-                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${isNormal ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-red-400 to-red-500'}`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between mt-0.5">
-                            <span className="text-xs text-gray-400">{result.refLow}</span>
-                            <span className="text-xs text-gray-400">{result.refHigh}</span>
-                          </div>
-                        </div>
-                      )
-                    })}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-white rounded-lg">
+                    <p className="text-2xl font-bold text-green-600">{medAdherence}</p>
+                    <p className="text-xs text-gray-600">Medication Adherence</p>
                   </div>
-                ) : (
-                  <p className="text-gray-500 text-center py-8">No lab results available</p>
-                )}
+                  <div className="text-center p-3 bg-white rounded-lg">
+                    <p className="text-2xl font-bold text-blue-600">{vitalScore}</p>
+                    <p className="text-xs text-gray-600">Vital Signs</p>
+                  </div>
+                  <div className="text-center p-3 bg-white rounded-lg">
+                    <p className="text-2xl font-bold text-purple-600">{preventiveScore}</p>
+                    <p className="text-xs text-gray-600">Preventive Care</p>
+                  </div>
+                  <div className="text-center p-3 bg-white rounded-lg">
+                    <p className="text-2xl font-bold text-orange-600">{conditionScore}</p>
+                    <p className="text-xs text-gray-600">Condition Management</p>
+                  </div>
+                </div>
+
+                <p className="text-sm text-gray-600 mt-4 text-center">
+                  Your health score is calculated based on vital trends, medication adherence, preventive care compliance, and condition management.
+                </p>
               </div>
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* ===== FALLBACK PLACEHOLDER VIEWS ===== */}
         {['labs', 'encounters', 'procedures', 'trends'].includes(activeView) && (
