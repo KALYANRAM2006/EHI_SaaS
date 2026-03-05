@@ -143,7 +143,7 @@ export default function Dashboard() {
 
   if (!stats) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
           <svg className="animate-spin w-12 h-12 mx-auto text-primary-600 mb-4" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
@@ -156,15 +156,15 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gray-50/50">
       {/* Top Navigation Bar */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <header className="bg-white/70 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Left: Logo */}
             <div className="flex items-center space-x-8">
               <div className="flex items-center space-x-2 cursor-pointer" onClick={() => navigate('/')}>
-                <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-purple-500 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-lg flex items-center justify-center">
                   <FileText className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-lg font-bold text-gray-900">HealthLens</span>
@@ -235,7 +235,7 @@ export default function Dashboard() {
             <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center space-x-2">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-primary-600 rounded-lg flex items-center justify-center">
+                  <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-lg flex items-center justify-center">
                     <Sparkles className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-gray-900">AI Health Summary</h3>
@@ -263,7 +263,7 @@ export default function Dashboard() {
                   </p>
                   {/* Show only the Overall Health Story section as preview */}
                   {aiSummary.sections.filter(s => s.id === 'overall').map(section => (
-                    <div key={section.id} className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-5 border border-blue-100">
+                    <div key={section.id} className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-5 border border-teal-100">
                       <div className="flex items-center space-x-2 mb-3">
                         <span className="text-xl">{section.icon}</span>
                         <h4 className="text-lg font-semibold text-gray-900">{section.title}</h4>
@@ -390,13 +390,13 @@ export default function Dashboard() {
 
             {/* Meta info */}
             <div className="bg-white rounded-xl shadow-sm p-4 flex items-center space-x-3 text-sm text-gray-600">
-              <Sparkles className="w-5 h-5 text-purple-500" />
+              <Sparkles className="w-5 h-5 text-teal-500" />
               <span>Generated using AI • Based on {aiSummary.basedOn}</span>
             </div>
 
             {/* AI Summary Sections - expandable cards */}
             {aiSummary.sections.map((section) => (
-              <div key={section.id} className={`bg-white rounded-2xl shadow-lg overflow-hidden ${section.id === 'overall' ? 'ring-2 ring-blue-100' : ''}`}>
+              <div key={section.id} className={`bg-white rounded-2xl shadow-lg overflow-hidden ${section.id === 'overall' ? 'ring-2 ring-teal-100' : ''}`}>
                 <button
                   onClick={() => toggleSection(section.id)}
                   className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
@@ -412,7 +412,7 @@ export default function Dashboard() {
                   )}
                 </button>
                 {expandedSections[section.id] && (
-                  <div className={`px-6 pb-6 ${section.id === 'overall' ? 'bg-gradient-to-r from-blue-50/50 to-purple-50/50' : ''}`}>
+                  <div className={`px-6 pb-6 ${section.id === 'overall' ? 'bg-gradient-to-r from-teal-50/50 to-cyan-50/50' : ''}`}>
                     <div className="text-gray-700 leading-relaxed space-y-3 pl-11">
                       {section.content.split('\n\n').map((paragraph, i) => (
                         <div key={i}>
@@ -589,8 +589,8 @@ export default function Dashboard() {
                     <div key={index} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start space-x-3">
-                          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Pill className="w-5 h-5 text-purple-600" />
+                          <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Pill className="w-5 h-5 text-teal-600" />
                           </div>
                           <div>
                             <p className="font-semibold text-gray-900">{med.name}</p>

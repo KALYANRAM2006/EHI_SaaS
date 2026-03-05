@@ -92,8 +92,8 @@ export default function FileUpload({ onComplete }) {
     if (lower.endsWith('.xml'))                      return { type: 'C-CDA / XML', color: 'text-blue-600 bg-blue-50' }
     if (lower.endsWith('.json'))                      return { type: 'FHIR JSON',   color: 'text-green-600 bg-green-50' }
     if (lower.endsWith('.ndjson') || lower.endsWith('.jsonl')) return { type: 'NDJSON', color: 'text-green-600 bg-green-50' }
-    if (lower.endsWith('.tsv'))                       return { type: 'TSV',          color: 'text-purple-600 bg-purple-50' }
-    if (lower.endsWith('.csv'))                       return { type: 'CSV',          color: 'text-purple-600 bg-purple-50' }
+    if (lower.endsWith('.tsv'))                       return { type: 'TSV',          color: 'text-teal-600 bg-teal-50' }
+    if (lower.endsWith('.csv'))                       return { type: 'CSV',          color: 'text-teal-600 bg-teal-50' }
     if (lower.endsWith('.zip'))                       return { type: 'Archive',      color: 'text-orange-600 bg-orange-50' }
     if (lower.endsWith('.pdf'))                       return { type: 'PDF',          color: 'text-red-600 bg-red-50' }
     if (lower.endsWith('.rtf') || lower.endsWith('.doc') || lower.endsWith('.docx')) return { type: 'Document', color: 'text-red-600 bg-red-50' }
