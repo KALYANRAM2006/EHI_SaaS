@@ -15,12 +15,25 @@ import { useData } from '../context/DataContext'
 
 export default function LandingPage() {
   const navigate = useNavigate()
-  const { uploadedFiles } = useData()
+  const { uploadedFiles, loadSampleData } = useData()
   const [showUpload, setShowUpload] = useState(false)
+  const [loadingSample, setLoadingSample] = useState(false)
 
   const handleFilesUploaded = () => {
     // Navigate to dashboard after files are uploaded
     navigate('/dashboard')
+  }
+
+  const handleTrySampleData = () => {
+    setLoadingSample(true)
+    // Brief delay so user sees the loading state
+    setTimeout(() => {
+      const success = loadSampleData()
+      if (success) {
+        navigate('/dashboard')
+      }
+      setLoadingSample(false)
+    }, 600)
   }
 
   const features = [
@@ -119,8 +132,25 @@ export default function LandingPage() {
                     <Upload className="w-5 h-5" />
                     <span>Browse Files</span>
                   </button>
-                  <button className="btn-secondary">
-                    Try Sample Data
+                  <button
+                    onClick={handleTrySampleData}
+                    disabled={loadingSample}
+                    className="btn-secondary inline-flex items-center space-x-2 disabled:opacity-50"
+                  >
+                    {loadingSample ? (
+                      <>
+                        <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                        <span>Loading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Database className="w-5 h-5" />
+                        <span>Try Sample Data</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
