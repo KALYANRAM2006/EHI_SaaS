@@ -1,13 +1,15 @@
 import { useState, useRef } from 'react'
-import { Upload, File, X, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Upload, File, X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 
 export default function FileUpload({ onComplete }) {
   const [dragOver, setDragOver] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [parsing, setParsing] = useState(false)
+  const [parseError, setParseError] = useState(null)
   const [files, setFiles] = useState([])
   const fileInputRef = useRef(null)
-  const { addFile, setLoading } = useData()
+  const { addFile, setLoading, parseFiles } = useData()
 
   const handleDragOver = (e) => {
     e.preventDefault()
@@ -89,10 +91,21 @@ export default function FileUpload({ onComplete }) {
     return { type: 'Unknown', color: 'text-gray-600 bg-gray-50' }
   }
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (files.length > 0 && files.every(f => f.status === 'complete')) {
-      setLoading(true)
-      onComplete()
+      setParsing(true)
+      setParseError(null)
+      try {
+        const success = await parseFiles()
+        if (success) {
+          onComplete()
+        } else {
+          setParseError('Failed to parse the uploaded files. Please ensure they are valid Epic EHI TSV or ZIP files.')
+        }
+      } catch (err) {
+        setParseError(err.message || 'An error occurred while parsing files.')
+      }
+      setParsing(false)
     }
   }
 
@@ -175,21 +188,36 @@ export default function FileUpload({ onComplete }) {
         </div>
       )}
 
+      {/* Parse Error */}
+      {parseError && (
+        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {parseError}
+        </div>
+      )}
+
       {/* Action Buttons */}
       {files.length > 0 && (
         <div className="mt-6 flex justify-end space-x-4">
           <button
-            onClick={() => setFiles([])}
-            className="px-6 py-3 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+            onClick={() => { setFiles([]); setParseError(null) }}
+            disabled={parsing}
+            className="px-6 py-3 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
           >
             Clear All
           </button>
           <button
             onClick={handleContinue}
-            disabled={!files.every(f => f.status === 'complete')}
-            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!files.every(f => f.status === 'complete') || parsing}
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Continue to Dashboard
+            {parsing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Parsing Files...
+              </>
+            ) : (
+              'Continue to Dashboard'
+            )}
           </button>
         </div>
       )}

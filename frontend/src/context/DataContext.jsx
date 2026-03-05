@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, useCallback } from 'react'
 import { generateSampleParsedData, generateAISummary } from '../data/sampleData'
+import { parseUploadedFiles } from '../parsers/epicTsvParser'
 
 const DataContext = createContext()
 
 export function DataProvider({ children }) {
   const [uploadedFiles, setUploadedFiles] = useState([])
+  const [rawFiles, setRawFiles] = useState([])  // Store actual File objects for parsing
   const [parsedData, setParsedData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -13,17 +15,39 @@ export function DataProvider({ children }) {
   const [selectedPatient, setSelectedPatient] = useState(null)
 
   const addFile = (file) => {
-    setUploadedFiles(prev => [...prev, file])
+    setUploadedFiles(prev => [...prev, { name: file.name, size: file.size, type: file.type }])
+    setRawFiles(prev => [...prev, file])
   }
 
   const clearFiles = () => {
     setUploadedFiles([])
+    setRawFiles([])
     setParsedData(null)
     setError(null)
     setIsSampleData(false)
     setAiSummary(null)
     setSelectedPatient(null)
   }
+
+  // Parse real uploaded files (ZIP/TSV)
+  const parseFiles = useCallback(async () => {
+    if (rawFiles.length === 0) return false
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await parseUploadedFiles(rawFiles)
+      setParsedData(result.parsedData)
+      setSelectedPatient(result.selectedPatient)
+      setAiSummary(result.aiSummary)
+      setIsSampleData(false)
+      setLoading(false)
+      return true
+    } catch (err) {
+      setError(err.message)
+      setLoading(false)
+      return false
+    }
+  }, [rawFiles])
 
   const loadSampleData = useCallback(() => {
     setLoading(true)
@@ -65,6 +89,7 @@ export function DataProvider({ children }) {
     setError,
     isSampleData,
     loadSampleData,
+    parseFiles,
     aiSummary,
     setAiSummary,
     selectedPatient,

@@ -188,7 +188,7 @@ export default function Dashboard() {
             </div>
             {/* Right: Patient selector + actions */}
             <div className="flex items-center space-x-3">
-              {isSampleData && parsedData?.patients?.length > 1 && (
+              {parsedData?.patients?.length > 1 && (
                 <select
                   value={selectedPatient?.patId || ''}
                   onChange={(e) => selectPatient(e.target.value)}
