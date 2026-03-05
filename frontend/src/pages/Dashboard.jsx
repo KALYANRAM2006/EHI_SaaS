@@ -22,6 +22,7 @@ import {
   BarChart3,
   BookOpen,
   Lightbulb,
+  Database,
   CheckCircle2,
   AlertTriangle,
   Info,
@@ -40,6 +41,8 @@ export default function Dashboard() {
   const [timelineYear, setTimelineYear] = useState(null)
   const [timelineCategory, setTimelineCategory] = useState('All')
   const [timelineSearch, setTimelineSearch] = useState('')
+  const [explorerSearch, setExplorerSearch] = useState('')
+  const [expandedExplorer, setExpandedExplorer] = useState({ patient: true })
 
   useEffect(() => {
     if (uploadedFiles.length === 0) {
@@ -1091,81 +1094,193 @@ export default function Dashboard() {
         )}
 
         {/* ===== DATA EXPLORER VIEW ===== */}
-        {activeView === 'data-explorer' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Data Explorer</h2>
-                <p className="text-gray-500">Browse raw health data from {parsedData?.totalPatients || 0} patients across {parsedData?.totalRecords || 0} records</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                  {parsedData?.totalPatients || 0} Patients
-                </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                  {parsedData?.totalRecords || 0} Records
-                </span>
-              </div>
-            </div>
+        {activeView === 'data-explorer' && (() => {
+          // Build the data object to explore for the selected patient
+          const explorerData = selectedPatient ? {
+            patient: {
+              name: `${selectedPatient.firstName} ${selectedPatient.lastName}`,
+              age: selectedPatient.age,
+              sex: selectedPatient.sex,
+              birthDate: selectedPatient.birthDate,
+              city: selectedPatient.city,
+              state: selectedPatient.state,
+              zip: selectedPatient.zip,
+              language: selectedPatient.language,
+              maritalStatus: selectedPatient.maritalStatus,
+            },
+            encounters: stats.encounters.map(e => ({
+              date: e.contactDate,
+              type: e.encType,
+              provider: providers[e.visitProvider]?.name || 'Unknown',
+              diagnosis: e.diagnosis,
+              chiefComplaint: e.chiefComplaint,
+              status: e.status,
+              patientClass: e.patientClass,
+            })),
+            medications: stats.medications.map(m => ({
+              name: m.name,
+              dosage: m.dosage,
+              purpose: m.purpose,
+              prescriber: m.prescriber,
+              startDate: m.startDate,
+            })),
+            conditions: stats.conditions.map(c => ({
+              name: c.name,
+              status: c.status,
+              severity: c.severity,
+              onset: c.onset,
+            })),
+            labResults: stats.results.map(r => ({
+              component: r.component,
+              value: r.value,
+              unit: r.unit,
+              flag: r.flag,
+              refLow: r.refLow,
+              refHigh: r.refHigh,
+              resultTime: r.resultTime,
+            })),
+            allergies: stats.allergies || [],
+          } : {}
 
-            {/* Patient list with modern styling */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
-              <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50/30">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-gray-900">Patients ({parsedData?.patients?.length || 0})</h3>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                    <input type="text" placeholder="Search patients..." className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48 bg-white" />
+          // Render color-coded value
+          const renderValue = (value) => {
+            if (value === null || value === undefined) return <span className="text-gray-400">null</span>
+            if (typeof value === 'boolean') return <span className="text-purple-600">{value.toString()}</span>
+            if (typeof value === 'number') return <span className="text-blue-600">{value}</span>
+            if (typeof value === 'string') return <span className="text-green-600">"{value}"</span>
+            if (Array.isArray(value)) return <span className="text-gray-600">[{value.length} items]</span>
+            if (typeof value === 'object') return <span className="text-gray-600">{'{ ... }'}</span>
+            return <span>{String(value)}</span>
+          }
+
+          // Recursive tree renderer
+          const RenderTree = ({ obj, path = '', level = 0 }) => {
+            if (!obj || typeof obj !== 'object') return null
+            return Object.entries(obj).map(([key, value]) => {
+              const currentPath = path ? `${path}.${key}` : key
+              const isArray = Array.isArray(value)
+              const isObject = typeof value === 'object' && value !== null && !isArray
+              const isExpanded = expandedExplorer[currentPath]
+
+              // Search filter
+              if (explorerSearch && !JSON.stringify({ [key]: value }).toLowerCase().includes(explorerSearch.toLowerCase())) {
+                return null
+              }
+
+              if (isObject || isArray) {
+                return (
+                  <div key={currentPath} className="border-l-2 border-gray-200 pl-4 ml-2 my-2">
+                    <button
+                      onClick={() => setExpandedExplorer(prev => ({ ...prev, [currentPath]: !prev[currentPath] }))}
+                      className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded w-full text-left"
+                    >
+                      {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                      <span className="font-mono font-semibold text-sm">{key}:</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-gray-300 text-gray-600 bg-white">
+                        {isArray ? `Array[${value.length}]` : 'Object'}
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className="mt-2">
+                        {isArray ? (
+                          <div className="space-y-2">
+                            {value.map((item, index) => (
+                              <div key={`${currentPath}[${index}]`} className="border-l-2 border-blue-200 pl-4 ml-2">
+                                <div className="flex items-start gap-2 p-2 bg-blue-50 rounded">
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-blue-300 text-blue-600 bg-white">{index}</span>
+                                  <div className="flex-1">
+                                    {typeof item === 'object' && item !== null
+                                      ? <RenderTree obj={item} path={`${currentPath}[${index}]`} level={level + 1} />
+                                      : <span className="font-mono text-sm">{renderValue(item)}</span>
+                                    }
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <RenderTree obj={value} path={currentPath} level={level + 1} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+              return (
+                <div key={currentPath} className="border-l-2 border-gray-200 pl-4 ml-2 my-2">
+                  <div className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded">
+                    <span className="font-mono font-semibold text-sm">{key}:</span>
+                    <span className="font-mono text-sm">{renderValue(value)}</span>
                   </div>
                 </div>
+              )
+            }).filter(Boolean)
+          }
+
+          return (
+          <div className="space-y-6">
+            {/* Raw Data Explorer Card — matches Figma */}
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <Database className="w-5 h-5 text-gray-700" />
+                  <h2 className="text-lg font-bold text-gray-900">Raw Data Explorer</h2>
+                </div>
+                <p className="text-sm text-gray-500">Browse and search through the complete structured health data</p>
               </div>
-              <div className="p-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 text-left text-gray-500">
-                        <th className="pb-3 pr-4 font-medium">Name</th>
-                        <th className="pb-3 pr-4 font-medium">Age</th>
-                        <th className="pb-3 pr-4 font-medium">Sex</th>
-                        <th className="pb-3 pr-4 font-medium">City</th>
-                        <th className="pb-3 pr-4 font-medium">Encounters</th>
-                        <th className="pb-3 pr-4 font-medium">Results</th>
-                        <th className="pb-3 font-medium">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(parsedData?.patients || []).map((patient, i) => (
-                        <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/30 transition-colors ${selectedPatient?.patId === patient.patId ? 'bg-blue-50' : ''}`}>
-                          <td className="py-3.5 pr-4 font-medium text-gray-900">{patient.firstName} {patient.lastName}</td>
-                          <td className="py-3.5 pr-4 text-gray-600">{patient.age}</td>
-                          <td className="py-3.5 pr-4 text-gray-600">{patient.sex}</td>
-                          <td className="py-3.5 pr-4 text-gray-600">{patient.city}, {patient.state}</td>
-                          <td className="py-3.5 pr-4">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">{patient.encounterCount}</span>
-                          </td>
-                          <td className="py-3.5 pr-4">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">{patient.resultCount}</span>
-                          </td>
-                          <td className="py-3.5">
-                            <button
-                              onClick={() => { selectPatient(patient.patId); setActiveView('overview'); }}
-                              className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-                            >
-                              View <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div className="p-6 space-y-6">
+                {/* Search bar — full width */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search in data... (e.g., 'hypertension', 'Lisinopril', '2026')"
+                    value={explorerSearch}
+                    onChange={e => setExplorerSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                  />
+                </div>
+
+                {/* Data Tree */}
+                <div className="bg-gray-50 rounded-lg p-4 max-h-[600px] overflow-y-auto">
+                  <div className="font-mono text-sm">
+                    <RenderTree obj={explorerData} />
+                  </div>
+                </div>
+
+                {/* Stats Badges */}
+                <div className="flex flex-wrap gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
+                    Total Fields: {JSON.stringify(explorerData).split('"').length - 1}
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
+                    Encounters: {stats.encounters.length}
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
+                    Medications: {stats.medications.length}
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
+                    Conditions: {stats.conditions.length}
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
+                    Lab Results: {stats.results.length}
+                  </span>
+                  {stats.allergies.length > 0 && (
+                    <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
+                      Allergies: {stats.allergies.length}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Raw JSON Preview */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
-              <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50/30 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-900">Raw Data Preview</h3>
+            {/* JSON View Card — matches Figma */}
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">JSON View</h3>
+                  <p className="text-sm text-gray-500">Complete raw data in JSON format</p>
+                </div>
                 <button
                   onClick={handleExport}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium shadow-md hover:shadow-lg transition-all"
@@ -1175,20 +1290,15 @@ export default function Dashboard() {
                   Export JSON
                 </button>
               </div>
-              <div className="p-4 bg-gray-900 rounded-b-2xl max-h-96 overflow-auto">
-                <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap">
-                  {JSON.stringify(parsedData?.patients?.[0] ? {
-                    patient: { name: `${selectedPatient?.firstName} ${selectedPatient?.lastName}`, age: selectedPatient?.age, sex: selectedPatient?.sex },
-                    encounters: stats.encounters.length,
-                    medications: stats.medications.length,
-                    conditions: stats.conditions.length,
-                    labResults: stats.results.length,
-                  } : {}, null, 2)}
+              <div className="bg-gray-900 rounded-b-2xl max-h-[400px] overflow-auto p-4">
+                <pre className="text-xs text-gray-100 font-mono whitespace-pre-wrap">
+                  {JSON.stringify(explorerData, null, 2)}
                 </pre>
               </div>
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* ===== INSIGHTS VIEW ===== */}
         {activeView === 'insights' && (() => {
