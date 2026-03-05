@@ -36,6 +36,9 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState('overview')
   const [expandedSections, setExpandedSections] = useState({ overall: true })
   const [regenerating, setRegenerating] = useState(false)
+  const [timelineYear, setTimelineYear] = useState(null)
+  const [timelineCategory, setTimelineCategory] = useState('All')
+  const [timelineSearch, setTimelineSearch] = useState('')
 
   useEffect(() => {
     if (uploadedFiles.length === 0) {
@@ -697,69 +700,247 @@ export default function Dashboard() {
         )}
 
         {/* ===== TIMELINE VIEW ===== */}
-        {activeView === 'timeline' && (
+        {activeView === 'timeline' && (() => {
+          // Build unified timeline events from encounters, medications, results
+          const timelineEvents = []
+          stats.encounters.forEach(enc => {
+            const prov = providers[enc.visitProvider]
+            timelineEvents.push({
+              date: enc.contactDate,
+              type: 'encounter',
+              category: enc.encType?.toLowerCase().includes('lab') ? 'Labs' : enc.encType?.toLowerCase().includes('emergency') ? 'Visits' : 'Visits',
+              title: enc.encType,
+              subtitle: enc.diagnosis,
+              provider: prov?.name || 'Provider',
+              providerSpecialty: prov?.specialty || 'Specialist',
+              chiefComplaint: enc.chiefComplaint,
+              patientClass: enc.patientClass,
+              notes: enc.diagnosis,
+              data: enc,
+            })
+          })
+          stats.medications.forEach(med => {
+            timelineEvents.push({
+              date: med.startDate,
+              type: 'medication',
+              category: 'Medications',
+              title: 'Medication Started',
+              subtitle: med.name,
+              provider: med.prescriber || 'Provider',
+              notes: `${med.dosage} — ${med.purpose}`,
+              data: med,
+            })
+          })
+          stats.results.forEach(result => {
+            timelineEvents.push({
+              date: result.resultTime,
+              type: 'lab',
+              category: 'Labs',
+              title: 'Lab Result',
+              subtitle: result.component,
+              notes: `${result.value} ${result.unit || ''} (Ref: ${result.refLow}-${result.refHigh}) — ${result.flag}`,
+              data: result,
+            })
+          })
+          // Sort descending
+          timelineEvents.sort((a, b) => new Date(b.date) - new Date(a.date))
+
+          // Group by year
+          const yearGroups = {}
+          timelineEvents.forEach(ev => {
+            const y = new Date(ev.date).getFullYear().toString()
+            if (!yearGroups[y]) yearGroups[y] = []
+            yearGroups[y].push(ev)
+          })
+          const years = Object.keys(yearGroups).sort((a, b) => b - a)
+
+          // Apply filters
+          const filtered = timelineEvents.filter(ev => {
+            if (timelineYear && new Date(ev.date).getFullYear().toString() !== timelineYear) return false
+            if (timelineCategory !== 'All') {
+              if (timelineCategory === 'Visits' && ev.category !== 'Visits') return false
+              if (timelineCategory === 'Labs' && ev.category !== 'Labs') return false
+              if (timelineCategory === 'Medications' && ev.category !== 'Medications') return false
+              if (timelineCategory === 'Procedures' && ev.category !== 'Procedures') return false
+            }
+            if (timelineSearch) {
+              const q = timelineSearch.toLowerCase()
+              return JSON.stringify(ev).toLowerCase().includes(q)
+            }
+            return true
+          })
+
+          const getIcon = (ev) => {
+            if (ev.category === 'Labs') return <TestTube className="w-5 h-5" />
+            if (ev.category === 'Medications') return <Pill className="w-5 h-5" />
+            if (ev.type === 'encounter') return <Activity className="w-5 h-5" />
+            return <FileText className="w-5 h-5" />
+          }
+          const getColor = (ev) => {
+            if (ev.category === 'Labs') return { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200', dot: 'bg-green-500 border-green-100' }
+            if (ev.category === 'Medications') return { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-200', dot: 'bg-purple-500 border-purple-100' }
+            if (ev.data?.patientClass === 'Emergency') return { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', dot: 'bg-red-500 border-red-100' }
+            return { bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-200', dot: 'bg-blue-500 border-blue-100' }
+          }
+
+          return (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">Health Timeline</h2>
-              <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700">
-                <RefreshCw className="w-4 h-4" />
-                <span>Refresh</span>
-              </button>
-            </div>
-            {/* Filter bar with badge-style buttons */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-4 flex flex-wrap items-center gap-2 border border-gray-200/50">
-              {['All', 'Visits', 'Labs', 'Medications', 'Conditions'].map((filter, idx) => {
-                const filterColors = ['bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md', 'bg-blue-50 text-blue-700 border border-blue-200', 'bg-green-50 text-green-700 border border-green-200', 'bg-purple-50 text-purple-700 border border-purple-200', 'bg-red-50 text-red-700 border border-red-200']
-                return (
-                  <button key={filter} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${idx === 0 ? filterColors[0] : filterColors[idx]}`}
-                    style={idx === 0 ? {boxShadow:'0 2px 8px rgba(59,130,246,0.3)'} : {}}>
-                    {filter}
+            {/* Card container like Figma */}
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <Calendar className="w-5 h-5 text-gray-700" />
+                  <h2 className="text-xl font-bold text-gray-900">Healthcare Timeline</h2>
+                </div>
+                <p className="text-sm text-gray-500 ml-7">Chronological view of all healthcare events and encounters</p>
+              </div>
+              <div className="p-6 space-y-5">
+                {/* Year filters */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setTimelineYear(null)}
+                    className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${!timelineYear ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    style={!timelineYear ? {boxShadow:'0 2px 8px rgba(59,130,246,0.3)'} : {}}
+                  >
+                    All Years
                   </button>
-                )
-              })}
-              <div className="flex-1" />
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                <input type="text" placeholder="Search events..." className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48 bg-gray-50" />
+                  {years.map(year => (
+                    <button
+                      key={year}
+                      onClick={() => setTimelineYear(timelineYear === year ? null : year)}
+                      className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${timelineYear === year ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      style={timelineYear === year ? {boxShadow:'0 2px 8px rgba(59,130,246,0.3)'} : {}}
+                    >
+                      {year} ({yearGroups[year].length})
+                    </button>
+                  ))}
+                </div>
+
+                {/* Category filters */}
+                <div className="flex flex-wrap gap-2">
+                  {['All', 'Medications', 'Labs', 'Visits', 'Procedures'].map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setTimelineCategory(cat === 'All' ? 'All' : cat)}
+                      className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${(cat === 'All' ? timelineCategory === 'All' : timelineCategory === cat) ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      style={(cat === 'All' ? timelineCategory === 'All' : timelineCategory === cat) ? {boxShadow:'0 2px 8px rgba(34,197,94,0.3)'} : {}}
+                    >
+                      {cat === 'All' ? 'All Categories' : cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search bar — full width */}
+                <div className="relative">
+                  <Search className="absolute left-4 top-3 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search timeline..."
+                    value={timelineSearch}
+                    onChange={e => setTimelineSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                  />
+                </div>
+
+                {/* Refresh button — full width */}
+                <button
+                  onClick={() => { setTimelineYear(null); setTimelineCategory('All'); setTimelineSearch(''); }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Refresh</span>
+                </button>
+
+                {/* Timeline */}
+                <div className="relative">
+                  {/* Vertical line */}
+                  <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-200" />
+
+                  <div className="space-y-8">
+                    {filtered.map((ev, index) => {
+                      const colors = getColor(ev)
+                      return (
+                        <div key={index} className="relative pl-20">
+                          {/* Timeline dot */}
+                          <div className={`absolute left-[1.375rem] top-2 w-5 h-5 rounded-full border-4 ${colors.dot}`} />
+
+                          {/* Date label on left */}
+                          <div className="absolute left-0 top-0 text-xs text-gray-500 w-14 text-right pr-1">
+                            {new Date(ev.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </div>
+
+                          {/* Event card */}
+                          <div className={`${colors.bg} border ${colors.border} rounded-xl p-4`}>
+                            <div className="flex items-start gap-3">
+                              <div className={`mt-1 ${colors.text}`}>{getIcon(ev)}</div>
+                              <div className="flex-1">
+                                <div className="flex items-start justify-between mb-2">
+                                  <div>
+                                    <h4 className={`font-semibold ${colors.text}`}>{ev.title}{ev.subtitle ? `: ${ev.subtitle}` : ''}</h4>
+                                    <p className="text-sm opacity-75">
+                                      {new Date(ev.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                    </p>
+                                  </div>
+                                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${colors.border} ${colors.text} bg-white/60`}>
+                                    {ev.type}
+                                  </span>
+                                </div>
+
+                                <div className="border-t border-current opacity-10 my-2" />
+
+                                {/* Event details */}
+                                {ev.type === 'encounter' && (
+                                  <div className="space-y-2 text-sm">
+                                    {ev.provider && <p><strong>Provider:</strong> {ev.provider}{ev.providerSpecialty ? ` (${ev.providerSpecialty})` : ''}</p>}
+                                    {ev.chiefComplaint && <p><strong>Chief Complaint:</strong> {ev.chiefComplaint}</p>}
+                                    {ev.data?.vitals && (
+                                      <div>
+                                        <strong>Vitals:</strong>
+                                        <div className="grid grid-cols-2 gap-2 mt-1">
+                                          {ev.data.vitals.bp && <span>BP: {ev.data.vitals.bp}</span>}
+                                          {ev.data.vitals.hr && <span>HR: {ev.data.vitals.hr} bpm</span>}
+                                          {ev.data.vitals.temp && <span>Temp: {ev.data.vitals.temp}°F</span>}
+                                          {ev.data.vitals.weight && <span>Weight: {ev.data.vitals.weight}</span>}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {ev.data?.notes && <p><strong>Notes:</strong> {ev.data.notes}</p>}
+                                    {ev.patientClass && <p><strong>Class:</strong> {ev.patientClass}</p>}
+                                  </div>
+                                )}
+                                {ev.type === 'medication' && (
+                                  <div className="space-y-1 text-sm">
+                                    <p><strong>Medication:</strong> {ev.data.name}</p>
+                                    <p><strong>Dosage:</strong> {ev.data.dosage}</p>
+                                    <p><strong>Purpose:</strong> {ev.data.purpose}</p>
+                                    {ev.provider && <p><strong>Prescribed by:</strong> {ev.provider}</p>}
+                                  </div>
+                                )}
+                                {ev.type === 'lab' && (
+                                  <div className="space-y-1 text-sm">
+                                    <p><strong>Test:</strong> {ev.data.component}</p>
+                                    <p><strong>Result:</strong> {ev.data.value} {ev.data.unit || ''}</p>
+                                    <p><strong>Reference Range:</strong> {ev.data.refLow}–{ev.data.refHigh}</p>
+                                    <p><strong>Status:</strong> <span className={ev.data.flag === 'Normal' ? 'text-green-700' : 'text-red-700'}>{ev.data.flag}</span></p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {filtered.length === 0 && (
+                  <p className="text-center text-gray-500 py-8">No timeline events found</p>
+                )}
               </div>
             </div>
-            {/* Vertical Timeline with colored dots */}
-            <div className="relative">
-              <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-300 via-purple-300 to-indigo-300" />
-              {stats.encounters
-                .sort((a, b) => new Date(b.contactDate) - new Date(a.contactDate))
-                .map((enc, i) => {
-                  const prov = providers[enc.visitProvider]
-                  const dotColors = enc.patientClass === 'Emergency' ? 'bg-red-500 ring-red-100' : enc.patientClass === 'Inpatient' ? 'bg-orange-500 ring-orange-100' : 'bg-blue-500 ring-blue-100'
-                  const cardBorder = enc.patientClass === 'Emergency' ? 'border-l-red-500' : enc.patientClass === 'Inpatient' ? 'border-l-orange-500' : 'border-l-blue-500'
-                  return (
-                    <div key={i} className="relative pl-16 pb-6">
-                      <div className={`absolute left-[1.375rem] w-4 h-4 ${dotColors} rounded-full ring-4`} />
-                      <div className={`bg-white rounded-2xl shadow-lg p-5 hover:shadow-xl transition-all border-l-4 ${cardBorder}`}>
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1.5 font-medium">
-                              {new Date(enc.contactDate).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}
-                            </p>
-                            <p className="font-semibold text-gray-900 text-base">
-                              {enc.encType}: {enc.diagnosis}
-                            </p>
-                            <p className="text-sm text-gray-600 mt-1">
-                              {prov?.name || 'Provider'} • {prov?.specialty || 'Specialist'}
-                            </p>
-                            {enc.chiefComplaint && <p className="text-sm text-gray-500 mt-1.5 italic">"{enc.chiefComplaint}"</p>}
-                          </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${enc.patientClass === 'Emergency' ? 'bg-red-50 text-red-700 border border-red-200' : enc.patientClass === 'Inpatient' ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-                            {enc.patientClass}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-            </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* ===== RECORDS VIEW ===== */}
         {activeView === 'records' && (
