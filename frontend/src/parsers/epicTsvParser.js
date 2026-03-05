@@ -1,50 +1,33 @@
 /**
- * Epic EHI TSV/ZIP Parser
- * Parses uploaded .tsv files or .zip archives containing Epic EHI export TSV files.
- * Produces the same data shape as sampleData.js's generateSampleParsedData().
+ * Universal Health Record Parser — YAML-Driven, Multi-Vendor, Multi-Format
+ *
+ * Supports:
+ *   1. Delimited (TSV/CSV) — Epic, Greenway, MEDITECH, eCW, NextGen
+ *   2. NDJSON / FHIR JSON   — Athena, Cerner
+ *   3. XML / C-CDA           — Allscripts, eCW, Practice Fusion, MEDITECH
+ *   4. Document Bundles      — All vendors (PDF, RTF, images) — indexed only
+ *
+ * Architecture:
+ *   Files → extractAllFiles() → format detection → vendor detection
+ *   → loadRules(vendor) → YAML-driven mapping → app data model
+ *
+ * Adding a new vendor = new YAML rules folder. Zero code changes.
+ * All parsing is 100% client-side. No data leaves the browser.
  */
-import JSZip from 'jszip'
+
 import { generateAISummary } from '../data/sampleData'
+import { loadRules, applyRule, detectVendor } from './ruleEngine'
+import {
+  extractAllFiles,
+  detectPrimaryFormat,
+  parseTSV,
+  parseCSV,
+  parseNDJSON,
+  parseFHIRJSON,
+  parseCCDA,
+} from './formatParsers'
 
-// ─── TSV Parsing Helpers ─────────────────────────────────────────────────────
-
-/** Parse a TSV string into an array of objects keyed by header names */
-function parseTSV(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim() !== '')
-  if (lines.length === 0) return []
-  const headers = lines[0].split('\t')
-  return lines.slice(1).map(line => {
-    const values = line.split('\t')
-    const obj = {}
-    headers.forEach((h, i) => {
-      const val = (values[i] || '').trim()
-      obj[h] = val === 'NULL' || val === '' ? null : val
-    })
-    return obj
-  })
-}
-
-/** Read a File object as text */
-function readFileText(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
-    reader.readAsText(file)
-  })
-}
-
-/** Read a File object as ArrayBuffer (for ZIP) */
-function readFileBuffer(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
-    reader.readAsArrayBuffer(file)
-  })
-}
-
-// ─── Provider Lookup (shared with sampleData) ────────────────────────────────
+// ─── Provider Lookup ────────────────────────────────────────────────────────
 
 const defaultProviders = {
   E12345: { name: 'Dr. James Wilson', specialty: 'Internal Medicine' },
@@ -59,159 +42,413 @@ const defaultProviders = {
   E01234: { name: 'Dr. Karen Wright', specialty: 'Pulmonology' },
 }
 
-// ─── Mapping Functions: TSV rows → app data shapes ──────────────────────────
+// ─── App-Shape Adapters ─────────────────────────────────────────────────────
+// Convert raw parsed rows into the shape the Dashboard expects.
 
-function mapPatientRow(row) {
-  // PAT_NAME format: "Last, First M"
-  const rawName = row.PAT_NAME || ''
+function toAppPatient(raw) {
+  const rawName = raw.PAT_NAME || raw.PATIENT_NAME || ''
   const nameParts = rawName.split(', ')
-  const lastName = nameParts[0] || row.PAT_LAST_NAME || ''
+  const lastName = nameParts[0] || raw.PAT_LAST_NAME || raw.LAST_NAME || raw.family || ''
   const firstMiddle = nameParts[1] || ''
-  const firstName = firstMiddle.split(' ')[0] || row.PAT_FIRST_NAME || ''
+  const firstName = firstMiddle.split(' ')[0] || raw.PAT_FIRST_NAME || raw.FIRST_NAME || raw.given || ''
 
-  const birthDate = row.BIRTH_DATE || ''
   let age = 0
+  const birthDate = raw.BIRTH_DATE || raw.DOB || raw.birthDate || ''
   if (birthDate) {
     const birth = new Date(birthDate)
     const now = new Date()
     age = now.getFullYear() - birth.getFullYear()
     if (now.getMonth() < birth.getMonth() ||
-        (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) {
-      age--
-    }
+        (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--
   }
 
   return {
-    patId: row.PAT_ID,
-    name: rawName,
+    patId: raw.PAT_ID || raw.PATIENT_ID || raw.id || raw.MRN || String(Math.random()).slice(2, 10),
+    name: rawName || `${firstName} ${lastName}`.trim(),
     firstName,
     lastName,
     age,
-    city: row.CITY,
-    state: row.STATE_C_NAME,
-    zip: row.ZIP,
+    city: raw.CITY || raw.city || '',
+    state: raw.STATE_C_NAME || raw.STATE || raw.state || '',
+    zip: raw.ZIP || raw.zip || raw.postalCode || '',
     birthDate,
-    sex: row.SEX_C_NAME || 'Unknown',
-    ethnicGroup: row.ETHNIC_GROUP_C_NAME,
-    language: row.LANGUAGE_C_NAME,
-    maritalStatus: row.MARITAL_STATUS_C_NAME,
+    sex: raw.SEX_C_NAME || raw.SEX || raw.GENDER || raw.gender || 'Unknown',
+    ethnicGroup: raw.ETHNIC_GROUP_C_NAME || raw.ETHNICITY || '',
+    language: raw.LANGUAGE_C_NAME || raw.LANGUAGE || '',
+    maritalStatus: raw.MARITAL_STATUS_C_NAME || raw.MARITAL_STATUS || '',
   }
 }
 
-function mapEncounterRow(row) {
+function toAppEncounter(raw) {
   return {
-    csnId: row.PAT_ENC_CSN_ID,
-    patId: row.PAT_ID,
-    contactDate: row.CONTACT_DATE,
-    encType: row.ENC_TYPE_C_NAME,
-    visitProvider: row.VISIT_PROV_ID,
-    status: row.APPT_STATUS_C_NAME,
-    patientClass: row.ADT_PATIENT_CLASS_C_NAME,
-    chiefComplaint: row.CHIEF_COMPLAINT,
-    diagnosis: row.DIAGNOSIS_LIST,
-    checkinTime: row.CHECKIN_TIME,
-    checkoutTime: row.CHECKOUT_TIME,
+    csnId: raw.PAT_ENC_CSN_ID || raw.ENCOUNTER_ID || raw.id,
+    patId: raw.PAT_ID || raw.PATIENT_ID,
+    contactDate: raw.CONTACT_DATE || raw.ENCOUNTER_DATE || raw.DATE || raw.period?.start,
+    encType: raw.ENC_TYPE_C_NAME || raw.ENCOUNTER_TYPE || raw.type?.[0]?.text || '',
+    visitProvider: raw.VISIT_PROV_ID || raw.PROVIDER_ID || '',
+    status: raw.APPT_STATUS_C_NAME || raw.STATUS || raw.status || '',
+    patientClass: raw.ADT_PATIENT_CLASS_C_NAME || raw.CLASS || '',
+    chiefComplaint: raw.CHIEF_COMPLAINT || raw.REASON || '',
+    diagnosis: raw.DIAGNOSIS_LIST || '',
+    checkinTime: raw.CHECKIN_TIME || '',
+    checkoutTime: raw.CHECKOUT_TIME || '',
   }
 }
 
-function mapOrderRow(row) {
+function toAppOrder(raw) {
   return {
-    orderId: row.ORDER_ID,
-    orderType: row.ORDER_TYPE_C_NAME,
-    patId: row.PAT_ID,
-    csnId: row.PAT_ENC_CSN_ID,
-    orderDate: row.ORDERING_DATE,
-    status: row.ORDER_STATUS_C_NAME,
-    procName: row.PROC_NAME,
-    procCode: row.PROC_CODE,
-    specimen: row.SPECIMEN_TYPE_C_NAME,
-    priority: row.PRIORITY_C_NAME,
+    orderId: raw.ORDER_ID || raw.ORDER_PROC_ID || raw.id,
+    orderType: raw.ORDER_TYPE_C_NAME || raw.ORDER_TYPE || raw.category?.[0]?.text || '',
+    patId: raw.PAT_ID || raw.PATIENT_ID,
+    csnId: raw.PAT_ENC_CSN_ID || raw.ENCOUNTER_ID,
+    orderDate: raw.ORDERING_DATE || raw.ORDER_DATE || raw.authoredOn,
+    status: raw.ORDER_STATUS_C_NAME || raw.STATUS || raw.status || '',
+    procName: raw.PROC_NAME || raw.PROCEDURE_NAME || raw.code?.text || '',
+    procCode: raw.PROC_CODE || raw.CPT_CODE || raw.code?.coding?.[0]?.code || '',
+    specimen: raw.SPECIMEN_TYPE_C_NAME || '',
+    priority: raw.PRIORITY_C_NAME || raw.PRIORITY || '',
   }
 }
 
-function mapResultRow(row) {
+function toAppResult(raw) {
   return {
-    resultId: row.RESULT_ID,
-    orderId: row.ORDER_ID,
-    component: row.COMPONENT_NAME,
-    value: row.ORD_VALUE,
-    numValue: row.ORD_NUM_VALUE ? parseFloat(row.ORD_NUM_VALUE) : null,
-    unit: row.REFERENCE_UNIT,
-    refLow: row.REFERENCE_LOW ? parseFloat(row.REFERENCE_LOW) : null,
-    refHigh: row.REFERENCE_HIGH ? parseFloat(row.REFERENCE_HIGH) : null,
-    flag: row.RESULT_FLAG_C_NAME || 'Normal',
-    resultTime: row.RESULT_TIME,
+    resultId: raw.RESULT_ID || raw.id,
+    orderId: raw.ORDER_ID || raw.ORDER_PROC_ID || raw.basedOn?.[0]?.reference,
+    component: raw.COMPONENT_NAME || raw.TEST_NAME || raw.code?.text || '',
+    value: raw.ORD_VALUE || raw.RESULT_VALUE || raw.valueQuantity?.value?.toString() || raw.valueString || '',
+    numValue: parseFloat(raw.ORD_NUM_VALUE || raw.NUMERIC_VALUE || raw.valueQuantity?.value) || null,
+    unit: raw.REFERENCE_UNIT || raw.UNIT || raw.valueQuantity?.unit || '',
+    refLow: parseFloat(raw.REFERENCE_LOW || raw.REF_LOW) || null,
+    refHigh: parseFloat(raw.REFERENCE_HIGH || raw.REF_HIGH) || null,
+    flag: raw.RESULT_FLAG_C_NAME || raw.ABNORMAL_FLAG || raw.interpretation?.[0]?.text || 'Normal',
+    resultTime: raw.RESULT_TIME || raw.RESULT_DATE || raw.effectiveDateTime || '',
   }
 }
 
-function mapProblemRow(row) {
+function toAppCondition(raw) {
   return {
-    name: row.DX_ID_DX_NAME,
-    onset: row.NOTED_DATE,
-    status: row.PROBLEM_STATUS_C_NAME || 'Active',
-    severity: row.PRIORITY === '1' ? 'Severe' : row.PRIORITY === '2' ? 'Moderate' : 'Mild',
-    resolved: row.RESOLVED_DATE,
+    name: raw.DX_ID_DX_NAME || raw.DIAGNOSIS_NAME || raw.CONDITION_NAME || raw.code?.text || '',
+    onset: raw.NOTED_DATE || raw.ONSET_DATE || raw.onsetDateTime || '',
+    status: raw.PROBLEM_STATUS_C_NAME || raw.STATUS || (raw.RESOLVED_DATE ? 'Resolved' : 'Active'),
+    severity: raw.PRIORITY === '1' ? 'Severe' : raw.PRIORITY === '2' ? 'Moderate' : raw.SEVERITY || 'Mild',
+    resolved: raw.RESOLVED_DATE || raw.abatementDateTime || '',
   }
 }
 
-function mapMedicationRow(row) {
+function toAppMedication(raw) {
   return {
-    name: row.MEDICATION_NAME,
-    dosage: `${row.DOSE || ''}${row.DOSE_UNIT || ''} ${row.ROUTE || ''} ${row.FREQUENCY || ''}`.trim(),
-    prescriber: row.ORDERING_PROV_ID ? (defaultProviders[row.ORDERING_PROV_ID]?.name || row.ORDERING_PROV_ID) : 'Provider',
-    startDate: row.START_DATE,
-    purpose: row.MED_CLASS || row.GENERIC_NAME || '',
+    name: raw.MEDICATION_NAME || raw.MEDICATION_ID_MEDICATION_NAME || raw.DRUG_NAME || raw.medicationCodeableConcept?.text || '',
+    dosage: `${raw.DOSE || raw.DOSAGE || ''} ${raw.DOSE_UNIT || ''} ${raw.ROUTE || ''} ${raw.FREQUENCY || ''}`.trim() || raw.dosageInstruction?.[0]?.text || '',
+    prescriber: raw.ORD_CREATR_USER_ID_NAME || raw.ORDERING_PROV_ID || raw.PRESCRIBER || 'Provider',
+    startDate: raw.START_DATE || raw.ORDERING_DATE || raw.authoredOn || '',
+    purpose: raw.MED_CLASS || raw.GENERIC_NAME || raw.INDICATION || '',
   }
 }
 
-function mapAllergyRow(row) {
+function toAppAllergy(raw) {
   return {
-    allergen: row.ALLERGEN,
-    type: row.ALLERGY_TYPE_C_NAME,
-    reaction: row.REACTIONS,
-    severity: row.SEVERITY_C_NAME,
-    status: row.ALLERGY_STATUS_C_NAME || 'Active',
-    noted: row.NOTED_DATE,
+    allergen: raw.ALLERGEN || raw.ALLERGEN_ID_ALLERGEN_NAME || raw.ALLERGY_NAME || raw.code?.text || '',
+    type: raw.ALLERGY_TYPE_C_NAME || raw.ALLERGY_TYPE || raw.type || '',
+    reaction: raw.REACTIONS || raw.REACTION || raw.reaction?.[0]?.description || '',
+    severity: raw.SEVERITY_C_NAME || raw.ALLERGY_SEVERITY_C_NAME || raw.SEVERITY || raw.criticality || '',
+    status: raw.ALLERGY_STATUS_C_NAME || raw.ALRGY_STATUS_C_NAME || raw.STATUS || 'Active',
+    noted: raw.NOTED_DATE || raw.DATE_NOTED || raw.recordedDate || '',
   }
 }
 
-function mapImmunizationRow(row) {
+function toAppImmunization(raw) {
   return {
-    name: row.VACCINE_NAME,
-    code: row.VACCINE_CODE,
-    date: row.ADMIN_DATE,
-    route: row.ROUTE_C_NAME,
-    site: row.SITE_C_NAME,
-    manufacturer: row.MANUFACTURER,
-    status: row.IMMUNIZATION_STATUS || 'Completed',
+    name: raw.VACCINE_NAME || raw.IMMUNIZATION_NAME || raw.vaccineCode?.text || '',
+    code: raw.VACCINE_CODE || raw.VACCINE_CVX_CODE || raw.vaccineCode?.coding?.[0]?.code || '',
+    date: raw.ADMIN_DATE || raw.IMMUNIZATION_DATE || raw.occurrenceDateTime || '',
+    route: raw.ROUTE_C_NAME || raw.ADMIN_ROUTE_NAME || raw.ROUTE || '',
+    site: raw.SITE_C_NAME || raw.ADMIN_SITE_NAME || raw.SITE || '',
+    manufacturer: raw.MANUFACTURER || '',
+    status: raw.IMMUNIZATION_STATUS || raw.status || 'Completed',
   }
 }
 
-function mapVitalRow(row) {
+function toAppVital(raw) {
   return {
-    name: row.FLO_MEAS_NAME,
-    value: row.MEAS_VALUE,
-    unit: row.MEAS_UNIT,
-    time: row.RECORDED_TIME,
-    csnId: row.PAT_ENC_CSN_ID,
+    name: raw.FLO_MEAS_NAME || raw.VITAL_NAME || raw.code?.text || raw.MEASUREMENT_NAME || '',
+    value: raw.MEAS_VALUE || raw.VITAL_VALUE || raw.valueQuantity?.value?.toString() || '',
+    unit: raw.MEAS_UNIT || raw.VITAL_UNIT || raw.valueQuantity?.unit || '',
+    time: raw.RECORDED_TIME || raw.MEASUREMENT_DATE || raw.effectiveDateTime || '',
+    csnId: raw.PAT_ENC_CSN_ID || raw.ENCOUNTER_ID || '',
   }
 }
 
-function mapDocumentRow(row) {
+function toAppDocument(raw) {
   return {
-    docId: row.DOCUMENT_ID,
-    type: row.DOC_TYPE,
-    status: row.DOC_STATUS_C_NAME,
-    author: row.AUTHOR_PROV_NAME || row.AUTHOR_PROV_ID,
-    date: row.CREATE_INSTANT_DTTM,
-    specialty: row.SPECIALTY,
-    csnId: row.PAT_ENC_CSN_ID,
+    docId: raw.DOCUMENT_ID || raw.DOC_INFO_ID || raw.id || '',
+    type: raw.DOC_TYPE || raw.DOC_INFO_TYPE_C_NAME || raw.DOCUMENT_TYPE || raw.type?.text || '',
+    status: raw.DOC_STATUS_C_NAME || raw.STATUS || '',
+    author: raw.AUTHOR_PROV_NAME || raw.CREATE_USER_ID_NAME || raw.AUTHOR || '',
+    date: raw.CREATE_INSTANT_DTTM || raw.DOCUMENT_DATE || raw.date || '',
+    specialty: raw.SPECIALTY || '',
+    csnId: raw.PAT_ENC_CSN_ID || raw.ENCOUNTER_ID || '',
   }
 }
 
-// ─── Build Patient Summary ──────────────────────────────────────────────────
+// ─── FHIR Resource → App Shape ──────────────────────────────────────────────
+// For NDJSON / FHIR JSON vendors (Athena, Cerner)
 
-function buildPatientSummary(patient, encounters, orders, results, conditions, medications, allergies, immunizations, vitals, documents) {
+function fhirResourceToAppRow(resource) {
+  switch (resource.resourceType) {
+    case 'Patient': return { _type: 'patient', ...fhirPatientToRaw(resource) }
+    case 'Encounter': return { _type: 'encounter', ...fhirEncounterToRaw(resource) }
+    case 'Condition': return { _type: 'condition', ...fhirConditionToRaw(resource) }
+    case 'MedicationRequest':
+    case 'MedicationStatement': return { _type: 'medication', ...fhirMedicationToRaw(resource) }
+    case 'Observation': return { _type: fhirObservationCategory(resource), ...fhirObservationToRaw(resource) }
+    case 'AllergyIntolerance': return { _type: 'allergy', ...fhirAllergyToRaw(resource) }
+    case 'Immunization': return { _type: 'immunization', ...fhirImmunizationToRaw(resource) }
+    case 'DocumentReference': return { _type: 'document', ...fhirDocumentToRaw(resource) }
+    case 'Procedure': return { _type: 'procedure', ...resource }
+    default: return null
+  }
+}
+
+function fhirPatientToRaw(r) {
+  const name = r.name?.[0] || {}
+  return {
+    PAT_ID: r.id,
+    PAT_FIRST_NAME: Array.isArray(name.given) ? name.given[0] : name.given || '',
+    PAT_LAST_NAME: name.family || '',
+    PAT_NAME: `${name.family || ''}, ${Array.isArray(name.given) ? name.given.join(' ') : name.given || ''}`,
+    BIRTH_DATE: r.birthDate || '',
+    SEX_C_NAME: r.gender === 'male' ? 'Male' : r.gender === 'female' ? 'Female' : 'Unknown',
+    CITY: r.address?.[0]?.city || '',
+    STATE_C_NAME: r.address?.[0]?.state || '',
+    ZIP: r.address?.[0]?.postalCode || '',
+  }
+}
+
+function fhirEncounterToRaw(r) {
+  return {
+    PAT_ENC_CSN_ID: r.id,
+    PAT_ID: r.subject?.reference?.split('/')?.pop() || '',
+    CONTACT_DATE: r.period?.start || '',
+    ENC_TYPE_C_NAME: r.type?.[0]?.text || r.class?.display || '',
+    APPT_STATUS_C_NAME: r.status || '',
+  }
+}
+
+function fhirConditionToRaw(r) {
+  return {
+    DX_ID_DX_NAME: r.code?.text || r.code?.coding?.[0]?.display || '',
+    NOTED_DATE: r.onsetDateTime || r.recordedDate || '',
+    PROBLEM_STATUS_C_NAME: r.clinicalStatus?.coding?.[0]?.code === 'active' ? 'Active' : 'Resolved',
+    RESOLVED_DATE: r.abatementDateTime || '',
+    PAT_ID: r.subject?.reference?.split('/')?.pop() || '',
+  }
+}
+
+function fhirMedicationToRaw(r) {
+  return {
+    MEDICATION_NAME: r.medicationCodeableConcept?.text || r.medicationCodeableConcept?.coding?.[0]?.display || '',
+    DOSAGE: r.dosageInstruction?.[0]?.text || '',
+    ORDERING_DATE: r.authoredOn || r.effectiveDateTime || '',
+    PAT_ID: r.subject?.reference?.split('/')?.pop() || '',
+  }
+}
+
+function fhirObservationCategory(r) {
+  const cats = r.category || []
+  for (const cat of cats) {
+    const codes = cat.coding || []
+    for (const c of codes) {
+      if (c.code === 'vital-signs') return 'vital'
+      if (c.code === 'laboratory') return 'result'
+    }
+  }
+  return 'result'
+}
+
+function fhirObservationToRaw(r) {
+  return {
+    COMPONENT_NAME: r.code?.text || r.code?.coding?.[0]?.display || '',
+    ORD_VALUE: r.valueQuantity?.value?.toString() || r.valueString || '',
+    ORD_NUM_VALUE: r.valueQuantity?.value?.toString() || '',
+    REFERENCE_UNIT: r.valueQuantity?.unit || '',
+    RESULT_TIME: r.effectiveDateTime || '',
+    RESULT_FLAG_C_NAME: r.interpretation?.[0]?.coding?.[0]?.code === 'N' ? 'Normal' : r.interpretation?.[0]?.text || 'Normal',
+    ORDER_ID: r.basedOn?.[0]?.reference?.split('/')?.pop() || '',
+    PAT_ID: r.subject?.reference?.split('/')?.pop() || '',
+    PAT_ENC_CSN_ID: r.encounter?.reference?.split('/')?.pop() || '',
+    // Vital-specific
+    FLO_MEAS_NAME: r.code?.text || r.code?.coding?.[0]?.display || '',
+    MEAS_VALUE: r.valueQuantity?.value?.toString() || r.valueString || '',
+    MEAS_UNIT: r.valueQuantity?.unit || '',
+    RECORDED_TIME: r.effectiveDateTime || '',
+  }
+}
+
+function fhirAllergyToRaw(r) {
+  return {
+    ALLERGEN: r.code?.text || r.code?.coding?.[0]?.display || '',
+    ALLERGY_TYPE_C_NAME: r.type || '',
+    REACTIONS: r.reaction?.[0]?.manifestation?.[0]?.text || r.reaction?.[0]?.description || '',
+    SEVERITY_C_NAME: r.criticality || '',
+    ALLERGY_STATUS_C_NAME: r.clinicalStatus?.coding?.[0]?.code === 'active' ? 'Active' : 'Inactive',
+    NOTED_DATE: r.recordedDate || r.onsetDateTime || '',
+    PAT_ID: r.patient?.reference?.split('/')?.pop() || '',
+  }
+}
+
+function fhirImmunizationToRaw(r) {
+  return {
+    VACCINE_NAME: r.vaccineCode?.text || r.vaccineCode?.coding?.[0]?.display || '',
+    VACCINE_CODE: r.vaccineCode?.coding?.[0]?.code || '',
+    ADMIN_DATE: r.occurrenceDateTime || '',
+    ROUTE_C_NAME: r.route?.text || '',
+    SITE_C_NAME: r.site?.text || '',
+    MANUFACTURER: r.manufacturer?.display || '',
+    IMMUNIZATION_STATUS: r.status || 'completed',
+    PAT_ID: r.patient?.reference?.split('/')?.pop() || '',
+  }
+}
+
+function fhirDocumentToRaw(r) {
+  return {
+    DOC_INFO_ID: r.id,
+    DOC_INFO_TYPE_C_NAME: r.type?.text || r.type?.coding?.[0]?.display || '',
+    DOC_STATUS_C_NAME: r.status || '',
+    CREATE_USER_ID_NAME: r.author?.[0]?.display || '',
+    CREATE_INSTANT_DTTM: r.date || '',
+    PAT_ID: r.subject?.reference?.split('/')?.pop() || '',
+    PAT_ENC_CSN_ID: r.context?.encounter?.[0]?.reference?.split('/')?.pop() || '',
+  }
+}
+
+// ─── C-CDA → App Shape ─────────────────────────────────────────────────────
+
+function ccdaSectionsToRawRows(sections, metadata) {
+  const rows = {
+    patients: [],
+    encounters: [],
+    conditions: [],
+    medications: [],
+    allergies: [],
+    results: [],
+    vitals: [],
+    immunizations: [],
+    documents: [],
+  }
+
+  // Patient from metadata
+  if (metadata?.patient) {
+    const p = metadata.patient
+    rows.patients.push({
+      PAT_ID: p.mrn || 'CCDA-PAT-1',
+      PAT_FIRST_NAME: p.firstName,
+      PAT_LAST_NAME: p.lastName,
+      PAT_NAME: `${p.lastName}, ${p.firstName}`,
+      BIRTH_DATE: p.birthDate ? formatCCDADate(p.birthDate) : '',
+      SEX_C_NAME: p.sex || 'Unknown',
+    })
+  }
+
+  for (const sec of sections) {
+    const sectionRows = sec.rows.length > 0 ? sec.rows : sec.entries.map(e => flattenEntry(e))
+
+    switch (sec.dataType) {
+      case 'problems':
+        sectionRows.forEach(r => rows.conditions.push({
+          DX_ID_DX_NAME: r.displayName || r.Condition || r.Problem || r.text || '',
+          NOTED_DATE: formatCCDADate(r.startTime || r.effectiveTime || r['Date of Diagnosis'] || ''),
+          PROBLEM_STATUS_C_NAME: r.status === 'completed' ? 'Resolved' : 'Active',
+          RESOLVED_DATE: formatCCDADate(r.endTime || ''),
+        }))
+        break
+
+      case 'allergies':
+        sectionRows.forEach(r => rows.allergies.push({
+          ALLERGEN: r.displayName || r.Substance || r.Allergen || r.text || '',
+          ALLERGY_TYPE_C_NAME: r.Type || '',
+          REACTIONS: r.Reaction || r.Reactions || r.text || '',
+          SEVERITY_C_NAME: r.Severity || '',
+          ALLERGY_STATUS_C_NAME: r.status === 'completed' ? 'Inactive' : 'Active',
+          NOTED_DATE: formatCCDADate(r.effectiveTime || r.startTime || ''),
+        }))
+        break
+
+      case 'medications':
+        sectionRows.forEach(r => rows.medications.push({
+          MEDICATION_NAME: r.displayName || r.Medication || r.Drug || r.text || '',
+          DOSAGE: r.Dose || r.Dosage || r.Instructions || '',
+          ORDERING_DATE: formatCCDADate(r.startTime || r.effectiveTime || ''),
+          ROUTE: r.Route || '',
+        }))
+        break
+
+      case 'results':
+        sectionRows.forEach(r => rows.results.push({
+          COMPONENT_NAME: r.displayName || r.Test || r['Lab Test'] || r.text || '',
+          ORD_VALUE: r.value || r.Result || r.Value || '',
+          REFERENCE_UNIT: r.unit || r.Unit || r.Units || '',
+          RESULT_TIME: formatCCDADate(r.effectiveTime || r.Date || ''),
+          RESULT_FLAG_C_NAME: (r.Flag || r.Interpretation || 'Normal'),
+        }))
+        break
+
+      case 'vitals':
+        sectionRows.forEach(r => rows.vitals.push({
+          FLO_MEAS_NAME: r.displayName || r['Vital Sign'] || r.Measurement || r.text || '',
+          MEAS_VALUE: r.value || r.Value || r.Result || '',
+          MEAS_UNIT: r.unit || r.Unit || '',
+          RECORDED_TIME: formatCCDADate(r.effectiveTime || r.Date || ''),
+        }))
+        break
+
+      case 'encounters':
+        sectionRows.forEach(r => rows.encounters.push({
+          PAT_ENC_CSN_ID: r.code || `ENC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          CONTACT_DATE: formatCCDADate(r.startTime || r.effectiveTime || r.Date || ''),
+          ENC_TYPE_C_NAME: r.displayName || r.Type || r.text || '',
+          APPT_STATUS_C_NAME: r.status || '',
+        }))
+        break
+
+      case 'immunizations':
+        sectionRows.forEach(r => rows.immunizations.push({
+          VACCINE_NAME: r.displayName || r.Vaccine || r.Immunization || r.text || '',
+          ADMIN_DATE: formatCCDADate(r.effectiveTime || r.startTime || r.Date || ''),
+          IMMUNIZATION_STATUS: r.status || 'Completed',
+        }))
+        break
+
+      default:
+        break
+    }
+  }
+
+  return rows
+}
+
+function flattenEntry(entry) {
+  const flat = { ...entry }
+  delete flat._type
+  delete flat.rawElement
+  return flat
+}
+
+function formatCCDADate(val) {
+  if (!val) return ''
+  // C-CDA dates: YYYYMMDD or YYYYMMDDHHmmss
+  if (/^\d{8,14}$/.test(val)) {
+    const y = val.slice(0, 4)
+    const m = val.slice(4, 6)
+    const d = val.slice(6, 8)
+    return `${m}/${d}/${y}`
+  }
+  return val
+}
+
+// ─── Build Patient Summaries ────────────────────────────────────────────────
+
+function buildPatientSummary(patient, encounters, orders, results, conditions,
+                              medications, allergies, immunizations, vitals, documents) {
   const abnormalResults = results.filter(r => r.flag && r.flag !== 'Normal')
   return {
     ...patient,
@@ -233,26 +470,165 @@ function buildPatientSummary(patient, encounters, orders, results, conditions, m
   }
 }
 
-// ─── Main Parse Functions ───────────────────────────────────────────────────
+function computeDateRange(encounters) {
+  if (encounters.length === 0) return { start: '', end: '' }
+  const dates = encounters.map(e => e.contactDate).filter(Boolean).sort()
+  return { start: dates[0], end: dates[dates.length - 1] }
+}
 
-/**
- * Parse a collection of TSV text contents keyed by filename.
- * Returns the same data structure as generateSampleParsedData().
- */
-function parseEpicTSVData(tsvMap) {
-  // Parse each table if present
-  const patientRows = tsvMap['PATIENT.tsv'] ? parseTSV(tsvMap['PATIENT.tsv']).map(mapPatientRow) : []
-  const encounterRows = tsvMap['PAT_ENC.tsv'] ? parseTSV(tsvMap['PAT_ENC.tsv']).map(mapEncounterRow) : []
-  const orderRows = tsvMap['ORDER_PROC.tsv'] ? parseTSV(tsvMap['ORDER_PROC.tsv']).map(mapOrderRow) : []
-  const resultRows = tsvMap['ORDER_RESULTS.tsv'] ? parseTSV(tsvMap['ORDER_RESULTS.tsv']).map(mapResultRow) : []
-  const problemRows = tsvMap['PROBLEM_LIST.tsv'] ? parseTSV(tsvMap['PROBLEM_LIST.tsv']).map(mapProblemRow) : []
-  const medRows = tsvMap['ORDER_MED.tsv'] ? parseTSV(tsvMap['ORDER_MED.tsv']).map(mapMedicationRow) : []
-  const allergyRows = tsvMap['ALLERGY.tsv'] ? parseTSV(tsvMap['ALLERGY.tsv']).map(mapAllergyRow) : []
-  const immuneRows = tsvMap['IMMUNE.tsv'] ? parseTSV(tsvMap['IMMUNE.tsv']).map(mapImmunizationRow) : []
-  const vitalRows = tsvMap['IP_FLWSHT_MEAS.tsv'] ? parseTSV(tsvMap['IP_FLWSHT_MEAS.tsv']).map(mapVitalRow) : []
-  const docRows = tsvMap['DOC_INFORMATION.tsv'] ? parseTSV(tsvMap['DOC_INFORMATION.tsv']).map(mapDocumentRow) : []
+// ─── Delimited Data Assembly ────────────────────────────────────────────────
 
-  // If no PATIENT rows found, try to infer from encounters
+function assembleFromDelimited(delimitedMap, rules) {
+  // Parse each file using appropriate parser (TSV or CSV)
+  const rawTables = {}
+  for (const [filename, text] of Object.entries(delimitedMap)) {
+    const isCSV = filename.toLowerCase().endsWith('.csv')
+    rawTables[filename] = isCSV ? parseCSV(text) : parseTSV(text)
+  }
+
+  // Apply YAML rules to each table (if rules loaded) for FHIR output
+  const fhirResources = {}
+  if (rules.length > 0) {
+    for (const [filename, rows] of Object.entries(rawTables)) {
+      const rule = rules.find(r =>
+        r.source_file?.toUpperCase() === filename.toUpperCase() ||
+        (r.epic_table?.toUpperCase() + '.TSV') === filename.toUpperCase()
+      )
+      if (rule) {
+        fhirResources[filename] = rows.map(row => applyRule(rule, row))
+      }
+    }
+  }
+
+  // Build app-shape rows (using raw columns — adapters handle column name variants)
+  const getRows = (fileKey, adapter) => {
+    const rows = rawTables[fileKey]
+    return rows ? rows.map(adapter) : []
+  }
+
+  const patientRows   = getRows('PATIENT.tsv', toAppPatient)
+  const encounterRows = getRows('PAT_ENC.tsv', toAppEncounter)
+  const orderRows     = getRows('ORDER_PROC.tsv', toAppOrder)
+  const resultRows    = getRows('ORDER_RESULTS.tsv', toAppResult)
+  const problemRows   = getRows('PROBLEM_LIST.tsv', toAppCondition)
+  const medRows       = getRows('ORDER_MED.tsv', toAppMedication)
+  const allergyRows   = getRows('ALLERGY.tsv', toAppAllergy)
+  const immuneRows    = getRows('IMMUNE.tsv', toAppImmunization)
+  const vitalRows     = getRows('IP_FLWSHT_MEAS.tsv', toAppVital)
+  const docRows       = getRows('DOC_INFORMATION.tsv', toAppDocument)
+
+  return { patientRows, encounterRows, orderRows, resultRows, problemRows, medRows, allergyRows, immuneRows, vitalRows, docRows, fhirResources }
+}
+
+// ─── FHIR JSON Assembly ─────────────────────────────────────────────────────
+
+function assembleFromFHIR(jsonFiles) {
+  const allResources = []
+
+  for (const { text, format } of jsonFiles) {
+    if (format === 'ndjson') {
+      allResources.push(...parseNDJSON(text))
+    } else {
+      allResources.push(...parseFHIRJSON(text))
+    }
+  }
+
+  // Categorize resources
+  const categories = {
+    patients: [], encounters: [], conditions: [], medications: [],
+    results: [], vitals: [], allergies: [], immunizations: [], documents: [],
+  }
+
+  for (const resource of allResources) {
+    const mapped = fhirResourceToAppRow(resource)
+    if (!mapped) continue
+
+    switch (mapped._type) {
+      case 'patient':      categories.patients.push(mapped); break
+      case 'encounter':    categories.encounters.push(mapped); break
+      case 'condition':    categories.conditions.push(mapped); break
+      case 'medication':   categories.medications.push(mapped); break
+      case 'result':       categories.results.push(mapped); break
+      case 'vital':        categories.vitals.push(mapped); break
+      case 'allergy':      categories.allergies.push(mapped); break
+      case 'immunization': categories.immunizations.push(mapped); break
+      case 'document':     categories.documents.push(mapped); break
+    }
+  }
+
+  return {
+    patientRows: categories.patients.map(toAppPatient),
+    encounterRows: categories.encounters.map(toAppEncounter),
+    orderRows: [],
+    resultRows: categories.results.map(toAppResult),
+    problemRows: categories.conditions.map(toAppCondition),
+    medRows: categories.medications.map(toAppMedication),
+    allergyRows: categories.allergies.map(toAppAllergy),
+    immuneRows: categories.immunizations.map(toAppImmunization),
+    vitalRows: categories.vitals.map(toAppVital),
+    docRows: categories.documents.map(toAppDocument),
+    fhirResources: allResources,
+  }
+}
+
+// ─── C-CDA XML Assembly ─────────────────────────────────────────────────────
+
+function assembleFromCCDA(xmlFiles) {
+  const merged = {
+    patients: [], encounters: [], conditions: [], medications: [],
+    results: [], vitals: [], allergies: [], immunizations: [], documents: [],
+  }
+
+  for (const { text } of xmlFiles) {
+    const { sections, metadata } = parseCCDA(text)
+    const rows = ccdaSectionsToRawRows(sections, metadata)
+
+    merged.patients.push(...rows.patients)
+    merged.encounters.push(...rows.encounters)
+    merged.conditions.push(...rows.conditions)
+    merged.medications.push(...rows.medications)
+    merged.results.push(...rows.results)
+    merged.vitals.push(...rows.vitals)
+    merged.allergies.push(...rows.allergies)
+    merged.immunizations.push(...rows.immunizations)
+    merged.documents.push(...rows.documents)
+  }
+
+  return {
+    patientRows: merged.patients.map(toAppPatient),
+    encounterRows: merged.encounters.map(toAppEncounter),
+    orderRows: [],
+    resultRows: merged.results.map(toAppResult),
+    problemRows: merged.conditions.map(toAppCondition),
+    medRows: merged.medications.map(toAppMedication),
+    allergyRows: merged.allergies.map(toAppAllergy),
+    immuneRows: merged.immunizations.map(toAppImmunization),
+    vitalRows: merged.vitals.map(toAppVital),
+    docRows: merged.documents.map(toAppDocument),
+    fhirResources: {},
+  }
+}
+
+// ─── Final Assembly ─────────────────────────────────────────────────────────
+
+function assembleParsedData(assembled, documentIndexes, vendor, rules) {
+  let { patientRows, encounterRows, orderRows, resultRows, problemRows,
+        medRows, allergyRows, immuneRows, vitalRows, docRows, fhirResources } = assembled
+
+  // Add indexed documents
+  if (documentIndexes.length > 0) {
+    docRows = [...docRows, ...documentIndexes.map(d => ({
+      docId: d.metadata.fileName,
+      type: d.metadata.category,
+      status: 'Available',
+      author: '',
+      date: d.metadata.lastModified || '',
+      specialty: '',
+      csnId: '',
+    }))]
+  }
+
+  // If no patient rows, infer from encounters
   if (patientRows.length === 0 && encounterRows.length > 0) {
     const uniquePatIds = [...new Set(encounterRows.map(e => e.patId))]
     uniquePatIds.forEach(id => {
@@ -264,28 +640,34 @@ function parseEpicTSVData(tsvMap) {
     })
   }
 
+  // If still no patients, create a placeholder
+  if (patientRows.length === 0) {
+    patientRows.push({
+      patId: 'UNKNOWN', name: 'Unknown Patient', firstName: 'Unknown', lastName: 'Patient',
+      age: 0, city: '', state: '', zip: '', birthDate: '', sex: 'Unknown',
+      ethnicGroup: '', language: '', maritalStatus: '',
+    })
+  }
+
   // Build per-patient summaries
+  const isSingle = patientRows.length === 1
   const patientSummaries = patientRows.map(patient => {
     const patId = patient.patId
-    const enc = encounterRows.filter(e => e.patId === patId)
-    const ord = orderRows.filter(o => o.patId === patId)
-    // Results link through orders
+    const enc  = encounterRows.filter(e => isSingle || e.patId === patId)
+    const ord  = orderRows.filter(o => isSingle || o.patId === patId)
     const orderIds = new Set(ord.map(o => o.orderId))
-    const res = resultRows.filter(r => orderIds.has(r.orderId))
-    // Problem list may have patId or may not (single-patient ZIP) - use all if single patient
-    const prob = patientRows.length === 1 ? problemRows : problemRows.filter(p => p.patId === patId)
-    const meds = patientRows.length === 1 ? medRows : medRows.filter(m => m.patId === patId)
-    const allergies = patientRows.length === 1 ? allergyRows : allergyRows.filter(a => a.patId === patId)
-    const immunes = patientRows.length === 1 ? immuneRows : immuneRows.filter(im => im.patId === patId)
-    const vitals = patientRows.length === 1 ? vitalRows : vitalRows.filter(v => v.patId === patId)
-    const docs = patientRows.length === 1 ? docRows : docRows.filter(d => d.patId === patId)
+    const res  = isSingle ? resultRows : resultRows.filter(r => orderIds.has(r.orderId) || r.patId === patId)
+    const prob = isSingle ? problemRows : problemRows.filter(p => p.patId === patId)
+    const meds = isSingle ? medRows : medRows.filter(m => m.patId === patId)
+    const alrg = isSingle ? allergyRows : allergyRows.filter(a => a.patId === patId)
+    const immn = isSingle ? immuneRows : immuneRows.filter(i => i.patId === patId)
+    const vitl = isSingle ? vitalRows : vitalRows.filter(v => v.patId === patId)
+    const docs = isSingle ? docRows : docRows.filter(d => d.patId === patId)
 
-    return buildPatientSummary(patient, enc, ord, res, prob, meds, allergies, immunes, vitals, docs)
+    return buildPatientSummary(patient, enc, ord, res, prob, meds, alrg, immn, vitl, docs)
   })
 
   const totalRecords = encounterRows.length + orderRows.length + resultRows.length
-
-  // Select first patient by default
   const selectedPatient = patientSummaries[0] || null
 
   return {
@@ -300,132 +682,145 @@ function parseEpicTSVData(tsvMap) {
     dataSourceCount: 1,
     dateRange: computeDateRange(encounterRows),
     isSample: false,
+    fhirResources,
+    vendor,
+    rulesLoaded: rules.map(r => ({ type: r.resource_type, file: r.source_file })),
   }
 }
 
-function computeDateRange(encounters) {
-  if (encounters.length === 0) return { start: '', end: '' }
-  const dates = encounters.map(e => e.contactDate).filter(Boolean).sort()
-  return { start: dates[0], end: dates[dates.length - 1] }
-}
-
-// ─── Public API ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// PUBLIC API
+// ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Parse a list of uploaded File objects (TSV and/or ZIP files).
- * Returns { parsedData, aiSummary, selectedPatient }
+ * Parse uploaded File objects — any vendor, any format.
+ *
+ * Flow:
+ *   1. Extract all files (ZIP, TSV, CSV, JSON, NDJSON, XML, documents)
+ *   2. Detect primary format
+ *   3. Auto-detect vendor
+ *   4. Load YAML rules for vendor
+ *   5. Parse using format-appropriate parser
+ *   6. Convert to Dashboard-ready data
+ *
+ * @param {File[]} fileList - Array of uploaded File objects
+ * @returns {{ parsedData, aiSummary, selectedPatient, vendor, format }}
  */
 export async function parseUploadedFiles(fileList) {
-  const tsvMap = {}
+  // 1. Extract & categorize all files
+  const extracted = await extractAllFiles(fileList)
 
-  for (const file of fileList) {
-    const name = file.name.toLowerCase()
+  const totalFiles = Object.keys(extracted.delimited).length +
+    extracted.json.length + extracted.xml.length + extracted.documents.length
 
-    if (name.endsWith('.zip')) {
-      // Unzip and extract TSV files
-      const buffer = await readFileBuffer(file)
-      const zip = await JSZip.loadAsync(buffer)
-      const entries = Object.entries(zip.files)
-
-      for (const [path, entry] of entries) {
-        if (entry.dir) continue
-        const fileName = path.split('/').pop() // handle nested folders
-        if (fileName.toLowerCase().endsWith('.tsv')) {
-          const text = await entry.async('text')
-          // Use the base filename as key, normalize to expected names
-          const normalizedName = normalizeFileName(fileName)
-          if (normalizedName) {
-            // Merge: if we already have data for this table, append rows (skip header)
-            if (tsvMap[normalizedName]) {
-              const existingLines = tsvMap[normalizedName].split(/\r?\n/)
-              const newLines = text.split(/\r?\n/).filter(l => l.trim() !== '')
-              // Append data rows (skip first header line)
-              tsvMap[normalizedName] = existingLines.join('\n') + '\n' + newLines.slice(1).join('\n')
-            } else {
-              tsvMap[normalizedName] = text
-            }
-          }
-        }
-      }
-    } else if (name.endsWith('.tsv')) {
-      const text = await readFileText(file)
-      const normalizedName = normalizeFileName(file.name)
-      if (normalizedName) {
-        if (tsvMap[normalizedName]) {
-          const existingLines = tsvMap[normalizedName].split(/\r?\n/)
-          const newLines = text.split(/\r?\n/).filter(l => l.trim() !== '')
-          tsvMap[normalizedName] = existingLines.join('\n') + '\n' + newLines.slice(1).join('\n')
-        } else {
-          tsvMap[normalizedName] = text
-        }
-      }
-    }
+  if (totalFiles === 0) {
+    throw new Error(
+      'No valid health record files found. Supported formats:\n' +
+      '• TSV/CSV (Epic, Greenway, MEDITECH, eCW, NextGen)\n' +
+      '• JSON/NDJSON (Athena, Cerner FHIR exports)\n' +
+      '• XML/C-CDA (Allscripts, Practice Fusion)\n' +
+      '• ZIP archives containing any of the above\n' +
+      '• Documents (PDF, RTF, images)'
+    )
   }
 
-  if (Object.keys(tsvMap).length === 0) {
-    throw new Error('No valid Epic TSV files found in the uploaded file(s). Expected files like PATIENT.tsv, PAT_ENC.tsv, ORDER_PROC.tsv, etc.')
+  // 2. Detect primary format
+  const primaryFormat = detectPrimaryFormat(extracted)
+  console.log(`[Parser] Primary format: ${primaryFormat}, files: ${totalFiles}`)
+
+  // 3. Auto-detect vendor with hints
+  const hints = {}
+  if (extracted.json.length > 0) {
+    // Sample a few JSON resources for vendor fingerprinting
+    try {
+      const sampleText = extracted.json[0].text
+      const sampleResources = extracted.json[0].format === 'ndjson'
+        ? parseNDJSON(sampleText).slice(0, 5)
+        : parseFHIRJSON(sampleText).slice(0, 5)
+      hints.jsonResources = sampleResources
+    } catch { /* ignore */ }
+  }
+  if (extracted.xml.length > 0) {
+    try {
+      const { metadata } = parseCCDA(extracted.xml[0].text)
+      hints.xmlMetadata = metadata
+    } catch { /* ignore */ }
   }
 
-  const parsedData = parseEpicTSVData(tsvMap)
+  const vendor = detectVendor(extracted.allFileNames, primaryFormat, hints) || 'epic-tsv'
+  console.log(`[Parser] Detected vendor: ${vendor}`)
 
-  // Generate AI summary for the selected patient
+  // 4. Load YAML rules for this vendor (may fail for vendors without rules yet)
+  let rules = []
+  try {
+    rules = await loadRules(vendor)
+    console.log(`[Parser] Loaded ${rules.length} YAML rules for ${vendor}`)
+  } catch (err) {
+    console.warn(`[Parser] No YAML rules for ${vendor}:`, err.message)
+  }
+
+  // 5. Parse based on detected format
+  let assembled
+  switch (primaryFormat) {
+    case 'delimited':
+      assembled = assembleFromDelimited(extracted.delimited, rules)
+      break
+    case 'fhir-json':
+    case 'ndjson':
+      assembled = assembleFromFHIR(extracted.json)
+      break
+    case 'ccda-xml':
+      assembled = assembleFromCCDA(extracted.xml)
+      break
+    case 'documents':
+      // Documents only — create minimal structure
+      assembled = {
+        patientRows: [], encounterRows: [], orderRows: [], resultRows: [],
+        problemRows: [], medRows: [], allergyRows: [], immuneRows: [],
+        vitalRows: [], docRows: [], fhirResources: {},
+      }
+      break
+    default:
+      // Mixed — try all
+      assembled = assembleFromDelimited(extracted.delimited, rules)
+      if (extracted.json.length > 0) {
+        const jsonAssembled = assembleFromFHIR(extracted.json)
+        mergeAssembled(assembled, jsonAssembled)
+      }
+      if (extracted.xml.length > 0) {
+        const xmlAssembled = assembleFromCCDA(extracted.xml)
+        mergeAssembled(assembled, xmlAssembled)
+      }
+  }
+
+  // 6. Assemble final data
+  const parsedData = assembleParsedData(assembled, extracted.documents, vendor, rules)
+
+  // 7. Generate AI summary
   const aiSummary = parsedData.selectedPatient
     ? generateAISummary(parsedData.selectedPatient)
     : null
+
+  console.log(`[Parser] Complete: ${parsedData.totalPatients} patients, ${parsedData.totalRecords} records, vendor=${vendor}, format=${primaryFormat}`)
 
   return {
     parsedData,
     aiSummary,
     selectedPatient: parsedData.selectedPatient,
+    vendor,
+    format: primaryFormat,
   }
 }
 
-/** Normalize uploaded filenames to the expected canonical names */
-function normalizeFileName(filename) {
-  const base = filename.split('/').pop().split('\\').pop()
-  const upper = base.toUpperCase()
-
-  const knownFiles = [
-    'PATIENT.TSV',
-    'PAT_ENC.TSV',
-    'ORDER_PROC.TSV',
-    'ORDER_RESULTS.TSV',
-    'PROBLEM_LIST.TSV',
-    'ORDER_MED.TSV',
-    'ALLERGY.TSV',
-    'IMMUNE.TSV',
-    'IP_FLWSHT_MEAS.TSV',
-    'DOC_INFORMATION.TSV',
-  ]
-
-  // Direct match
-  if (knownFiles.includes(upper)) {
-    return base.split('.')[0].toUpperCase() + '.tsv'
-  }
-
-  // Fuzzy matching for common variants
-  const fileMap = {
-    PATIENT: 'PATIENT.tsv',
-    PAT_ENC: 'PAT_ENC.tsv',
-    ENCOUNTER: 'PAT_ENC.tsv',
-    ORDER_PROC: 'ORDER_PROC.tsv',
-    ORDER_RESULTS: 'ORDER_RESULTS.tsv',
-    RESULTS: 'ORDER_RESULTS.tsv',
-    PROBLEM_LIST: 'PROBLEM_LIST.tsv',
-    PROBLEMS: 'PROBLEM_LIST.tsv',
-    ORDER_MED: 'ORDER_MED.tsv',
-    MEDICATION: 'ORDER_MED.tsv',
-    ALLERGY: 'ALLERGY.tsv',
-    ALLERGIES: 'ALLERGY.tsv',
-    IMMUNE: 'IMMUNE.tsv',
-    IMMUNIZATION: 'IMMUNE.tsv',
-    IP_FLWSHT_MEAS: 'IP_FLWSHT_MEAS.tsv',
-    FLOWSHEET: 'IP_FLWSHT_MEAS.tsv',
-    VITALS: 'IP_FLWSHT_MEAS.tsv',
-    DOC_INFORMATION: 'DOC_INFORMATION.tsv',
-    DOCUMENTS: 'DOC_INFORMATION.tsv',
-  }
-
-  const nameWithoutExt = upper.replace('.TSV', '')
-  return fileMap[nameWithoutExt] || null
+function mergeAssembled(target, source) {
+  target.patientRows.push(...(source.patientRows || []))
+  target.encounterRows.push(...(source.encounterRows || []))
+  target.orderRows.push(...(source.orderRows || []))
+  target.resultRows.push(...(source.resultRows || []))
+  target.problemRows.push(...(source.problemRows || []))
+  target.medRows.push(...(source.medRows || []))
+  target.allergyRows.push(...(source.allergyRows || []))
+  target.immuneRows.push(...(source.immuneRows || []))
+  target.vitalRows.push(...(source.vitalRows || []))
+  target.docRows.push(...(source.docRows || []))
 }

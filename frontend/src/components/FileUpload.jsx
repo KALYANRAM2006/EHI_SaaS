@@ -32,17 +32,22 @@ export default function FileUpload({ onComplete }) {
     processFiles(selectedFiles)
   }
 
+  const ACCEPT_EXTS = [
+    '.xml', '.json', '.ndjson', '.jsonl',
+    '.tsv', '.csv',
+    '.zip',
+    '.pdf', '.rtf', '.doc', '.docx',
+    '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp', '.gif', '.dcm',
+  ]
+
   const processFiles = (newFiles) => {
     const validFiles = newFiles.filter(file => {
-      const ext = file.name.toLowerCase()
-      return ext.endsWith('.xml') ||
-             ext.endsWith('.json') ||
-             ext.endsWith('.tsv') ||
-             ext.endsWith('.zip')
+      const lower = file.name.toLowerCase()
+      return ACCEPT_EXTS.some(ext => lower.endsWith(ext))
     })
 
     if (validFiles.length === 0) {
-      alert('Please upload valid health record files (.xml, .json, .tsv, .zip)')
+      alert('No supported files found. Accepted: TSV, CSV, JSON, NDJSON, XML, ZIP, PDF, RTF, DOC, DOCX, images')
       return
     }
 
@@ -84,10 +89,15 @@ export default function FileUpload({ onComplete }) {
 
   const detectFileType = (filename) => {
     const lower = filename.toLowerCase()
-    if (lower.endsWith('.xml')) return { type: 'C-CDA', color: 'text-blue-600 bg-blue-50' }
-    if (lower.endsWith('.json')) return { type: 'FHIR', color: 'text-green-600 bg-green-50' }
-    if (lower.endsWith('.tsv')) return { type: 'Epic TSV', color: 'text-purple-600 bg-purple-50' }
-    if (lower.endsWith('.zip')) return { type: 'Archive', color: 'text-orange-600 bg-orange-50' }
+    if (lower.endsWith('.xml'))                      return { type: 'C-CDA / XML', color: 'text-blue-600 bg-blue-50' }
+    if (lower.endsWith('.json'))                      return { type: 'FHIR JSON',   color: 'text-green-600 bg-green-50' }
+    if (lower.endsWith('.ndjson') || lower.endsWith('.jsonl')) return { type: 'NDJSON', color: 'text-green-600 bg-green-50' }
+    if (lower.endsWith('.tsv'))                       return { type: 'TSV',          color: 'text-purple-600 bg-purple-50' }
+    if (lower.endsWith('.csv'))                       return { type: 'CSV',          color: 'text-purple-600 bg-purple-50' }
+    if (lower.endsWith('.zip'))                       return { type: 'Archive',      color: 'text-orange-600 bg-orange-50' }
+    if (lower.endsWith('.pdf'))                       return { type: 'PDF',          color: 'text-red-600 bg-red-50' }
+    if (lower.endsWith('.rtf') || lower.endsWith('.doc') || lower.endsWith('.docx')) return { type: 'Document', color: 'text-red-600 bg-red-50' }
+    if (/\.(jpe?g|png|tiff?|bmp|gif|dcm)$/.test(lower)) return { type: 'Image', color: 'text-pink-600 bg-pink-50' }
     return { type: 'Unknown', color: 'text-gray-600 bg-gray-50' }
   }
 
@@ -100,7 +110,7 @@ export default function FileUpload({ onComplete }) {
         if (success) {
           onComplete()
         } else {
-          setParseError('Failed to parse the uploaded files. Please ensure they are valid Epic EHI TSV or ZIP files.')
+          setParseError('Failed to parse the uploaded files. Please ensure they are valid health record files (TSV, CSV, JSON, NDJSON, XML, ZIP).')
         }
       } catch (err) {
         setParseError(err.message || 'An error occurred while parsing files.')
@@ -126,7 +136,7 @@ export default function FileUpload({ onComplete }) {
           {dragOver ? 'Drop files here' : 'Drop files here or click to browse'}
         </p>
         <p className="text-sm text-gray-500">
-          Supports .xml (C-CDA), .json (FHIR), .tsv (Epic), .zip
+          TSV &middot; CSV &middot; JSON &middot; NDJSON &middot; XML/C-CDA &middot; ZIP &middot; PDF &middot; RTF &middot; Images
         </p>
       </div>
 
@@ -134,7 +144,7 @@ export default function FileUpload({ onComplete }) {
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".xml,.json,.tsv,.zip"
+        accept=".xml,.json,.ndjson,.jsonl,.tsv,.csv,.zip,.pdf,.rtf,.doc,.docx,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.gif,.dcm"
         onChange={handleFileSelect}
         className="hidden"
       />

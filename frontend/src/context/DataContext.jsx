@@ -13,6 +13,8 @@ export function DataProvider({ children }) {
   const [isSampleData, setIsSampleData] = useState(false)
   const [aiSummary, setAiSummary] = useState(null)
   const [selectedPatient, setSelectedPatient] = useState(null)
+  const [detectedVendor, setDetectedVendor] = useState(null)
+  const [detectedFormat, setDetectedFormat] = useState(null)
 
   const addFile = (file) => {
     setUploadedFiles(prev => [...prev, { name: file.name, size: file.size, type: file.type }])
@@ -27,6 +29,8 @@ export function DataProvider({ children }) {
     setIsSampleData(false)
     setAiSummary(null)
     setSelectedPatient(null)
+    setDetectedVendor(null)
+    setDetectedFormat(null)
   }
 
   // Parse real uploaded files (ZIP/TSV)
@@ -39,6 +43,8 @@ export function DataProvider({ children }) {
       setParsedData(result.parsedData)
       setSelectedPatient(result.selectedPatient)
       setAiSummary(result.aiSummary)
+      setDetectedVendor(result.vendor || null)
+      setDetectedFormat(result.format || null)
       setIsSampleData(false)
       setLoading(false)
       return true
@@ -94,6 +100,8 @@ export function DataProvider({ children }) {
     setAiSummary,
     selectedPatient,
     selectPatient,
+    detectedVendor,
+    detectedFormat,
   }
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
