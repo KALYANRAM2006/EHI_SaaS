@@ -27,14 +27,20 @@ import {
   AlertTriangle,
   Info,
   ArrowRight,
+  Shield,
+  Trash2,
+  ShieldCheck,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { generateAISummary, providers } from '../data/sampleData'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
+import { PrivacyBadge, PrivacyPanel } from '../components/PrivacyBanner'
+import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
+import { getRuleIntegrity } from '../parsers/ruleEngine'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { uploadedFiles, parsedData, loading, isSampleData, aiSummary, setAiSummary, selectedPatient, selectPatient } = useData()
+  const { uploadedFiles, parsedData, loading, isSampleData, aiSummary, setAiSummary, selectedPatient, selectPatient, secureWipe, memoryCleared } = useData()
   const [activeView, setActiveView] = useState('overview')
   const [expandedSections, setExpandedSections] = useState({ overall: true })
   const [regenerating, setRegenerating] = useState(false)
@@ -43,6 +49,7 @@ export default function Dashboard() {
   const [timelineSearch, setTimelineSearch] = useState('')
   const [explorerSearch, setExplorerSearch] = useState('')
   const [expandedExplorer, setExpandedExplorer] = useState({ patient: true })
+  const [privacyOpen, setPrivacyOpen] = useState(false)
 
   useEffect(() => {
     if (uploadedFiles.length === 0) {
@@ -320,6 +327,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <PrivacyBadge onClick={() => setPrivacyOpen(true)} />
               {parsedData?.patients?.length > 1 && (
                 <select
                   value={selectedPatient?.patId || ''}
@@ -333,6 +341,13 @@ export default function Dashboard() {
                   ))}
                 </select>
               )}
+              <button
+                onClick={async () => { await secureWipe(); navigate('/') }}
+                className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors group relative"
+                title="Clear all data & return home"
+              >
+                <Trash2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              </button>
               <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
                 <HelpCircle className="w-5 h-5" />
               </button>
@@ -1601,6 +1616,54 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+
+      {/* Privacy & Security Footer */}
+      <footer className="border-t border-gray-200/50 bg-white/60 backdrop-blur-sm mt-8">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4 text-xs text-gray-500">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+              <span className="text-green-600 font-medium">Zero PHI Server</span>
+            </span>
+            <span>•</span>
+            <span>App v{APP_VERSION}</span>
+            <span>•</span>
+            <span>Rules v{RULE_ENGINE_VERSION}</span>
+            {(() => {
+              const integrity = getRuleIntegrity()
+              if (!integrity) return null
+              return (
+                <>
+                  <span>•</span>
+                  <span className={`flex items-center gap-1 ${integrity.verified ? 'text-green-600' : 'text-amber-600'}`}>
+                    {integrity.verified
+                      ? <><CheckCircle2 className="w-3 h-3" /> Rules verified</>
+                      : <><AlertTriangle className="w-3 h-3" /> Rules modified</>
+                    }
+                  </span>
+                </>
+              )
+            })()}
+          </div>
+          <button
+            onClick={() => setPrivacyOpen(true)}
+            className="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline"
+          >
+            Privacy Settings
+          </button>
+        </div>
+      </footer>
+
+      {/* Memory Cleared Toast */}
+      {memoryCleared && (
+        <div className="fixed bottom-6 right-6 z-[90] bg-green-600 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-2 animate-bounce">
+          <ShieldCheck className="w-5 h-5" />
+          <span className="font-medium">Memory securely cleared</span>
+        </div>
+      )}
+
+      {/* Privacy Panel Modal */}
+      <PrivacyPanel isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
     </div>
   )
 }

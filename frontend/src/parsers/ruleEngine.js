@@ -12,6 +12,26 @@
  */
 
 import yaml from 'js-yaml'
+import { computeSHA256, verifyRuleIntegrity, RULE_ENGINE_VERSION } from '../utils/privacy'
+
+// ─── Rule Integrity State ────────────────────────────────────────────────────
+
+let _lastIntegrityResult = null
+
+/**
+ * Get the last rule integrity verification result.
+ * @returns {{ verified: boolean, files: Array<{filename, hash, status}> } | null}
+ */
+export function getRuleIntegrity() {
+  return _lastIntegrityResult
+}
+
+/**
+ * Get the rule engine version string.
+ */
+export function getRuleEngineVersion() {
+  return RULE_ENGINE_VERSION
+}
 
 // ─── Rule Loading ────────────────────────────────────────────────────────────
 
@@ -130,6 +150,7 @@ export async function loadRules(vendor) {
 
   const basePath = `${import.meta.env.BASE_URL}rules/${vendor}`
   const rules = []
+  const ruleTexts = [] // For integrity verification
 
   for (const file of fileList) {
     try {
@@ -139,6 +160,7 @@ export async function loadRules(vendor) {
         continue
       }
       const text = await resp.text()
+      ruleTexts.push({ filename: `${vendor}/${file}`, content: text })
       const parsed = yaml.load(text)
       if (parsed) {
         parsed._filename = file
@@ -147,6 +169,18 @@ export async function loadRules(vendor) {
     } catch (err) {
       console.warn(`[RuleEngine] Error loading ${file}:`, err.message)
     }
+  }
+
+  // ─── Rule Integrity Verification ──────────────────────────────────────────
+  try {
+    _lastIntegrityResult = await verifyRuleIntegrity(ruleTexts)
+    if (_lastIntegrityResult.verified) {
+      console.log(`[RuleEngine] ✓ Integrity verified — ${ruleTexts.length} rules loaded for ${vendor}`)
+    } else {
+      console.warn(`[RuleEngine] ⚠ Rule integrity changed — some files differ from baseline`)
+    }
+  } catch (err) {
+    console.warn('[RuleEngine] Could not verify rule integrity:', err.message)
   }
 
   return rules

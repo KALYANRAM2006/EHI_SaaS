@@ -7,9 +7,14 @@ import {
   Shield,
   TrendingUp,
   Zap,
+  ShieldCheck,
+  Lock,
+  Eye,
 } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import { useData } from '../context/DataContext'
+import { PrivacyPanel } from '../components/PrivacyBanner'
+import { APP_VERSION } from '../utils/privacy'
 
 export default function LandingPage() {
   const navigate = useNavigate()
@@ -17,6 +22,7 @@ export default function LandingPage() {
   const [showUpload, setShowUpload] = useState(false)
   const [loadingSample, setLoadingSample] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [privacyOpen, setPrivacyOpen] = useState(false)
 
   const handleFilesUploaded = () => navigate('/dashboard')
 
@@ -191,13 +197,56 @@ export default function LandingPage() {
 
           {/* Privacy Badge */}
           <div className="flex justify-center">
-            <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-full">
-              <Shield className="w-5 h-5 text-green-600" />
+            <button
+              onClick={() => setPrivacyOpen(true)}
+              className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-full hover:shadow-lg hover:border-green-300 transition-all group cursor-pointer"
+            >
+              <ShieldCheck className="w-5 h-5 text-green-600 group-hover:scale-110 transition-transform" />
               <span className="text-sm font-semibold text-green-900">🔒 Your data never leaves your device</span>
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            </button>
+          </div>
+
+          {/* Privacy Trust Indicators */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+            <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 p-4">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <ShieldCheck className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Zero Server Contact</p>
+                <p className="text-xs text-gray-500">No PHI transmitted</p>
+              </div>
             </div>
+            <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 p-4">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Lock className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">AES-256 Encryption</p>
+                <p className="text-xs text-gray-500">Optional local storage</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 p-4">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Eye className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Session-Only Mode</p>
+                <p className="text-xs text-gray-500">Auto-clears on close</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Version Footer */}
+          <div className="flex justify-center">
+            <span className="text-xs text-gray-400">HealthLens v{APP_VERSION} — HIPAA-Ready Architecture</span>
           </div>
         </div>
       </div>
+
+      {/* Privacy Panel Modal */}
+      <PrivacyPanel isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
     </div>
   )
 }
