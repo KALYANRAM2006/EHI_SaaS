@@ -21,6 +21,10 @@ import {
   Search,
   BarChart3,
   BookOpen,
+  Lightbulb,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { generateAISummary, providers } from '../data/sampleData'
@@ -133,13 +137,137 @@ export default function Dashboard() {
     })
   }
 
-  const navTabs = [
+  // Top-level nav (matches mockup header)
+  const topNavItems = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'timeline', label: 'Timeline' },
+    { id: 'records', label: 'Records' },
+    { id: 'export', label: 'Export' },
+  ]
+
+  // Secondary tabs (below header)
+  const secondaryTabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'ai-summary', label: 'AI Summary' },
     { id: 'timeline', label: 'Timeline' },
-    { id: 'records', label: 'Records' },
+    { id: 'insights', label: 'Insights' },
     { id: 'data-explorer', label: 'Data Explorer' },
   ]
+
+  // Map top-level nav clicks to views
+  const handleTopNav = (id) => {
+    switch (id) {
+      case 'dashboard': setActiveView('overview'); break
+      case 'timeline': setActiveView('timeline'); break
+      case 'records': setActiveView('records'); break
+      case 'export': handleExport(); break
+    }
+  }
+
+  // Determine which top-level nav is active
+  const activeTopNav = (() => {
+    if (['overview', 'ai-summary', 'insights', 'data-explorer', 'medications', 'conditions', 'labs', 'procedures', 'trends'].includes(activeView)) return 'dashboard'
+    if (activeView === 'timeline') return 'timeline'
+    if (activeView === 'records') return 'records'
+    return 'dashboard'
+  })()
+
+  // Generate AI-driven health insights from patient data
+  const healthInsights = useMemo(() => {
+    if (!stats) return []
+    const insights = []
+
+    // Blood pressure trend
+    const bpResults = stats.results.filter(r =>
+      r.component?.toLowerCase().includes('systolic') ||
+      r.component?.toLowerCase().includes('blood pressure') ||
+      r.component?.toLowerCase().includes('intravascular systolic')
+    )
+    if (bpResults.length > 0) {
+      const vals = bpResults.map(r => parseFloat(r.value)).filter(v => !isNaN(v))
+      if (vals.length >= 2 && vals[vals.length - 1] > vals[0]) {
+        insights.push({
+          icon: TrendingUp,
+          iconColor: 'text-orange-500',
+          title: 'Blood Pressure Trending Up',
+          description: `Systolic BP increased from ${vals[0]} to ${vals[vals.length - 1]} mmHg. Consider lifestyle modifications.`,
+          severity: 'warning',
+        })
+      } else if (vals.length >= 1) {
+        const latest = vals[vals.length - 1]
+        if (latest > 130) {
+          insights.push({
+            icon: TrendingUp,
+            iconColor: 'text-orange-500',
+            title: 'Elevated Blood Pressure',
+            description: `Latest systolic BP is ${latest} mmHg. Monitor and discuss with your provider.`,
+            severity: 'warning',
+          })
+        }
+      }
+    }
+
+    // Medication compliance
+    if (stats.medications.length > 0 && stats.conditions.filter(c => c.status === 'Active').length > 0) {
+      insights.push({
+        icon: CheckCircle2,
+        iconColor: 'text-green-500',
+        title: 'Medication Compliance',
+        description: `Patient is on appropriate therapy for ${stats.conditions.filter(c => c.status === 'Active').length} documented condition${stats.conditions.filter(c => c.status === 'Active').length !== 1 ? 's' : ''}.`,
+        severity: 'positive',
+      })
+    }
+
+    // Abnormal labs
+    if (stats.abnormalResults.length > 0) {
+      insights.push({
+        icon: Lightbulb,
+        iconColor: 'text-blue-500',
+        title: 'Lab Monitoring Recommended',
+        description: `${stats.abnormalResults.length} abnormal lab result${stats.abnormalResults.length !== 1 ? 's' : ''} detected. Follow-up testing and dietary modifications advised.`,
+        severity: 'info',
+      })
+    }
+
+    // Overdue screenings
+    if (stats.encounters.length > 0) {
+      const lastVisit = new Date(stats.encounters[0]?.contactDate)
+      const monthsSince = Math.floor((Date.now() - lastVisit) / (1000 * 60 * 60 * 24 * 30))
+      if (monthsSince > 12) {
+        insights.push({
+          icon: AlertTriangle,
+          iconColor: 'text-amber-500',
+          title: 'Follow-Up Visit Overdue',
+          description: `Last documented encounter was ${monthsSince} months ago. Annual wellness visit recommended.`,
+          severity: 'warning',
+        })
+      }
+    }
+
+    // Allergy count
+    if (stats.allergies?.length > 0) {
+      insights.push({
+        icon: Info,
+        iconColor: 'text-blue-500',
+        title: 'Allergy Awareness',
+        description: `${stats.allergies.length} documented allergy${stats.allergies.length !== 1 ? 'ies' : 'y'}. Ensure all providers are aware before prescribing.`,
+        severity: 'info',
+      })
+    }
+
+    // If no insights generated, add a generic one
+    if (insights.length === 0) {
+      insights.push({
+        icon: CheckCircle2,
+        iconColor: 'text-green-500',
+        title: 'Health Data Loaded',
+        description: 'Your health records have been parsed successfully. Review the Overview and AI Summary tabs for details.',
+        severity: 'positive',
+      })
+    }
+
+    return insights
+  }, [stats])
 
   if (!stats) {
     return (
@@ -157,31 +285,31 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-      {/* Top Navigation Bar */}
+      {/* ── Top Navigation Bar ── */}
       <header className="bg-white/70 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Left: Logo */}
+            {/* Left: Logo + Top-level nav */}
             <div className="flex items-center space-x-8">
               <div className="flex items-center space-x-2 cursor-pointer" onClick={() => navigate('/')}>
-                <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-white" />
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center shadow-md">
+                  <Sparkles className="w-5 h-5 text-white" strokeWidth={2.5} />
                 </div>
-                <span className="text-lg font-bold text-gray-900">HealthLens</span>
+                <span className="text-xl font-bold tracking-tight text-gray-900">HealthLens</span>
               </div>
-              {/* Nav tabs matching screenshot */}
+              {/* Top-level nav: Dashboard | Timeline | Records | Export */}
               <nav className="hidden md:flex items-center space-x-1">
-                {navTabs.map((tab) => (
+                {topNavItems.map((item) => (
                   <button
-                    key={tab.id}
-                    onClick={() => setActiveView(tab.id)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      activeView === tab.id
-                        ? 'bg-primary-50 text-primary-700'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    key={item.id}
+                    onClick={() => handleTopNav(item.id)}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      activeTopNav === item.id
+                        ? 'text-gray-900 font-semibold'
+                        : 'text-gray-500 hover:text-gray-900'
                     }`}
                   >
-                    {tab.label}
+                    {item.label}
                   </button>
                 ))}
               </nav>
@@ -201,19 +329,39 @@ export default function Dashboard() {
                   ))}
                 </select>
               )}
-              <button onClick={handleExport} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors" title="Export">
-                <Download className="w-5 h-5" />
-              </button>
-              <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+              <button className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
                 <HelpCircle className="w-5 h-5" />
               </button>
-              <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+              <button className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
                 <User className="w-5 h-5" />
               </button>
             </div>
           </div>
         </div>
       </header>
+
+      {/* ── Secondary Tabs ── */}
+      {activeTopNav === 'dashboard' && (
+        <div className="bg-white border-b border-gray-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <nav className="flex items-center space-x-1 py-2">
+              {secondaryTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveView(tab.id)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activeView === tab.id
+                      ? 'bg-primary-50 text-primary-700'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -691,6 +839,52 @@ export default function Dashboard() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ===== INSIGHTS VIEW ===== */}
+        {activeView === 'insights' && (
+          <div className="space-y-6">
+            <div className="mb-2">
+              <div className="flex items-center space-x-2 mb-1">
+                <Lightbulb className="w-5 h-5 text-amber-500" />
+                <h2 className="text-2xl font-bold text-gray-900">AI-Generated Health Insights</h2>
+              </div>
+              <p className="text-gray-500">Personalized recommendations based on your health data</p>
+            </div>
+
+            {healthInsights.map((insight, index) => {
+              const Icon = insight.icon
+              const severityStyles = {
+                warning: 'border-orange-200 bg-orange-50/40',
+                positive: 'border-green-200 bg-green-50/40',
+                info: 'border-blue-200 bg-blue-50/40',
+              }
+              const badgeStyles = {
+                warning: 'bg-red-50 text-red-600 border border-red-200',
+                positive: 'bg-green-50 text-green-600 border border-green-200',
+                info: 'bg-blue-50 text-blue-600 border border-blue-200',
+              }
+              return (
+                <div
+                  key={index}
+                  className={`rounded-2xl border p-6 transition-shadow hover:shadow-md ${severityStyles[insight.severity] || 'border-gray-200 bg-white'}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-4">
+                      <Icon className={`w-6 h-6 mt-0.5 ${insight.iconColor}`} />
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{insight.title}</h3>
+                        <p className="text-gray-600 mt-1">{insight.description}</p>
+                      </div>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${badgeStyles[insight.severity] || 'bg-gray-100 text-gray-600'}`}>
+                      {insight.severity}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 

@@ -76,7 +76,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center shadow-md">
-              <Heart className="w-5 h-5 text-white" strokeWidth={2.5} />
+              <Sparkles className="w-5 h-5 text-white" strokeWidth={2.5} />
             </div>
             <span className="text-xl font-bold tracking-tight text-gray-900">HealthLens</span>
           </div>
