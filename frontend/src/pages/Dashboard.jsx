@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
+  ArrowRight,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { generateAISummary, providers } from '../data/sampleData'
@@ -63,46 +64,76 @@ export default function Dashboard() {
     const activeConditions = stats.conditions.filter(c => c.status === 'Active')
     return [
       {
-        emoji: '💊', label: 'Medications',
-        count: `${stats.medications.length} Active`,
-        stat: stats.medications.length > 0 ? stats.medications[0].name : 'None',
-        detail: stats.medications.length > 1 ? `+${stats.medications.length - 1} more` : '',
+        icon: Pill, label: 'Medications',
+        count: stats.medications.length,
+        countLabel: 'Active',
+        gradient: 'from-purple-500 to-purple-600',
+        bgColor: 'bg-purple-50',
+        shadowColor: 'rgba(168,85,247,0.2)',
+        borderColor: 'border-purple-200',
+        items: stats.medications.slice(0, 2).map(m => `${m.name} - ${m.dose || m.frequency || ''}`),
+        total: stats.medications.length,
         link: 'medications',
       },
       {
-        emoji: '🧪', label: 'Lab Results',
-        count: `${stats.results.length} Results`,
-        stat: `${stats.abnormalResults.length} Abnormal`,
-        detail: `${stats.orders.length} Orders`,
+        icon: TestTube, label: 'Lab Results',
+        count: stats.results.length,
+        countLabel: 'Results',
+        gradient: 'from-green-500 to-emerald-600',
+        bgColor: 'bg-green-50',
+        shadowColor: 'rgba(34,197,94,0.2)',
+        borderColor: 'border-green-200',
+        items: stats.results.slice(0, 2).map(r => `${r.component || 'Result'} - ${r.value || ''} ${r.units || ''}`),
+        total: stats.results.length,
         link: 'labs',
       },
       {
-        emoji: '🏥', label: 'Visits',
-        count: `${stats.encounters.length} Encounters`,
-        stat: stats.encounters.length > 0 ? `Last: ${new Date(stats.encounters[0].contactDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'None',
-        detail: '',
+        icon: Stethoscope, label: 'Visits',
+        count: stats.encounters.length,
+        countLabel: 'Encounters',
+        gradient: 'from-blue-500 to-blue-600',
+        bgColor: 'bg-blue-50',
+        shadowColor: 'rgba(59,130,246,0.2)',
+        borderColor: 'border-blue-200',
+        items: stats.encounters.slice(0, 2).map(e => `${new Date(e.contactDate).toLocaleDateString()} - ${e.visitType || 'Visit'}`),
+        total: stats.encounters.length,
         link: 'encounters',
       },
       {
-        emoji: '⚠️', label: 'Conditions',
-        count: `${activeConditions.length} Active`,
-        stat: activeConditions.length > 0 ? activeConditions[0].name : 'None documented',
-        detail: activeConditions.length > 1 ? `+${activeConditions.length - 1} more` : '',
+        icon: AlertCircle, label: 'Conditions',
+        count: activeConditions.length,
+        countLabel: 'Active',
+        gradient: 'from-red-500 to-red-600',
+        bgColor: 'bg-red-50',
+        shadowColor: 'rgba(239,68,68,0.2)',
+        borderColor: 'border-red-200',
+        items: activeConditions.slice(0, 2).map(c => c.name),
+        total: activeConditions.length,
         link: 'conditions',
       },
       {
-        emoji: '📋', label: 'Procedures',
-        count: `${stats.orders.filter(o => o.orderType === 'Imaging').length} Imaging`,
-        stat: `${stats.orders.filter(o => o.orderType === 'Lab').length} Lab Orders`,
-        detail: '',
+        icon: Syringe, label: 'Immunizations',
+        count: stats.orders.filter(o => o.orderType === 'Immunization').length || 0,
+        countLabel: 'Records',
+        gradient: 'from-orange-500 to-orange-600',
+        bgColor: 'bg-orange-50',
+        shadowColor: 'rgba(249,115,22,0.2)',
+        borderColor: 'border-orange-200',
+        items: stats.orders.filter(o => o.orderType === 'Immunization').slice(0, 2).map(o => o.name),
+        total: stats.orders.filter(o => o.orderType === 'Immunization').length || 0,
         link: 'procedures',
       },
       {
-        emoji: '📊', label: 'Trends',
-        count: `${stats.results.length} Data Points`,
-        stat: stats.abnormalResults.length > 0 ? 'Attention needed' : 'All normal',
-        detail: '',
-        link: 'trends',
+        icon: Activity, label: 'Orders',
+        count: stats.orders.length,
+        countLabel: 'Total',
+        gradient: 'from-indigo-500 to-indigo-600',
+        bgColor: 'bg-indigo-50',
+        shadowColor: 'rgba(99,102,241,0.2)',
+        borderColor: 'border-indigo-200',
+        items: stats.orders.slice(0, 2).map(o => o.name || 'Order'),
+        total: stats.orders.length,
+        link: 'procedures',
       },
     ]
   }, [stats])
@@ -137,40 +168,14 @@ export default function Dashboard() {
     })
   }
 
-  // Top-level nav (matches mockup header)
-  const topNavItems = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'timeline', label: 'Timeline' },
-    { id: 'records', label: 'Records' },
-    { id: 'export', label: 'Export' },
-  ]
-
-  // Secondary tabs (below header)
-  const secondaryTabs = [
+  // Tab definitions matching Figma mockup
+  const tabItems = [
     { id: 'overview', label: 'Overview' },
     { id: 'ai-summary', label: 'AI Summary' },
     { id: 'timeline', label: 'Timeline' },
     { id: 'insights', label: 'Insights' },
     { id: 'data-explorer', label: 'Data Explorer' },
   ]
-
-  // Map top-level nav clicks to views
-  const handleTopNav = (id) => {
-    switch (id) {
-      case 'dashboard': setActiveView('overview'); break
-      case 'timeline': setActiveView('timeline'); break
-      case 'records': setActiveView('records'); break
-      case 'export': handleExport(); break
-    }
-  }
-
-  // Determine which top-level nav is active
-  const activeTopNav = (() => {
-    if (['overview', 'ai-summary', 'insights', 'data-explorer', 'medications', 'conditions', 'labs', 'procedures', 'trends'].includes(activeView)) return 'dashboard'
-    if (activeView === 'timeline') return 'timeline'
-    if (activeView === 'records') return 'records'
-    return 'dashboard'
-  })()
 
   // Generate AI-driven health insights from patient data
   const healthInsights = useMemo(() => {
@@ -271,9 +276,9 @@ export default function Dashboard() {
 
   if (!stats) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50/30">
         <div className="text-center">
-          <svg className="animate-spin w-12 h-12 mx-auto text-primary-600 mb-4" viewBox="0 0 24 24">
+          <svg className="animate-spin w-12 h-12 mx-auto text-blue-600 mb-4" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
           </svg>
@@ -284,43 +289,34 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
-      {/* ── Top Navigation Bar ── */}
-      <header className="bg-white/70 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Left: Logo + Top-level nav */}
-            <div className="flex items-center space-x-8">
-              <div className="flex items-center space-x-2 cursor-pointer" onClick={() => navigate('/')}>
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center shadow-md">
-                  <Sparkles className="w-5 h-5 text-white" strokeWidth={2.5} />
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 relative overflow-hidden">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{backgroundImage:'radial-gradient(circle at 20% 50%, #3b82f6 1px, transparent 1px), radial-gradient(circle at 60% 70%, #8b5cf6 1px, transparent 1px), radial-gradient(circle at 80% 30%, #10b981 1px, transparent 1px)',backgroundSize:'50px 50px, 80px 80px, 60px 60px'}} />
+      {/* Gradient Orbs */}
+      <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-blue-400/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-purple-400/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+      {/* Header with Glass Effect */}
+      <header className="backdrop-blur-md bg-white/80 border-b border-gray-200/50 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-8">
+              <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow:'0 4px 14px rgba(59,130,246,0.3)'}}>
+                  <Sparkles className="w-6 h-6 text-white" />
                 </div>
-                <span className="text-xl font-bold tracking-tight text-gray-900">HealthLens</span>
+                <div>
+                  <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">HealthLens</span>
+                  <p className="text-xs text-gray-500 -mt-1">Dashboard</p>
+                </div>
               </div>
-              {/* Top-level nav: Dashboard | Timeline | Records | Export */}
-              <nav className="hidden md:flex items-center space-x-1">
-                {topNavItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleTopNav(item.id)}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${
-                      activeTopNav === item.id
-                        ? 'text-gray-900 font-semibold'
-                        : 'text-gray-500 hover:text-gray-900'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
             </div>
-            {/* Right: Patient selector + actions */}
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-2">
               {parsedData?.patients?.length > 1 && (
                 <select
                   value={selectedPatient?.patId || ''}
                   onChange={(e) => selectPatient(e.target.value)}
-                  className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 mr-2"
                 >
                   {parsedData.patients.map((p) => (
                     <option key={p.patId} value={p.patId}>
@@ -329,10 +325,10 @@ export default function Dashboard() {
                   ))}
                 </select>
               )}
-              <button className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+              <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
                 <HelpCircle className="w-5 h-5" />
               </button>
-              <button className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+              <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
                 <User className="w-5 h-5" />
               </button>
             </div>
@@ -340,177 +336,155 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* ── Secondary Tabs ── */}
-      {activeTopNav === 'dashboard' && (
-        <div className="bg-white border-b border-gray-100">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <nav className="flex items-center space-x-1 py-2">
-              {secondaryTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveView(tab.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeView === tab.id
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
+      {/* Tab Navigation — Gradient pill style matching Figma */}
+      <div className="max-w-7xl mx-auto px-6 pt-8">
+        <div className="inline-flex bg-white/80 backdrop-blur-sm border border-gray-200 p-1.5 rounded-2xl shadow-lg" style={{boxShadow:'0 4px 14px rgba(148,163,184,0.15)'}}>
+          {tabItems.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveView(tab.id)}
+              className={`px-6 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                activeView === tab.id
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+              style={activeView === tab.id ? {boxShadow:'0 4px 14px rgba(59,130,246,0.3)'} : {}}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* ===== OVERVIEW (Dashboard) VIEW ===== */}
         {activeView === 'overview' && (
-          <div className="space-y-6">
-            {/* Header Section */}
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Health Summary for {stats.patientName}
-              </h2>
-              <p className="text-gray-600 mt-1">
-                📊 {stats.age}-year-old {stats.sex} | {stats.encounters.length + stats.orders.length + stats.results.length} records | {isSampleData ? 'Sample Data' : 'Uploaded Data'} • Last Updated: Today
-              </p>
+          <div className="space-y-8">
+            {/* Patient Header with Badges */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Health Summary for {stats.patientName}
+                </h2>
+                <p className="text-gray-500 mt-1">
+                  {stats.age}-year-old {stats.sex} • {isSampleData ? 'Sample Data' : 'Uploaded Data'}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 mt-3 md:mt-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                  <Activity className="w-3.5 h-3.5" />
+                  {stats.encounters.length + stats.orders.length + stats.results.length} Total Records
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                  <Calendar className="w-3.5 h-3.5" />
+                  {stats.encounters.length > 0 ? `${new Date(stats.encounters[0].contactDate).toLocaleDateString()} - ${new Date(stats.encounters[stats.encounters.length - 1].contactDate).toLocaleDateString()}` : 'No dates'}
+                </span>
+              </div>
             </div>
 
-            {/* AI Health Summary Preview Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                    <Sparkles className="w-6 h-6 text-white" />
+            {/* AI Health Summary Card — Full gradient background matching Figma */}
+            <div className="relative rounded-2xl overflow-hidden shadow-xl" style={{boxShadow:'0 10px 40px rgba(59,130,246,0.15)'}}>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
+              <div className="absolute inset-0 opacity-10" style={{backgroundImage:'radial-gradient(circle, white 1px, transparent 1px)',backgroundSize:'20px 20px'}} />
+              <div className="relative p-8">
+                <div className="flex items-start justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                      <Sparkles className="w-7 h-7 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">AI Health Summary</h3>
+                      <p className="text-blue-100 text-sm">Generated using AI • Based on {aiSummary?.basedOn || 'your health records'}</p>
+                    </div>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900">AI Health Summary</h3>
-                </div>
-                <div className="flex items-center space-x-2">
                   <button
                     onClick={handleRegenerateAI}
                     disabled={regenerating}
-                    className="flex items-center space-x-1 px-3 py-1.5 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors text-sm font-medium disabled:opacity-50 border border-white/20"
                   >
                     <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
                     <span>Regenerate</span>
                   </button>
-                  <button className="flex items-center space-x-1 px-3 py-1.5 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors text-sm font-medium">
-                    <Share2 className="w-4 h-4" />
-                    <span>Share</span>
-                  </button>
                 </div>
-              </div>
 
-              {aiSummary && (
-                <div className="space-y-4">
-                  <p className="text-sm text-gray-500">
-                    ✨ Generated using AI • Based on {aiSummary.basedOn}
-                  </p>
-                  {/* Show only the Overall Health Story section as preview */}
-                  {aiSummary.sections.filter(s => s.id === 'overall').map(section => (
-                    <div key={section.id} className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-5 border border-teal-100">
-                      <div className="flex items-center space-x-2 mb-3">
-                        <span className="text-xl">{section.icon}</span>
-                        <h4 className="text-lg font-semibold text-gray-900">{section.title}</h4>
-                      </div>
-                      <div className="text-gray-700 leading-relaxed space-y-2">
-                        {section.content.split('\n\n').map((paragraph, i) => (
+                {aiSummary && (
+                  <div className="space-y-4">
+                    {aiSummary.sections.filter(s => s.id === 'overall').map(section => (
+                      <div key={section.id} className="text-white/90 leading-relaxed space-y-2 text-[15px]">
+                        {section.content.split('\n\n').slice(0, 2).map((paragraph, i) => (
                           <p key={i}>{renderFormattedText(paragraph)}</p>
                         ))}
                       </div>
-                    </div>
-                  ))}
-
-                  <div>
-                    <p className="font-semibold text-gray-900 mb-2">Key Highlights:</p>
-                    <ul className="space-y-1.5 text-gray-700">
-                      <li className="flex items-start">
-                        <span className="text-primary-600 mr-2">•</span>
-                        <span>{stats.medications.length} medication{stats.medications.length !== 1 ? 's' : ''} currently prescribed</span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-primary-600 mr-2">•</span>
-                        <span>{stats.conditions.filter(c => c.status === 'Active').length} active health condition{stats.conditions.filter(c => c.status === 'Active').length !== 1 ? 's' : ''} being managed</span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-primary-600 mr-2">•</span>
-                        <span>{stats.results.length} lab results on file ({stats.abnormalResults.length} abnormal)</span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-primary-600 mr-2">•</span>
-                        <span>{stats.encounters.length} healthcare encounters documented</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <button
-                    onClick={() => setActiveView('ai-summary')}
-                    className="text-primary-600 hover:text-primary-700 font-medium flex items-center space-x-1"
-                  >
-                    <span>Read Full Summary</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Category Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-              {categoryCards.map((card, index) => (
-                <div key={index} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer" onClick={() => setActiveView(card.link)}>
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="text-4xl">{card.emoji}</div>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">{card.label}</h3>
-                  <div className="space-y-1 mb-4">
-                    <p className="text-2xl font-bold text-gray-900">{card.count}</p>
-                    <p className="text-sm text-gray-600">{card.stat}</p>
-                    {card.detail && <p className="text-sm text-gray-500">{card.detail}</p>}
-                  </div>
-                  <span className="text-primary-600 hover:text-primary-700 font-medium flex items-center space-x-1 text-sm">
-                    <span>View All</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Health Trends */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="w-6 h-6 text-primary-600" />
-                  <h3 className="text-xl font-bold text-gray-900">Health Trends</h3>
-                </div>
-                <button
-                  onClick={() => setActiveView('trends')}
-                  className="text-primary-600 hover:text-primary-700 font-medium flex items-center space-x-1"
-                >
-                  <span>View Charts</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-              {stats.results.length > 0 ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold text-gray-700">Lab Values Overview</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {stats.results.filter(r => r.numValue != null).slice(0, 8).map((result, i) => (
-                      <div key={i} className={`p-3 rounded-lg border ${result.flag === 'Normal' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                        <p className="text-xs font-medium text-gray-500 truncate">{result.component}</p>
-                        <p className={`text-lg font-bold ${result.flag === 'Normal' ? 'text-green-700' : 'text-red-700'}`}>
-                          {result.value} <span className="text-xs font-normal">{result.unit}</span>
-                        </p>
-                        <p className="text-xs text-gray-500">{result.refLow}-{result.refHigh}</p>
-                      </div>
                     ))}
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
+                        <p className="text-white/60 text-xs">Medications</p>
+                        <p className="text-white text-xl font-bold">{stats.medications.length}</p>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
+                        <p className="text-white/60 text-xs">Conditions</p>
+                        <p className="text-white text-xl font-bold">{stats.conditions.filter(c => c.status === 'Active').length}</p>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
+                        <p className="text-white/60 text-xs">Lab Results</p>
+                        <p className="text-white text-xl font-bold">{stats.results.length}</p>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
+                        <p className="text-white/60 text-xs">Encounters</p>
+                        <p className="text-white text-xl font-bold">{stats.encounters.length}</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveView('ai-summary')}
+                      className="flex items-center gap-1 text-white font-medium hover:gap-2 transition-all mt-2"
+                    >
+                      <span>Read Full Summary</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
                   </div>
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">No lab results available for trends</p>
-              )}
+                )}
+              </div>
+            </div>
+
+            {/* Category Cards — Figma-style gradient icon + top border accent + hover lift */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {categoryCards.map((card, index) => {
+                const Icon = card.icon
+                return (
+                  <div
+                    key={index}
+                    className={`bg-white rounded-2xl border-t-4 ${card.borderColor} shadow-lg p-6 cursor-pointer transition-all duration-200 hover:-translate-y-1`}
+                    onClick={() => setActiveView(card.link)}
+                    style={{boxShadow: `0 4px 14px ${card.shadowColor}`}}
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = `0 12px 30px ${card.shadowColor}`}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = `0 4px 14px ${card.shadowColor}`}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className={`w-12 h-12 bg-gradient-to-br ${card.gradient} rounded-xl flex items-center justify-center shadow-lg`}>
+                        <Icon className="w-6 h-6 text-white" />
+                      </div>
+                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${card.bgColor} text-gray-700`}>
+                        {card.count} {card.countLabel}
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{card.label}</h3>
+                    <div className="space-y-1 mb-4 min-h-[40px]">
+                      {card.items.map((item, i) => (
+                        <p key={i} className="text-sm text-gray-600 truncate">{item}</p>
+                      ))}
+                      {card.items.length === 0 && <p className="text-sm text-gray-400">No records</p>}
+                    </div>
+                    <span className="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 text-sm">
+                      <span>View All</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -520,70 +494,98 @@ export default function Dashboard() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">AI Health Summary</h2>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={handleRegenerateAI}
                   disabled={regenerating}
-                  className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50 shadow-md"
+                  style={{boxShadow:'0 4px 14px rgba(59,130,246,0.3)'}}
                 >
                   <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
                   <span>Regenerate</span>
                 </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
+                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700">
                   <Share2 className="w-4 h-4" />
                   <span>Share</span>
                 </button>
               </div>
             </div>
 
-            {/* Meta info */}
-            <div className="bg-white rounded-xl shadow-sm p-4 flex items-center space-x-3 text-sm text-gray-600">
-              <Sparkles className="w-5 h-5 text-teal-500" />
-              <span>Generated using AI • Based on {aiSummary.basedOn}</span>
+            {/* Main Summary Gradient Card */}
+            <div className="relative rounded-2xl overflow-hidden shadow-xl" style={{boxShadow:'0 10px 40px rgba(59,130,246,0.12)'}}>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
+              <div className="absolute inset-0 opacity-10" style={{backgroundImage:'radial-gradient(circle, white 1px, transparent 1px)',backgroundSize:'20px 20px'}} />
+              <div className="relative p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                    <Sparkles className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Overall Health Story</h3>
+                    <p className="text-blue-100 text-sm">Based on {aiSummary.basedOn}</p>
+                  </div>
+                </div>
+                {aiSummary.sections.filter(s => s.id === 'overall').map(section => (
+                  <div key={section.id} className="text-white/90 leading-relaxed space-y-3">
+                    {section.content.split('\n\n').map((paragraph, i) => (
+                      <p key={i}>{renderFormattedText(paragraph)}</p>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* AI Summary Sections - expandable cards */}
-            {aiSummary.sections.map((section) => (
-              <div key={section.id} className={`bg-white rounded-2xl shadow-lg overflow-hidden ${section.id === 'overall' ? 'ring-2 ring-teal-100' : ''}`}>
-                <button
-                  onClick={() => toggleSection(section.id)}
-                  className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl">{section.icon}</span>
-                    <h3 className="text-lg font-bold text-gray-900">{section.title}</h3>
-                  </div>
-                  {expandedSections[section.id] ? (
-                    <ChevronDown className="w-5 h-5 text-gray-400" />
-                  ) : (
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
-                  )}
-                </button>
-                {expandedSections[section.id] && (
-                  <div className={`px-6 pb-6 ${section.id === 'overall' ? 'bg-gradient-to-r from-teal-50/50 to-cyan-50/50' : ''}`}>
-                    <div className="text-gray-700 leading-relaxed space-y-3 pl-11">
-                      {section.content.split('\n\n').map((paragraph, i) => (
-                        <div key={i}>
-                          {paragraph.split('\n').map((line, j) => (
-                            <p key={j} className={line.startsWith('•') || line.startsWith('✓') || line.startsWith('⚠') || line.startsWith('ℹ') ? 'ml-2 mb-1' : 'mb-2'}>
-                              {renderFormattedText(line)}
-                            </p>
-                          ))}
-                        </div>
-                      ))}
+            {/* Domain Summary Cards */}
+            {aiSummary.sections.filter(s => s.id !== 'overall').map((section) => {
+              const sectionColors = {
+                medications: { gradient: 'from-purple-500 to-purple-600', border: 'border-l-purple-500', bgHover: 'hover:border-l-purple-600' },
+                labs: { gradient: 'from-green-500 to-emerald-600', border: 'border-l-green-500', bgHover: 'hover:border-l-green-600' },
+                conditions: { gradient: 'from-red-500 to-red-600', border: 'border-l-red-500', bgHover: 'hover:border-l-red-600' },
+                encounters: { gradient: 'from-blue-500 to-blue-600', border: 'border-l-blue-500', bgHover: 'hover:border-l-blue-600' },
+              }
+              const colors = sectionColors[section.id] || sectionColors.encounters
+              return (
+                <div key={section.id} className={`bg-white rounded-2xl shadow-lg overflow-hidden border-l-4 ${colors.border} ${colors.bgHover} transition-all`}>
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{section.icon}</span>
+                      <h3 className="text-lg font-bold text-gray-900">{section.title}</h3>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                    {expandedSections[section.id] ? (
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    )}
+                  </button>
+                  {expandedSections[section.id] && (
+                    <div className="px-6 pb-6">
+                      <div className="text-gray-700 leading-relaxed space-y-3 pl-11">
+                        {section.content.split('\n\n').map((paragraph, i) => (
+                          <div key={i}>
+                            {paragraph.split('\n').map((line, j) => (
+                              <p key={j} className={line.startsWith('•') || line.startsWith('✓') || line.startsWith('⚠') || line.startsWith('ℹ') ? 'ml-2 mb-1' : 'mb-2'}>
+                                {renderFormattedText(line)}
+                              </p>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
 
             {/* Export actions */}
-            <div className="flex items-center space-x-3 pt-4">
-              <button onClick={handleExport} className="btn-primary inline-flex items-center space-x-2">
+            <div className="flex items-center gap-3 pt-4">
+              <button onClick={handleExport} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all" style={{boxShadow:'0 4px 14px rgba(59,130,246,0.3)'}}>
                 <Download className="w-5 h-5" />
                 <span>Export as PDF</span>
               </button>
-              <button className="btn-secondary inline-flex items-center space-x-2">
+              <button className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                 <Share2 className="w-5 h-5" />
                 <span>Share with Provider</span>
               </button>
@@ -594,48 +596,57 @@ export default function Dashboard() {
         {/* ===== TIMELINE VIEW ===== */}
         {activeView === 'timeline' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Health Timeline</h2>
-            {/* Filter bar */}
-            <div className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap items-center gap-2">
-              {['All', 'Visits', 'Labs', 'Imaging'].map(filter => (
-                <button key={filter} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${filter === 'All' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                  {filter}
-                </button>
-              ))}
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900">Health Timeline</h2>
+              <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700">
+                <RefreshCw className="w-4 h-4" />
+                <span>Refresh</span>
+              </button>
+            </div>
+            {/* Filter bar with badge-style buttons */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-4 flex flex-wrap items-center gap-2 border border-gray-200/50">
+              {['All', 'Visits', 'Labs', 'Medications', 'Conditions'].map((filter, idx) => {
+                const filterColors = ['bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md', 'bg-blue-50 text-blue-700 border border-blue-200', 'bg-green-50 text-green-700 border border-green-200', 'bg-purple-50 text-purple-700 border border-purple-200', 'bg-red-50 text-red-700 border border-red-200']
+                return (
+                  <button key={filter} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${idx === 0 ? filterColors[0] : filterColors[idx]}`}
+                    style={idx === 0 ? {boxShadow:'0 2px 8px rgba(59,130,246,0.3)'} : {}}>
+                    {filter}
+                  </button>
+                )
+              })}
               <div className="flex-1" />
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                <input type="text" placeholder="Search events..." className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 w-48" />
+                <input type="text" placeholder="Search events..." className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48 bg-gray-50" />
               </div>
             </div>
-            {/* Timeline events */}
+            {/* Vertical Timeline with colored dots */}
             <div className="relative">
-              <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-200" />
+              <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-300 via-purple-300 to-indigo-300" />
               {stats.encounters
                 .sort((a, b) => new Date(b.contactDate) - new Date(a.contactDate))
                 .map((enc, i) => {
                   const prov = providers[enc.visitProvider]
-                  const encTypeEmoji = enc.encType === 'Emergency' ? '🚨' : enc.encType === 'Hospital Encounter' ? '🏨' : '🩺'
+                  const dotColors = enc.patientClass === 'Emergency' ? 'bg-red-500 ring-red-100' : enc.patientClass === 'Inpatient' ? 'bg-orange-500 ring-orange-100' : 'bg-blue-500 ring-blue-100'
+                  const cardBorder = enc.patientClass === 'Emergency' ? 'border-l-red-500' : enc.patientClass === 'Inpatient' ? 'border-l-orange-500' : 'border-l-blue-500'
                   return (
-                    <div key={i} className="relative pl-16 pb-8">
-                      <div className="absolute left-6 w-5 h-5 bg-white border-2 border-primary-500 rounded-full flex items-center justify-center">
-                        <div className="w-2 h-2 bg-primary-500 rounded-full" />
-                      </div>
-                      <div className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow">
+                    <div key={i} className="relative pl-16 pb-6">
+                      <div className={`absolute left-[1.375rem] w-4 h-4 ${dotColors} rounded-full ring-4`} />
+                      <div className={`bg-white rounded-2xl shadow-lg p-5 hover:shadow-xl transition-all border-l-4 ${cardBorder}`}>
                         <div className="flex items-start justify-between">
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">
+                            <p className="text-xs text-gray-500 mb-1.5 font-medium">
                               {new Date(enc.contactDate).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}
                             </p>
-                            <p className="font-semibold text-gray-900">
-                              {encTypeEmoji} {enc.encType}: {enc.diagnosis}
+                            <p className="font-semibold text-gray-900 text-base">
+                              {enc.encType}: {enc.diagnosis}
                             </p>
                             <p className="text-sm text-gray-600 mt-1">
-                              {prov?.name || 'Provider'} | {prov?.specialty || 'Specialist'}
+                              {prov?.name || 'Provider'} • {prov?.specialty || 'Specialist'}
                             </p>
-                            {enc.chiefComplaint && <p className="text-sm text-gray-500 mt-1">Chief complaint: {enc.chiefComplaint}</p>}
+                            {enc.chiefComplaint && <p className="text-sm text-gray-500 mt-1.5 italic">"{enc.chiefComplaint}"</p>}
                           </div>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${enc.patientClass === 'Emergency' ? 'bg-red-100 text-red-700' : enc.patientClass === 'Inpatient' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${enc.patientClass === 'Emergency' ? 'bg-red-50 text-red-700 border border-red-200' : enc.patientClass === 'Inpatient' ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
                             {enc.patientClass}
                           </span>
                         </div>
@@ -737,8 +748,8 @@ export default function Dashboard() {
                     <div key={index} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start space-x-3">
-                          <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Pill className="w-5 h-5 text-teal-600" />
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Pill className="w-5 h-5 text-blue-600" />
                           </div>
                           <div>
                             <p className="font-semibold text-gray-900">{med.name}</p>
@@ -797,46 +808,98 @@ export default function Dashboard() {
         {/* ===== DATA EXPLORER VIEW ===== */}
         {activeView === 'data-explorer' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Data Explorer</h2>
-            <p className="text-gray-600">Raw health data from {parsedData?.totalPatients || 0} patients across {parsedData?.totalRecords || 0} records</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Data Explorer</h2>
+                <p className="text-gray-500">Browse raw health data from {parsedData?.totalPatients || 0} patients across {parsedData?.totalRecords || 0} records</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                  {parsedData?.totalPatients || 0} Patients
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                  {parsedData?.totalRecords || 0} Records
+                </span>
+              </div>
+            </div>
 
-            {/* Patient list */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Patients ({parsedData?.patients?.length || 0})</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 text-left text-gray-500">
-                      <th className="pb-3 pr-4">Name</th>
-                      <th className="pb-3 pr-4">Age</th>
-                      <th className="pb-3 pr-4">Sex</th>
-                      <th className="pb-3 pr-4">City</th>
-                      <th className="pb-3 pr-4">Encounters</th>
-                      <th className="pb-3 pr-4">Results</th>
-                      <th className="pb-3">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(parsedData?.patients || []).map((patient, i) => (
-                      <tr key={i} className={`border-b border-gray-100 hover:bg-gray-50 ${selectedPatient?.patId === patient.patId ? 'bg-primary-50' : ''}`}>
-                        <td className="py-3 pr-4 font-medium">{patient.firstName} {patient.lastName}</td>
-                        <td className="py-3 pr-4">{patient.age}</td>
-                        <td className="py-3 pr-4">{patient.sex}</td>
-                        <td className="py-3 pr-4">{patient.city}, {patient.state}</td>
-                        <td className="py-3 pr-4">{patient.encounterCount}</td>
-                        <td className="py-3 pr-4">{patient.resultCount}</td>
-                        <td className="py-3">
-                          <button
-                            onClick={() => { selectPatient(patient.patId); setActiveView('overview'); }}
-                            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                          >
-                            View Details
-                          </button>
-                        </td>
+            {/* Patient list with modern styling */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+              <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50/30">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-gray-900">Patients ({parsedData?.patients?.length || 0})</h3>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                    <input type="text" placeholder="Search patients..." className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48 bg-white" />
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-left text-gray-500">
+                        <th className="pb-3 pr-4 font-medium">Name</th>
+                        <th className="pb-3 pr-4 font-medium">Age</th>
+                        <th className="pb-3 pr-4 font-medium">Sex</th>
+                        <th className="pb-3 pr-4 font-medium">City</th>
+                        <th className="pb-3 pr-4 font-medium">Encounters</th>
+                        <th className="pb-3 pr-4 font-medium">Results</th>
+                        <th className="pb-3 font-medium">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {(parsedData?.patients || []).map((patient, i) => (
+                        <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/30 transition-colors ${selectedPatient?.patId === patient.patId ? 'bg-blue-50' : ''}`}>
+                          <td className="py-3.5 pr-4 font-medium text-gray-900">{patient.firstName} {patient.lastName}</td>
+                          <td className="py-3.5 pr-4 text-gray-600">{patient.age}</td>
+                          <td className="py-3.5 pr-4 text-gray-600">{patient.sex}</td>
+                          <td className="py-3.5 pr-4 text-gray-600">{patient.city}, {patient.state}</td>
+                          <td className="py-3.5 pr-4">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">{patient.encounterCount}</span>
+                          </td>
+                          <td className="py-3.5 pr-4">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">{patient.resultCount}</span>
+                          </td>
+                          <td className="py-3.5">
+                            <button
+                              onClick={() => { selectPatient(patient.patId); setActiveView('overview'); }}
+                              className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                            >
+                              View <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Raw JSON Preview */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+              <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50/30 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-900">Raw Data Preview</h3>
+                <button
+                  onClick={handleExport}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium shadow-md hover:shadow-lg transition-all"
+                  style={{boxShadow:'0 4px 14px rgba(59,130,246,0.3)'}}
+                >
+                  <Download className="w-4 h-4" />
+                  Export JSON
+                </button>
+              </div>
+              <div className="p-4 bg-gray-900 rounded-b-2xl max-h-96 overflow-auto">
+                <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap">
+                  {JSON.stringify(parsedData?.patients?.[0] ? {
+                    patient: { name: `${selectedPatient?.firstName} ${selectedPatient?.lastName}`, age: selectedPatient?.age, sex: selectedPatient?.sex },
+                    encounters: stats.encounters.length,
+                    medications: stats.medications.length,
+                    conditions: stats.conditions.length,
+                    labResults: stats.results.length,
+                  } : {}, null, 2)}
+                </pre>
               </div>
             </div>
           </div>
@@ -845,46 +908,138 @@ export default function Dashboard() {
         {/* ===== INSIGHTS VIEW ===== */}
         {activeView === 'insights' && (
           <div className="space-y-6">
-            <div className="mb-2">
-              <div className="flex items-center space-x-2 mb-1">
-                <Lightbulb className="w-5 h-5 text-amber-500" />
-                <h2 className="text-2xl font-bold text-gray-900">AI-Generated Health Insights</h2>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Lightbulb className="w-5 h-5 text-amber-500" />
+                  <h2 className="text-2xl font-bold text-gray-900">AI-Generated Health Insights</h2>
+                </div>
+                <p className="text-gray-500">Personalized recommendations based on your health data</p>
               </div>
-              <p className="text-gray-500">Personalized recommendations based on your health data</p>
             </div>
 
-            {healthInsights.map((insight, index) => {
-              const Icon = insight.icon
-              const severityStyles = {
-                warning: 'border-orange-200 bg-orange-50/40',
-                positive: 'border-green-200 bg-green-50/40',
-                info: 'border-blue-200 bg-blue-50/40',
-              }
-              const badgeStyles = {
-                warning: 'bg-red-50 text-red-600 border border-red-200',
-                positive: 'bg-green-50 text-green-600 border border-green-200',
-                info: 'bg-blue-50 text-blue-600 border border-blue-200',
-              }
-              return (
-                <div
-                  key={index}
-                  className={`rounded-2xl border p-6 transition-shadow hover:shadow-md ${severityStyles[insight.severity] || 'border-gray-200 bg-white'}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-4">
-                      <Icon className={`w-6 h-6 mt-0.5 ${insight.iconColor}`} />
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">{insight.title}</h3>
-                        <p className="text-gray-600 mt-1">{insight.description}</p>
-                      </div>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${badgeStyles[insight.severity] || 'bg-gray-100 text-gray-600'}`}>
-                      {insight.severity}
-                    </span>
+            {/* AI Insights Card */}
+            <div className="bg-white rounded-2xl shadow-lg border border-purple-100 overflow-hidden">
+              <div className="p-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Key AI Insights</h3>
+                    <p className="text-sm text-gray-500">{healthInsights.length} insights generated</p>
                   </div>
                 </div>
-              )
-            })}
+              </div>
+              <div className="p-6 space-y-4">
+                {healthInsights.map((insight, index) => {
+                  const Icon = insight.icon
+                  const severityStyles = {
+                    warning: 'bg-orange-50 border-orange-200',
+                    positive: 'bg-green-50 border-green-200',
+                    info: 'bg-blue-50 border-blue-200',
+                  }
+                  const badgeStyles = {
+                    warning: 'bg-orange-100 text-orange-700',
+                    positive: 'bg-green-100 text-green-700',
+                    info: 'bg-blue-100 text-blue-700',
+                  }
+                  return (
+                    <div key={index} className={`rounded-xl border p-4 transition-all hover:shadow-md ${severityStyles[insight.severity] || 'border-gray-200 bg-white'}`}>
+                      <div className="flex items-start gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${insight.severity === 'warning' ? 'bg-orange-100' : insight.severity === 'positive' ? 'bg-green-100' : 'bg-blue-100'}`}>
+                          <Icon className={`w-5 h-5 ${insight.iconColor}`} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-semibold text-gray-900">{insight.title}</h4>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${badgeStyles[insight.severity] || 'bg-gray-100 text-gray-600'}`}>
+                              {insight.severity === 'warning' ? '⚠️ Warning' : insight.severity === 'positive' ? '✅ Positive' : 'ℹ️ Info'}
+                            </span>
+                          </div>
+                          <p className="text-gray-600 mt-1 text-sm">{insight.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Health Score Card */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-2xl shadow-lg p-8">
+                <h3 className="text-lg font-bold text-gray-900 mb-6">Health Score</h3>
+                <div className="flex items-center justify-center mb-6">
+                  <div className="relative w-48 h-48">
+                    <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 120 120">
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="#e5e7eb" strokeWidth="10" />
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="url(#scoreGrad)" strokeWidth="10" strokeLinecap="round"
+                        strokeDasharray={`${(Math.min(100, Math.max(0, 100 - stats.abnormalResults.length * 10)) / 100) * 314} 314`}
+                      />
+                      <defs>
+                        <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#3b82f6" />
+                          <stop offset="100%" stopColor="#8b5cf6" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-4xl font-bold text-gray-900">{Math.min(100, Math.max(0, 100 - stats.abnormalResults.length * 10))}</span>
+                      <span className="text-sm text-gray-500">/100</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Medication Adherence', value: stats.medications.length > 0 ? 85 : 0, color: 'text-purple-600' },
+                    { label: 'Lab Values', value: stats.results.length > 0 ? Math.round((1 - stats.abnormalResults.length / Math.max(1, stats.results.length)) * 100) : 0, color: 'text-green-600' },
+                    { label: 'Care Continuity', value: stats.encounters.length > 2 ? 90 : stats.encounters.length * 30, color: 'text-blue-600' },
+                    { label: 'Preventive Care', value: stats.orders.filter(o => o.orderType === 'Immunization').length > 0 ? 75 : 40, color: 'text-orange-600' },
+                  ].map((item, i) => (
+                    <div key={i} className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+                      <p className={`text-lg font-bold ${item.color}`}>{item.value}%</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lab Values Summary */}
+              <div className="bg-white rounded-2xl shadow-lg p-8">
+                <h3 className="text-lg font-bold text-gray-900 mb-6">Lab Values Summary</h3>
+                {stats.results.length > 0 ? (
+                  <div className="space-y-4">
+                    {stats.results.filter(r => r.numValue != null).slice(0, 6).map((result, i) => {
+                      const pct = result.refHigh && result.refLow ? Math.min(100, Math.max(0, ((result.numValue - result.refLow) / (result.refHigh - result.refLow)) * 100)) : 50
+                      const isNormal = result.flag === 'Normal'
+                      return (
+                        <div key={i}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700">{result.component}</span>
+                            <span className={`text-sm font-bold ${isNormal ? 'text-green-600' : 'text-red-600'}`}>
+                              {result.value} {result.unit}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${isNormal ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-red-400 to-red-500'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between mt-0.5">
+                            <span className="text-xs text-gray-400">{result.refLow}</span>
+                            <span className="text-xs text-gray-400">{result.refHigh}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-8">No lab results available</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -892,7 +1047,7 @@ export default function Dashboard() {
         {['labs', 'encounters', 'procedures', 'trends'].includes(activeView) && (
           <div className="space-y-6">
             <div className="flex items-center space-x-3">
-              <button onClick={() => setActiveView('overview')} className="text-primary-600 hover:text-primary-700 text-sm font-medium">← Back to Dashboard</button>
+              <button onClick={() => setActiveView('overview')} className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Dashboard</button>
             </div>
             {activeView === 'labs' && stats.results.length > 0 ? (
               <div className="space-y-6">

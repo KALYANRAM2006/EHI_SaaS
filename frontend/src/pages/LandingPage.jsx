@@ -4,15 +4,9 @@ import {
   Upload,
   Database,
   Sparkles,
-  Clock,
   Shield,
-  FileText,
-  CheckCircle2,
-  ArrowRight,
-  Heart,
-  Activity,
-  BarChart3,
-  Lock,
+  TrendingUp,
+  Zap,
 } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import { useData } from '../context/DataContext'
@@ -22,6 +16,7 @@ export default function LandingPage() {
   const { uploadedFiles, loadSampleData } = useData()
   const [showUpload, setShowUpload] = useState(false)
   const [loadingSample, setLoadingSample] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
 
   const handleFilesUploaded = () => navigate('/dashboard')
 
@@ -34,234 +29,175 @@ export default function LandingPage() {
     }, 600)
   }
 
-  const features = [
-    {
-      icon: Database,
-      title: 'Multi-EHR Support',
-      description: 'Parse Epic, Cerner, Athena, Allscripts, and more — any format, one tool.',
-      gradient: 'from-teal-500 to-cyan-500',
-    },
-    {
-      icon: Sparkles,
-      title: 'AI Health Summary',
-      description: 'Get plain-language insights and actionable summaries from complex records.',
-      gradient: 'from-cyan-500 to-sky-500',
-    },
-    {
-      icon: Activity,
-      title: 'Timeline View',
-      description: 'Visualize encounters, labs, and medications across your care journey.',
-      gradient: 'from-sky-500 to-blue-500',
-    },
-    {
-      icon: Lock,
-      title: 'Zero-Trust Privacy',
-      description: 'All parsing happens in your browser. Nothing is uploaded, stored, or shared.',
-      gradient: 'from-teal-600 to-emerald-500',
-    },
-  ]
-
-  const formats = [
-    { name: 'C-CDA / XML', icon: FileText, vendors: 'Allscripts, Practice Fusion, MEDITECH' },
-    { name: 'FHIR JSON', icon: BarChart3, vendors: 'Athena, Cerner' },
-    { name: 'Epic TSV', icon: Database, vendors: 'Epic EHI Export' },
-    { name: 'CSV / NDJSON', icon: Heart, vendors: 'Greenway, NextGen, eCW' },
-  ]
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+    // Trigger the FileUpload component view for actual handling
+    setShowUpload(true)
+  }
 
   return (
-    <div className="min-h-screen bg-white overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 relative overflow-hidden">
+      {/* Background Gradient Orbs */}
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-br from-blue-400/20 to-cyan-400/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-gradient-to-tl from-purple-400/20 to-pink-400/20 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] bg-gradient-to-br from-indigo-400/10 to-blue-400/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
 
-      {/* ── Header ── */}
-      <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-gray-100/60">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+      {/* Header with Glass Effect */}
+      <header className="backdrop-blur-md bg-white/70 border-b border-gray-200/50 sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center shadow-md">
-              <Sparkles className="w-5 h-5 text-white" strokeWidth={2.5} />
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}>
+              <Sparkles className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-gray-900">HealthLens</span>
+            <div>
+              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                HealthLens
+              </span>
+              <p className="text-xs text-gray-500 -mt-1">EHI Ignite Challenge</p>
+            </div>
           </div>
-          <nav className="hidden sm:flex items-center gap-8 text-sm font-medium text-gray-500">
-            <a href="#features" className="hover:text-gray-900 transition-colors">Features</a>
-            <a href="#how-it-works" className="hover:text-gray-900 transition-colors">How It Works</a>
-            <button
-              onClick={() => setShowUpload(true)}
-              className="ml-2 px-5 py-2 text-sm font-semibold rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors"
-            >
-              Get Started
-            </button>
-          </nav>
+          <div className="hidden sm:flex gap-3">
+            <button className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">About</button>
+            <button className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">Help</button>
+            <button className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Sign In</button>
+          </div>
         </div>
       </header>
 
-      {/* ── Hero ── */}
-      <section className="relative">
-        {/* Single radial glow */}
-        <div className="hero-glow absolute inset-0 pointer-events-none" aria-hidden="true" />
-
-        <div className="relative max-w-4xl mx-auto px-6 pt-28 pb-20 text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-50 text-primary-700 text-sm font-medium mb-8 border border-primary-100">
-            <Shield className="w-3.5 h-3.5" />
-            <span>100 % Private — Data Never Leaves Your Device</span>
+      {/* Main Content */}
+      <div className="flex-1 flex items-center justify-center px-6 py-16 relative z-10">
+        <div className="max-w-5xl w-full space-y-16">
+          {/* Hero Section */}
+          <div className="text-center space-y-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full mb-4">
+              <Zap className="w-4 h-4" />
+              <span className="text-sm font-semibold">AI-Powered Health Insights</span>
+            </div>
+            <h1 className="text-5xl sm:text-6xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-indigo-900 bg-clip-text text-transparent leading-tight">
+              Transform Your Health Records
+            </h1>
+            <p className="text-xl sm:text-2xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+              Into beautiful stories you understand with AI-powered visualizations and insights
+            </p>
           </div>
 
-          <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-gray-900 leading-[1.08] mb-6">
-            Understand Your<br />
-            <span className="bg-gradient-to-r from-teal-600 via-cyan-500 to-sky-500 bg-clip-text text-transparent">
-              Health Records
-            </span>
-          </h1>
-
-          <p className="text-lg sm:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed mb-12">
-            Upload EHI exports from any provider. HealthLens parses, normalizes,
-            and surfaces <span className="text-gray-700 font-medium">clear, actionable insights</span> — entirely in your browser.
-          </p>
-
-          {/* CTA */}
-          <div className="max-w-2xl mx-auto">
+          {/* Upload Card with Glassmorphism */}
+          <div className="rounded-2xl shadow-2xl overflow-hidden" style={{boxShadow: '0 25px 50px rgba(59,130,246,0.1)'}}>
             {!showUpload ? (
-              <div className="glass-card">
-                <Upload className="w-12 h-12 mx-auto text-primary-400 mb-4" strokeWidth={1.5} />
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">Drop your health records here</h3>
-                <p className="text-sm text-gray-400 mb-8">TSV, CSV, JSON, NDJSON, XML, ZIP — all supported</p>
-                <div className="flex flex-col sm:flex-row justify-center gap-3">
-                  <button onClick={() => setShowUpload(true)} className="btn-primary inline-flex items-center justify-center gap-2">
-                    <Upload className="w-4 h-4" />
-                    Browse Files
-                  </button>
-                  <button onClick={handleTrySampleData} disabled={loadingSample} className="btn-secondary inline-flex items-center justify-center gap-2 disabled:opacity-50">
-                    {loadingSample ? (
-                      <>
-                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                        Loading…
-                      </>
-                    ) : (
-                      <>
-                        <Database className="w-4 h-4" />
-                        Try Sample Data
-                      </>
-                    )}
-                  </button>
+              <div
+                className={`relative p-16 text-center transition-all duration-300 bg-white ${
+                  isDragging ? 'bg-gradient-to-br from-blue-50 to-indigo-50' : ''
+                }`}
+                onDrop={handleDrop}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                onDragLeave={() => setIsDragging(false)}
+              >
+                {/* Decorative Elements */}
+                <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-400/10 to-transparent rounded-full -translate-x-1/2 -translate-y-1/2" />
+                <div className="absolute bottom-0 right-0 w-40 h-40 bg-gradient-to-tl from-indigo-400/10 to-transparent rounded-full translate-x-1/2 translate-y-1/2" />
+
+                <div className="relative z-10">
+                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl hover:scale-110 transition-transform cursor-pointer" style={{boxShadow: '0 10px 25px rgba(59,130,246,0.3)'}}>
+                    <Upload className="w-10 h-10 text-white" />
+                  </div>
+
+                  <p className="text-xl font-semibold text-gray-900 mb-2">Drop your EHI file here</p>
+                  <p className="text-gray-500 mb-8">or click to browse files</p>
+
+                  {/* Supported Formats */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 mb-8 max-w-md mx-auto border border-blue-100">
+                    <p className="font-semibold text-gray-900 mb-3">Supported formats:</p>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <p className="font-semibold text-blue-600">C-CDA</p>
+                        <p className="text-xs text-gray-500">.xml</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <p className="font-semibold text-indigo-600">FHIR</p>
+                        <p className="text-xs text-gray-500">.json</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <p className="font-semibold text-purple-600">Epic TSV</p>
+                        <p className="text-xs text-gray-500">.tsv</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CTA Buttons */}
+                  <div className="flex gap-4 justify-center">
+                    <button
+                      onClick={() => setShowUpload(true)}
+                      className="px-8 py-3 text-sm font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-lg cursor-pointer" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}
+                    >
+                      Browse Files
+                    </button>
+                    <button
+                      onClick={handleTrySampleData}
+                      disabled={loadingSample}
+                      className="px-8 py-3 text-sm font-semibold rounded-lg border-2 border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    >
+                      {loadingSample ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                          Loading…
+                        </span>
+                      ) : 'Try Sample Data'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
-              <FileUpload onComplete={handleFilesUploaded} />
+              <div className="bg-white p-8">
+                <FileUpload onComplete={handleFilesUploaded} />
+              </div>
             )}
           </div>
-        </div>
-      </section>
 
-      {/* ── Supported Formats ── */}
-      <section className="py-16 bg-gray-50/50">
-        <div className="max-w-5xl mx-auto px-6">
-          <p className="text-center text-xs font-semibold uppercase tracking-widest text-gray-400 mb-8">
-            Works with every major EHR export format
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {formats.map((f) => (
-              <div key={f.name} className="glass-card !p-5 text-center">
-                <f.icon className="w-6 h-6 text-primary-500 mx-auto mb-3" strokeWidth={1.8} />
-                <p className="font-semibold text-gray-900 text-sm">{f.name}</p>
-                <p className="text-xs text-gray-400 mt-1">{f.vendors}</p>
+          {/* Feature Cards Grid — Matches Figma exactly */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:border-blue-300 transition-all hover:shadow-xl" style={{['--tw-shadow-color']: 'rgba(59,130,246,0.1)'}}>
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}>
+                <Database className="w-7 h-7 text-white" />
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Wave divider ── */}
-      <div className="relative h-20 bg-white">
-        <svg className="absolute bottom-0 w-full" viewBox="0 0 1440 80" preserveAspectRatio="none">
-          <path fill="#f9fafb" d="M0,48 C360,80 720,0 1080,48 C1260,64 1380,80 1440,48 L1440,80 L0,80 Z" />
-        </svg>
-      </div>
-
-      {/* ── Features ── */}
-      <section id="features" className="py-24 bg-gray-50">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight mb-4">
-              Built for Clarity
-            </h2>
-            <p className="text-lg text-gray-500 max-w-xl mx-auto">
-              Everything you need to make sense of your health data — nothing you don't.
-            </p>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {features.map((f, i) => (
-              <div key={i} className="feature-card fade-in" style={{ animationDelay: `${i * 80}ms` }}>
-                <div className={`w-12 h-12 mx-auto mb-5 rounded-2xl bg-gradient-to-br ${f.gradient} flex items-center justify-center shadow-md`}>
-                  <f.icon className="w-6 h-6 text-white" strokeWidth={2} />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2">{f.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{f.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Wave divider ── */}
-      <div className="relative h-20 bg-gray-50">
-        <svg className="absolute bottom-0 w-full" viewBox="0 0 1440 80" preserveAspectRatio="none">
-          <path fill="#ffffff" d="M0,32 C480,80 960,0 1440,48 L1440,80 L0,80 Z" />
-        </svg>
-      </div>
-
-      {/* ── How It Works ── */}
-      <section id="how-it-works" className="py-24 bg-white">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight mb-4">
-              Three Simple Steps
-            </h2>
-            <p className="text-lg text-gray-500">
-              From raw export to actionable insight in seconds.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-10">
-            {[
-              { step: '1', title: 'Upload', desc: 'Drag & drop from any EHR system. ZIP, TSV, JSON, XML — we handle it.', icon: Upload },
-              { step: '2', title: 'Parse', desc: 'Auto-detect vendor & format, apply YAML rules, normalize to FHIR.', icon: Database },
-              { step: '3', title: 'Explore', desc: 'Browse your timeline, AI summaries, lab trends, and medication history.', icon: Sparkles },
-            ].map((item, i) => (
-              <div key={i} className="relative flex flex-col items-center text-center">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-teal-500 to-cyan-500 text-white flex items-center justify-center text-xl font-bold shadow-glow mb-6">
-                  {item.step}
-                </div>
-                <div className="w-11 h-11 rounded-xl bg-primary-50 flex items-center justify-center mb-4">
-                  <item.icon className="w-5 h-5 text-primary-600" strokeWidth={2} />
-                </div>
-                <h3 className="font-semibold text-gray-900 text-lg mb-2">{item.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed max-w-xs">{item.desc}</p>
-                {i < 2 && (
-                  <ArrowRight className="hidden md:block absolute top-6 -right-5 w-10 h-10 text-gray-200" />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Footer ── */}
-      <footer className="bg-gray-950 text-white py-14">
-        <div className="max-w-5xl mx-auto px-6 text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center">
-              <Heart className="w-4 h-4 text-white" strokeWidth={2.5} />
+              <h3 className="font-semibold text-gray-900 mb-2 text-center">Multi-EHR Support</h3>
+              <p className="text-sm text-gray-600 text-center">Works with all major formats</p>
             </div>
-            <span className="text-lg font-bold tracking-tight">HealthLens</span>
+
+            <div className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:border-purple-300 transition-all hover:shadow-xl" style={{['--tw-shadow-color']: 'rgba(168,85,247,0.1)'}}>
+              <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(168,85,247,0.3)'}}>
+                <Sparkles className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-2 text-center">AI Summaries</h3>
+              <p className="text-sm text-gray-600 text-center">Understand your health story</p>
+            </div>
+
+            <div className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:border-green-300 transition-all hover:shadow-xl" style={{['--tw-shadow-color']: 'rgba(34,197,94,0.1)'}}>
+              <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(34,197,94,0.3)'}}>
+                <TrendingUp className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-2 text-center">Timeline View</h3>
+              <p className="text-sm text-gray-600 text-center">See your health journey</p>
+            </div>
+
+            <div className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:border-red-300 transition-all hover:shadow-xl" style={{['--tw-shadow-color']: 'rgba(239,68,68,0.1)'}}>
+              <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(239,68,68,0.3)'}}>
+                <Shield className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-2 text-center">Secure & Private</h3>
+              <p className="text-sm text-gray-600 text-center">Data never leaves device</p>
+            </div>
           </div>
-          <p className="text-gray-400 text-sm mb-1">
-            Transform Your Health Data &middot; Privacy-First &middot; Multi-EHR Support
-          </p>
-          <p className="text-gray-500 text-xs">
-            Built by Health Data Alchemist for EHIgnite Challenge 2026 &middot; Cedars-Sinai Health System
-          </p>
+
+          {/* Privacy Badge */}
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-full">
+              <Shield className="w-5 h-5 text-green-600" />
+              <span className="text-sm font-semibold text-green-900">🔒 Your data never leaves your device</span>
+            </div>
+          </div>
         </div>
-      </footer>
+      </div>
     </div>
   )
 }
