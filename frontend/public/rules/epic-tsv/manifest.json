@@ -1,0 +1,130 @@
+{
+  "ruleset_version": "2026.03.04-epic-mvp",
+  "vendor": "epic",
+  "vendor_name": "Epic Systems Corporation",
+  "export_type": "TSV",
+  "fhir_target": "R4",
+  "description": "Epic EHI Tables Export - Tab-separated values format from Epic MyChart patient exports",
+  "author": "Health Data Alchemist",
+  "last_updated": "2026-03-04",
+  "official_spec": "https://open.epic.com/EHITables",
+  "spec_version": "February 2026",
+  "supports_uscdi": ["v3", "v4", "v5"],
+  "files": [
+    "10_patient.yaml",
+    "20_encounter.yaml",
+    "30_condition_problem_list.yaml",
+    "40_medication_statement.yaml",
+    "50_observation_labs.yaml",
+    "55_observation_vitals.yaml",
+    "60_document_reference.yaml",
+    "70_allergy_intolerance.yaml",
+    "80_immunization.yaml",
+    "90_procedure.yaml"
+  ],
+  "source_files": {
+    "PATIENT.tsv": {
+      "rules": "10_patient.yaml",
+      "resource_type": "Patient",
+      "description": "Patient demographics and identifiers",
+      "epic_table": "PATIENT",
+      "primary_key": "PAT_ID",
+      "official_doc": "https://open.epic.com/EHITables/GetTable/PATIENT.htm"
+    },
+    "PAT_ENC.tsv": {
+      "rules": "20_encounter.yaml",
+      "resource_type": "Encounter",
+      "description": "Patient encounters and visits",
+      "epic_table": "PAT_ENC",
+      "primary_key": "PAT_ENC_CSN_ID",
+      "official_doc": "https://open.epic.com/EHITables/GetTable/PAT_ENC.htm"
+    },
+    "PROBLEM_LIST.tsv": {
+      "rules": "30_condition_problem_list.yaml",
+      "resource_type": "Condition",
+      "description": "Active problems and chronic conditions from problem list",
+      "epic_table": "PROBLEM_LIST",
+      "primary_key": "PROBLEM_LIST_ID",
+      "official_doc": "https://open.epic.com/EHITables"
+    },
+    "ORDER_MED.tsv": {
+      "rules": "40_medication_statement.yaml",
+      "resource_type": "MedicationStatement",
+      "description": "Medication orders and prescriptions",
+      "epic_table": "ORDER_MED",
+      "primary_key": "ORDER_MED_ID",
+      "official_doc": "https://open.epic.com/EHITables"
+    },
+    "ORDER_PROC.tsv": {
+      "rules": "50_observation_labs.yaml",
+      "resource_type": "Observation",
+      "description": "Lab results, diagnostic tests, and observations",
+      "epic_table": "ORDER_PROC",
+      "primary_key": "ORDER_PROC_ID",
+      "official_doc": "https://open.epic.com/EHITables"
+    },
+    "FLOWSHEET.tsv": {
+      "rules": "55_observation_vitals.yaml",
+      "resource_type": "Observation",
+      "description": "Vital signs and flowsheet measurements",
+      "epic_table": "IP_FLWSHT_MEAS",
+      "official_doc": "https://open.epic.com/EHITables"
+    },
+    "DOC_INFORMATION.tsv": {
+      "rules": "60_document_reference.yaml",
+      "resource_type": "DocumentReference",
+      "description": "Clinical documents, notes, and reports index",
+      "epic_table": "DOC_INFORMATION",
+      "primary_key": "DOCUMENT_ID",
+      "official_doc": "https://open.epic.com/EHITables/GetTable/DOC_INFORMATION.htm"
+    },
+    "ALLERGY.tsv": {
+      "rules": "70_allergy_intolerance.yaml",
+      "resource_type": "AllergyIntolerance",
+      "description": "Patient allergies and adverse reactions",
+      "epic_table": "ALLERGY",
+      "primary_key": "ALLERGY_ID",
+      "official_doc": "https://open.epic.com/EHITables"
+    },
+    "IMMUNIZATION.tsv": {
+      "rules": "80_immunization.yaml",
+      "resource_type": "Immunization",
+      "description": "Vaccination history and immunization records",
+      "epic_table": "IMMUNIZATION",
+      "primary_key": "IMMUNIZATION_ID",
+      "official_doc": "https://open.epic.com/EHITables"
+    },
+    "PROCEDURES.tsv": {
+      "rules": "90_procedure.yaml",
+      "resource_type": "Procedure",
+      "description": "Surgical and diagnostic procedures performed",
+      "epic_table": "OR_CASE",
+      "official_doc": "https://open.epic.com/EHITables"
+    }
+  },
+  "requirements": {
+    "min_app_version": "0.1.0",
+    "duckdb_version": "0.9.0",
+    "parser": "papaparse"
+  },
+  "validation": {
+    "required_columns": {
+      "PATIENT.tsv": ["PAT_ID", "PAT_MRN_ID", "BIRTH_DATE"],
+      "PAT_ENC.tsv": ["PAT_ID", "PAT_ENC_CSN_ID", "CONTACT_DATE"],
+      "PROBLEM_LIST.tsv": ["PAT_ID", "PROBLEM_LIST_ID"],
+      "ORDER_MED.tsv": ["PAT_ID", "ORDER_MED_ID"],
+      "ORDER_PROC.tsv": ["PAT_ID", "ORDER_PROC_ID"]
+    },
+    "encoding": "UTF-8",
+    "delimiter": "\\t",
+    "quote_char": "\"",
+    "has_header": true
+  },
+  "notes": [
+    "Epic EHI Tables export contains thousands of tables - this manifest covers the most common patient-facing data",
+    "Table names and columns based on Epic's publicly documented EHI Tables specification",
+    "Some healthcare organizations may have custom Epic configurations",
+    "Actual export may contain additional tables not listed here",
+    "Documentation retrieved from open.epic.com on March 4, 2026"
+  ]
+}

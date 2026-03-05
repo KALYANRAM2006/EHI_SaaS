@@ -1,0 +1,204 @@
+# Epic TSV to FHIR R4 AllergyIntolerance Resource Mapping
+# Source: ALLERGY.tsv (Epic EHI Tables Export)
+# Target: AllergyIntolerance (http://hl7.org/fhir/R4/allergyintolerance.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables/GetTable/ALLERGY.htm
+# Spec Date: February 22, 2026
+
+resource_type: AllergyIntolerance
+source_file: ALLERGY.tsv
+epic_table: ALLERGY
+description: |
+  The ALLERGY table contains information about the allergies noted in patients' clinical system records.
+  To determine the allergic reaction details, can link to the ALLERGY_REACTIONS table.
+
+# Resource identity
+id:
+  source: ALLERGY_ID
+  transform: epic_allergy_id
+  required: true
+  description: "Unique allergy ID from Epic ALLERGY table column 1"
+
+# Identifier
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.768076"
+    value:
+      source: ALLERGY_ID
+      required: true
+
+# Clinical status (FHIR clinicalStatus element)
+clinicalStatus:
+  coding:
+    - system: "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical"
+      code:
+        source: ALRGY_STATUS_C_NAME
+        description: "Allergy status from Epic ALLERGY table column 10"
+        mapping:
+          Active: "active"
+          Deleted: "inactive"
+          "": "active"
+      display:
+        source: ALRGY_STATUS_C_NAME
+
+# Verification status
+verificationStatus:
+  coding:
+    - system: "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification"
+      code: "confirmed"
+      display: "Confirmed"
+
+# Type (allergy vs intolerance)
+type:
+  value: "allergy"
+  description: "Default to allergy"
+
+# Category
+category:
+  - value: "medication"
+    description: "Default category - adjust based on allergen type if available"
+
+# Criticality/Severity
+criticality:
+  source: ALLERGY_SEVERITY_C_NAME
+  description: "Allergy severity from Epic ALLERGY table column 9"
+  mapping:
+    High: "high"
+    Medium: "low"
+    Low: "low"
+    "": "unable-to-assess"
+  default: "unable-to-assess"
+
+# Code (allergen)
+code:
+  coding:
+    - system: "http://www.nlm.nih.gov/research/umls/rxnorm"
+      code:
+        source: ALLERGEN_ID
+        description: "Allergen ID from Epic ALLERGY table column 2"
+      display:
+        source: ALLERGEN_ID_ALLERGEN_NAME
+        description: "Allergen name from Epic ALLERGY table column 3"
+  text:
+    source: ALLERGEN_ID_ALLERGEN_NAME
+
+# Patient (subject)
+patient:
+  reference:
+    source: PAT_ID
+    transform: patient_reference
+    required: true
+    description: "Patient ID from Epic ALLERGY table"
+  display:
+    source: PAT_ID
+    transform: patient_display
+
+# Onset date/time
+onsetDateTime:
+  source: DATE_NOTED
+  transform: format_datetime
+  description: "Date allergy was noted from Epic ALLERGY table column 5"
+  condition:
+    field: DATE_NOTED
+    not_null: true
+
+# Recorded date
+recordedDate:
+  source: DATE_NOTED
+  transform: format_datetime
+  description: "Date allergy was entered from Epic ALLERGY table column 5"
+
+# Recorder (who entered the allergy)
+recorder:
+  reference:
+    source: ENTRY_USER_ID
+    transform: practitioner_reference
+    description: "User who entered allergy from Epic ALLERGY table column 6"
+    condition:
+      field: ENTRY_USER_ID
+      not_null: true
+  display:
+    source: ENTRY_USER_ID_NAME
+    description: "User name from Epic ALLERGY table column 7"
+
+# Reaction information
+reaction:
+  - description:
+      source: REACTION
+      description: "Free text reaction comments from Epic ALLERGY table column 4"
+    severity:
+      source: SEVERITY_C_NAME
+      description: "Allergy type/severity from Epic ALLERGY table column 8"
+      mapping:
+        High: "severe"
+        Medium: "moderate"
+        Low: "mild"
+        "": "moderate"
+      default: "moderate"
+
+# Note
+note:
+  - text:
+      source: REACTION
+      description: "Reaction comments from Epic ALLERGY table column 4"
+    condition:
+      field: REACTION
+      not_null: true
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-allergy"
+  lastUpdated:
+    source: DATE_NOTED
+    transform: format_datetime
+
+# Transform functions
+transforms:
+  epic_allergy_id:
+    description: "Convert Epic ALLERGY_ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  patient_reference:
+    description: "Create Patient reference from PAT_ID"
+    operation: "create_reference"
+    resource_type: "Patient"
+
+  patient_display:
+    description: "Create patient display text"
+    operation: "format_display"
+
+  practitioner_reference:
+    description: "Create Practitioner reference from user ID"
+    operation: "create_reference"
+    resource_type: "Practitioner"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - ALLERGY_ID
+
+  fhir_required_elements:
+    - clinicalStatus
+    - verificationStatus
+    - code
+    - patient
+
+# Epic ALLERGY Key Columns Reference:
+# Column 1: ALLERGY_ID (NUMERIC) - Primary Key - Unique allergy record ID
+# Column 2: ALLERGEN_ID (NUMERIC) - Allergen ID
+# Column 3: ALLERGEN_ID_ALLERGEN_NAME (VARCHAR) - Allergen name
+# Column 4: REACTION (VARCHAR) - Free text reaction comments
+# Column 5: DATE_NOTED (DATETIME) - Date patient noted allergic reaction
+# Column 6: ENTRY_USER_ID (VARCHAR) - User who entered allergy
+# Column 7: ENTRY_USER_ID_NAME (VARCHAR) - User name
+# Column 8: SEVERITY_C_NAME (VARCHAR) - Allergy type (called "TYPE" in Epic)
+# Column 9: ALLERGY_SEVERITY_C_NAME (VARCHAR) - Severity (High/Medium/Low)
+# Column 10: ALRGY_STATUS_C_NAME (VARCHAR) - Status (Active/Deleted)

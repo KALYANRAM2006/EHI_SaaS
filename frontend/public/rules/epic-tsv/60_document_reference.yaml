@@ -1,0 +1,185 @@
+# Epic TSV to FHIR R4 DocumentReference Resource Mapping
+# Source: DOC_INFORMATION.tsv (Epic EHI Tables Export)
+# Target: DocumentReference (http://hl7.org/fhir/R4/documentreference.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables/GetTable/DOC_INFORMATION.htm
+# Spec Date: February 22, 2026
+
+resource_type: DocumentReference
+source_file: DOC_INFORMATION.tsv
+epic_table: DOC_INFORMATION
+description: |
+  The DOC_INFORMATION table contains information about documents, including scanned and
+  electronically signed documents, clinical notes, and various medical records.
+
+# Resource identity
+id:
+  source: DOC_INFO_ID
+  transform: epic_document_id
+  required: true
+  description: "Unique document information ID from Epic DOC_INFORMATION table column 1"
+
+# Identifier
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.768084"
+    value:
+      source: DOC_INFO_ID
+      required: true
+
+# Status (FHIR status element - required)
+status:
+  value: "current"
+  description: "Default to current status"
+
+# Type (document type)
+type:
+  coding:
+    - system: "http://loinc.org"
+      code: "34133-9"
+      display: "Summarization of Episode Note"
+  text:
+    source: DOC_INFO_TYPE_C_NAME
+    description: "Document type from Epic DOC_INFORMATION table column 2"
+
+# Category
+category:
+  - coding:
+      - system: "http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category"
+        code: "clinical-note"
+        display: "Clinical Note"
+
+# Subject (reference to Patient)
+subject:
+  reference:
+    source: PAT_ID
+    transform: patient_reference
+    required: true
+    description: "Patient ID from Epic DOC_INFORMATION table"
+  display:
+    source: PAT_ID
+    transform: patient_display
+
+# Date (document creation date)
+date:
+  source: CREATE_INSTANT_DTTM
+  transform: format_datetime
+  description: "Document creation date"
+  condition:
+    field: CREATE_INSTANT_DTTM
+    not_null: true
+
+# Author (who created the document)
+author:
+  - reference:
+      source: CREATE_USER_ID
+      transform: practitioner_reference
+      description: "User who created document"
+      condition:
+        field: CREATE_USER_ID
+        not_null: true
+    display:
+      source: CREATE_USER_ID_NAME
+      description: "User name"
+
+# Content (document content information)
+content:
+  - attachment:
+      contentType:
+        source: FILE_TYPE
+        description: "File type/MIME type"
+        mapping:
+          pdf: "application/pdf"
+          txt: "text/plain"
+          xml: "application/xml"
+          html: "text/html"
+          jpg: "image/jpeg"
+          png: "image/png"
+          dcm: "application/dicom"
+        default: "application/octet-stream"
+      title:
+        source: DOC_INFO_TYPE_C_NAME
+        description: "Document type as title"
+      creation:
+        source: CREATE_INSTANT_DTTM
+        transform: format_datetime
+
+# Context (clinical context)
+context:
+  encounter:
+    - reference:
+        source: PAT_ENC_CSN_ID
+        transform: encounter_reference
+        description: "Associated encounter"
+        condition:
+          field: PAT_ENC_CSN_ID
+          not_null: true
+      display:
+        source: PAT_ENC_CSN_ID
+        transform: encounter_display
+  period:
+    start:
+      source: CREATE_INSTANT_DTTM
+      transform: format_datetime
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-doc-information"
+  lastUpdated:
+    source: CREATE_INSTANT_DTTM
+    transform: format_datetime
+
+# Transform functions
+transforms:
+  epic_document_id:
+    description: "Convert Epic DOC_INFO_ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  patient_reference:
+    description: "Create Patient reference from PAT_ID"
+    operation: "create_reference"
+    resource_type: "Patient"
+
+  patient_display:
+    description: "Create patient display text"
+    operation: "format_display"
+
+  encounter_reference:
+    description: "Create Encounter reference from PAT_ENC_CSN_ID"
+    operation: "create_reference"
+    resource_type: "Encounter"
+
+  encounter_display:
+    description: "Create encounter display text"
+    operation: "format_display"
+
+  practitioner_reference:
+    description: "Create Practitioner reference from user ID"
+    operation: "create_reference"
+    resource_type: "Practitioner"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - DOC_INFO_ID
+
+  fhir_required_elements:
+    - status
+    - content
+    - subject
+
+# Epic DOC_INFORMATION Key Columns Reference:
+# Column 1: DOC_INFO_ID (VARCHAR) - Primary Key - Unique document information record ID
+# Column 2: DOC_INFO_TYPE_C_NAME (VARCHAR) - Document type (50+ types including clinical notes, forms, scans, images)
+# Additional columns include: CREATE_INSTANT_DTTM, CREATE_USER_ID, FILE_TYPE, PAT_ID, PAT_ENC_CSN_ID, etc.
+#
+# Document types include: Clinical Notes, After Visit Summary, Lab Results, Consent Forms,
+# Advance Directives, DICOM Images, ECG, Discharge Instructions, and many more.

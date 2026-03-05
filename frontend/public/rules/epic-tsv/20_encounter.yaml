@@ -1,0 +1,211 @@
+# Epic TSV to FHIR R4 Encounter Resource Mapping
+# Source: PAT_ENC.tsv (Epic EHI Tables Export)
+# Target: Encounter (http://hl7.org/fhir/R4/encounter.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables/GetTable/PAT_ENC.htm
+# Spec Date: February 22, 2026
+
+resource_type: Encounter
+source_file: PAT_ENC.tsv
+epic_table: PAT_ENC
+description: |
+  The patient encounter table contains one record for each patient encounter in your system.
+  By default, this table does not contain Registration or PCP/Clinic Change contacts (encounter types 1 and 31).
+  It does contain all appointments, office visits, telephone encounters, and other types of encounters.
+  The primary key for the patient encounter table is PAT_ENC_CSN_ID.
+
+# Resource identity (FHIR id element)
+id:
+  source: PAT_ENC_CSN_ID
+  transform: epic_encounter_id
+  required: true
+  description: "Unique encounter serial number from Epic PAT_ENC table column 3"
+
+# Encounter identifiers
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.0"
+    type:
+      coding:
+        - system: "http://terminology.hl7.org/CodeSystem/v2-0203"
+          code: "VN"
+          display: "Visit Number"
+    value:
+      source: PAT_ENC_CSN_ID
+      required: true
+      description: "Contact Serial Number (CSN) from column 3"
+
+# Status (FHIR status element - required)
+status:
+  source: ENC_CLOSED_YN
+  description: "Encounter closed status from Epic PAT_ENC table column 11"
+  mapping:
+    Y: "finished"
+    N: "in-progress"
+    "": "unknown"
+  default: "unknown"
+
+# Class (FHIR class element - required)
+class:
+  coding:
+    - system: "http://terminology.hl7.org/CodeSystem/v3-ActCode"
+      code: "AMB"
+      display: "ambulatory"
+  description: "Default to ambulatory - adjust based on encounter type if available"
+
+# Subject (reference to Patient)
+subject:
+  reference:
+    source: PAT_ID
+    transform: patient_reference
+    required: true
+    description: "Patient ID from Epic PAT_ENC table column 1"
+  display:
+    source: PAT_ID
+    transform: patient_display
+
+# Participant (providers involved)
+participant:
+  - type:
+      - coding:
+          - system: "http://terminology.hl7.org/CodeSystem/v3-ParticipationType"
+            code: "PPRF"
+            display: "primary performer"
+    individual:
+      reference:
+        source: VISIT_PROV_ID
+        transform: practitioner_reference
+        description: "Visit provider from Epic PAT_ENC table"
+        condition:
+          field: VISIT_PROV_ID_PROV_NAME
+          not_null: true
+      display:
+        source: VISIT_PROV_ID_PROV_NAME
+        description: "Visit provider name from Epic PAT_ENC table column 7"
+
+  - type:
+      - coding:
+          - system: "http://terminology.hl7.org/CodeSystem/v3-ParticipationType"
+            code: "ATND"
+            display: "attender"
+    individual:
+      reference:
+        source: PCP_PROV_ID
+        transform: practitioner_reference
+        description: "PCP provider"
+        condition:
+          field: PCP_PROV_ID_PROV_NAME
+          not_null: true
+      display:
+        source: PCP_PROV_ID_PROV_NAME
+        description: "PCP provider name from Epic PAT_ENC table column 5"
+
+# Period (start and end times)
+period:
+  start:
+    source: CONTACT_DATE
+    transform: format_datetime
+    required: true
+    description: "Contact date from Epic PAT_ENC table column 4"
+  end:
+    source: ENC_CLOSE_DATE
+    transform: format_datetime
+    description: "Encounter close date from Epic PAT_ENC table column 14"
+    condition:
+      field: ENC_CLOSE_DATE
+      not_null: true
+
+# Service Provider (organization/department)
+serviceProvider:
+  reference:
+    source: DEPARTMENT_ID
+    transform: organization_reference
+    description: "Department ID"
+    condition:
+      field: DEPARTMENT_ID_EXTERNAL_NAME
+      not_null: true
+  display:
+    source: DEPARTMENT_ID_EXTERNAL_NAME
+    description: "Department external name from Epic PAT_ENC table column 9"
+
+# Account information (financial class)
+account:
+  - extension:
+      - url: "http://hl7.org/fhir/StructureDefinition/encounter-financial-class"
+        valueCoding:
+          system: "urn:oid:1.2.840.114350.1.13.0.1.7.10.698084.30"
+          code:
+            source: FIN_CLASS_C
+          display:
+            source: FIN_CLASS_C_NAME
+            description: "Financial class from Epic PAT_ENC table column 6"
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-pat-enc"
+  lastUpdated:
+    source: ENC_CLOSE_DATE
+    transform: format_datetime
+    condition:
+      field: ENC_CLOSE_DATE
+      not_null: true
+
+# Transform functions
+transforms:
+  epic_encounter_id:
+    description: "Convert Epic PAT_ENC_CSN_ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  patient_reference:
+    description: "Create Patient reference from PAT_ID"
+    operation: "create_reference"
+    resource_type: "Patient"
+
+  patient_display:
+    description: "Create patient display text"
+    operation: "format_display"
+
+  practitioner_reference:
+    description: "Create Practitioner reference from provider ID"
+    operation: "create_reference"
+    resource_type: "Practitioner"
+
+  organization_reference:
+    description: "Create Organization reference from department ID"
+    operation: "create_reference"
+    resource_type: "Organization"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - PAT_ENC_CSN_ID
+    - CONTACT_DATE
+
+  fhir_required_elements:
+    - status
+    - class
+    - subject
+
+# Epic PAT_ENC Key Columns Reference:
+# Column 1: PAT_ID (VARCHAR) - Patient ID
+# Column 2: PAT_ENC_DATE_REAL (FLOAT) - Unique contact date in decimal format
+# Column 3: PAT_ENC_CSN_ID (NUMERIC) - Primary Key - Unique encounter serial number
+# Column 4: CONTACT_DATE (DATETIME) - Date of contact
+# Column 5: PCP_PROV_ID_PROV_NAME (VARCHAR) - PCP provider name
+# Column 6: FIN_CLASS_C_NAME (VARCHAR) - Financial Class
+# Column 7: VISIT_PROV_ID_PROV_NAME (VARCHAR) - Visit provider name
+# Column 8: VISIT_PROV_TITLE_NAME (VARCHAR) - Visit provider title
+# Column 9: DEPARTMENT_ID_EXTERNAL_NAME (VARCHAR) - Department external name
+# Column 10: LMP_DATE (DATETIME) - Last Menstrual Period date
+# Column 11: ENC_CLOSED_YN (VARCHAR) - Encounter closed flag (Y/N)
+# Column 12: ENC_CLOSED_USER_ID (VARCHAR) - User who closed encounter
+# Column 13: ENC_CLOSED_USER_ID_NAME (VARCHAR) - User name
+# Column 14: ENC_CLOSE_DATE (DATETIME) - Date encounter was closed

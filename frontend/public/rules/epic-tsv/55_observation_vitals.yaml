@@ -1,0 +1,203 @@
+# Epic TSV to FHIR R4 Observation Resource Mapping (Vital Signs)
+# Source: FLOWSHEET.tsv / IP_FLWSHT_MEAS (Epic EHI Tables Export)
+# Target: Observation (http://hl7.org/fhir/R4/observation.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables
+# Spec Date: February 22, 2026
+
+resource_type: Observation
+source_file: FLOWSHEET.tsv
+epic_table: IP_FLWSHT_MEAS
+description: |
+  The IP_FLWSHT_MEAS table contains flowsheet measurements including vital signs
+  (blood pressure, heart rate, temperature, respiratory rate, weight, height, etc.)
+  and other patient observations recorded over time.
+
+# Resource identity
+id:
+  source: FLO_MEAS_ID
+  transform: epic_vital_id
+  required: true
+  description: "Unique flowsheet measurement ID"
+
+# Identifier
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.798268"
+    value:
+      source: FLO_MEAS_ID
+      required: true
+
+# Status (FHIR status element - required)
+status:
+  value: "final"
+  description: "Default to final status"
+
+# Category (vital signs category)
+category:
+  - coding:
+      - system: "http://terminology.hl7.org/CodeSystem/observation-category"
+        code: "vital-signs"
+        display: "Vital Signs"
+
+# Code (what vital sign was measured)
+code:
+  coding:
+    - system: "http://loinc.org"
+      code:
+        source: FLO_MEAS_ID_LOINC
+        description: "LOINC code for measurement"
+      display:
+        source: FLO_MEAS_NAME
+        description: "Flowsheet measurement name"
+  text:
+    source: FLO_MEAS_NAME
+
+# Subject (reference to Patient)
+subject:
+  reference:
+    source: PAT_ID
+    transform: patient_reference
+    required: true
+    description: "Patient ID"
+  display:
+    source: PAT_ID
+    transform: patient_display
+
+# Encounter (reference to Encounter)
+encounter:
+  reference:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_reference
+    description: "Associated encounter"
+    condition:
+      field: PAT_ENC_CSN_ID
+      not_null: true
+  display:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_display
+
+# Effective date/time (when measurement was taken)
+effectiveDateTime:
+  source: RECORDED_TIME
+  transform: format_datetime
+  description: "Time measurement was recorded"
+  required: true
+
+# Value (measurement value)
+valueQuantity:
+  value:
+    source: MEAS_VALUE
+    transform: parse_decimal
+    description: "Measurement value"
+  unit:
+    source: MEAS_UNIT
+    description: "Unit of measure"
+  system: "http://unitsofmeasure.org"
+  code:
+    source: MEAS_UNIT_UCUM
+    description: "UCUM unit code"
+
+# Value string (for non-numeric values)
+valueString:
+  source: MEAS_VALUE
+  description: "Measurement value as string"
+  condition:
+    field: MEAS_VALUE
+    not_numeric: true
+
+# Performer (who recorded the measurement)
+performer:
+  - reference:
+      source: USER_ID
+      transform: practitioner_reference
+      description: "User who recorded measurement"
+      condition:
+        field: USER_ID
+        not_null: true
+    display:
+      source: USER_NAME
+      description: "User name"
+
+# Note (comments on measurement)
+note:
+  - text:
+      source: MEAS_COMMENT
+      description: "Measurement comments"
+    condition:
+      field: MEAS_COMMENT
+      not_null: true
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-flowsheet"
+  lastUpdated:
+    source: RECORDED_TIME
+    transform: format_datetime
+
+# Transform functions
+transforms:
+  epic_vital_id:
+    description: "Convert Epic flowsheet measurement ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  patient_reference:
+    description: "Create Patient reference from PAT_ID"
+    operation: "create_reference"
+    resource_type: "Patient"
+
+  patient_display:
+    description: "Create patient display text"
+    operation: "format_display"
+
+  encounter_reference:
+    description: "Create Encounter reference from PAT_ENC_CSN_ID"
+    operation: "create_reference"
+    resource_type: "Encounter"
+
+  encounter_display:
+    description: "Create encounter display text"
+    operation: "format_display"
+
+  practitioner_reference:
+    description: "Create Practitioner reference from user ID"
+    operation: "create_reference"
+    resource_type: "Practitioner"
+
+  parse_decimal:
+    description: "Parse numeric value"
+    operation: "parse_decimal"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - FLO_MEAS_ID
+    - RECORDED_TIME
+
+  fhir_required_elements:
+    - status
+    - category
+    - code
+    - subject
+    - effectiveDateTime
+
+# Epic IP_FLWSHT_MEAS Key Columns (Common):
+# - FLO_MEAS_ID - Unique flowsheet measurement ID
+# - PAT_ID - Patient ID
+# - PAT_ENC_CSN_ID - Encounter CSN
+# - FLO_MEAS_NAME - Measurement name
+# - MEAS_VALUE - Measurement value
+# - MEAS_UNIT - Unit of measure
+# - RECORDED_TIME - Time measurement was recorded
+# - USER_ID - User who recorded measurement
+#
+# Common vital signs include: Blood Pressure, Heart Rate, Temperature, Respiratory Rate,
+# Oxygen Saturation, Weight, Height, BMI, Pain Score, etc.

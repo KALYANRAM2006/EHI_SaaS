@@ -1,0 +1,129 @@
+{
+  "ruleset_version": "2026.03.04-allscripts-fhir",
+  "vendor": "allscripts",
+  "vendor_name": "Allscripts (Veradigm)",
+  "export_type": "FHIR",
+  "fhir_target": "R4",
+  "description": "Allscripts TouchWorks FHIR R4 API - RESTful API with JSON/XML support",
+  "author": "Health Data Alchemist",
+  "last_updated": "2026-03-04",
+  "official_spec": "https://developer.allscripts.com/Content/fhir/",
+  "api_base_url": "https://fhir.allscripts.com/r4/",
+  "spec_version": "FHIR R4 (4.0.1)",
+  "supports_uscdi": ["v3", "v4"],
+  "authentication": {
+    "type": "OAuth 2.0",
+    "smart_on_fhir": true,
+    "patient_access": true,
+    "provider_access": true
+  },
+  "files": [
+    "10_patient_fhir.yaml",
+    "20_encounter_fhir.yaml",
+    "30_condition_fhir.yaml",
+    "40_medication_fhir.yaml",
+    "50_observation_fhir.yaml",
+    "60_document_fhir.yaml",
+    "70_allergy_fhir.yaml",
+    "80_immunization_fhir.yaml",
+    "90_procedure_fhir.yaml"
+  ],
+  "supported_resources": {
+    "Patient": {
+      "rules": "10_patient_fhir.yaml",
+      "resource_type": "Patient",
+      "description": "Patient demographics",
+      "endpoint": "/Patient/{id}",
+      "us_core_profile": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient",
+      "formats": ["json", "xml"]
+    },
+    "Encounter": {
+      "rules": "20_encounter_fhir.yaml",
+      "resource_type": "Encounter",
+      "description": "Encounters and visits",
+      "endpoint": "/Encounter",
+      "us_core_profile": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter",
+      "formats": ["json", "xml"]
+    },
+    "Condition": {
+      "rules": "30_condition_fhir.yaml",
+      "resource_type": "Condition",
+      "description": "Conditions and problems",
+      "endpoint": "/Condition",
+      "us_core_profile": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition",
+      "formats": ["json", "xml"]
+    },
+    "MedicationRequest": {
+      "rules": "40_medication_fhir.yaml",
+      "resource_type": "MedicationRequest",
+      "description": "Medication requests",
+      "endpoint": "/MedicationRequest",
+      "us_core_profile": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest",
+      "formats": ["json", "xml"]
+    },
+    "Observation": {
+      "rules": "50_observation_fhir.yaml",
+      "resource_type": "Observation",
+      "description": "Laboratory and clinical observations",
+      "endpoint": "/Observation",
+      "us_core_profile": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab",
+      "formats": ["json", "xml"]
+    },
+    "DocumentReference": {
+      "rules": "60_document_fhir.yaml",
+      "resource_type": "DocumentReference",
+      "description": "Clinical documents",
+      "endpoint": "/DocumentReference",
+      "us_core_profile": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-documentreference",
+      "formats": ["json", "xml"]
+    },
+    "AllergyIntolerance": {
+      "rules": "70_allergy_fhir.yaml",
+      "resource_type": "AllergyIntolerance",
+      "description": "Allergies and intolerances",
+      "endpoint": "/AllergyIntolerance",
+      "us_core_profile": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-allergyintolerance",
+      "formats": ["json", "xml"]
+    },
+    "Immunization": {
+      "rules": "80_immunization_fhir.yaml",
+      "resource_type": "Immunization",
+      "description": "Immunization records",
+      "endpoint": "/Immunization",
+      "us_core_profile": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-immunization",
+      "formats": ["json", "xml"]
+    },
+    "Procedure": {
+      "rules": "90_procedure_fhir.yaml",
+      "resource_type": "Procedure",
+      "description": "Procedure records",
+      "endpoint": "/Procedure",
+      "us_core_profile": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure",
+      "formats": ["json", "xml"]
+    }
+  },
+  "requirements": {
+    "min_app_version": "0.1.0",
+    "parser": "native",
+    "validation": "fhir-validator"
+  },
+  "validation": {
+    "fhir_version": "4.0.1",
+    "profile_validation": true,
+    "us_core_compliance": true
+  },
+  "sandbox": {
+    "available": true,
+    "url": "https://developer.allscripts.com/Content/fhir/content/TWFHIR17_Sandbox/",
+    "test_patients": true,
+    "anonymous_access": true
+  },
+  "notes": [
+    "Allscripts FHIR API supports both JSON and XML formats",
+    "SMART on FHIR integration for patient and provider apps",
+    "TouchWorks EHR versions 17.1, 20.0, and later supported",
+    "Sandbox environment available for testing and development",
+    "Minimal mapping required - data already in FHIR R4 format",
+    "Contact VeradigmConnect@veradigm.com for API credentials"
+  ]
+}

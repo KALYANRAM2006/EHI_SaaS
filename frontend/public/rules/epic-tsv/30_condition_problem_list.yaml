@@ -1,0 +1,204 @@
+# Epic TSV to FHIR R4 Condition Resource Mapping
+# Source: PROBLEM_LIST.tsv (Epic EHI Tables Export)
+# Target: Condition (http://hl7.org/fhir/R4/condition.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables/GetTable/PROBLEM_LIST.htm
+# Spec Date: February 22, 2026
+
+resource_type: Condition
+source_file: PROBLEM_LIST.tsv
+epic_table: PROBLEM_LIST
+description: |
+  The PROBLEM_LIST table contains data from patients' problem lists in the clinical system.
+  The data in this table reflects the current status of all problems on the patient's problem list.
+  Each problem is marked as active until it becomes Resolved or Deleted.
+
+# Resource identity
+id:
+  source: PROBLEM_LIST_ID
+  transform: epic_condition_id
+  required: true
+  description: "Unique problem list ID from Epic PROBLEM_LIST table column 1"
+
+# Identifier
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.768076"
+    value:
+      source: PROBLEM_LIST_ID
+      required: true
+
+# Clinical status (FHIR clinicalStatus element - required)
+clinicalStatus:
+  coding:
+    - system: "http://terminology.hl7.org/CodeSystem/condition-clinical"
+      code:
+        source: RESOLVED_DATE
+        transform: determine_clinical_status
+        description: "Derived from RESOLVED_DATE (column 5) - null=active, has date=resolved"
+      display:
+        source: RESOLVED_DATE
+        transform: clinical_status_display
+
+# Verification status
+verificationStatus:
+  coding:
+    - system: "http://terminology.hl7.org/CodeSystem/condition-ver-status"
+      code: "confirmed"
+      display: "Confirmed"
+
+# Category (FHIR category element)
+category:
+  - coding:
+      - system: "http://terminology.hl7.org/CodeSystem/condition-category"
+        code: "problem-list-item"
+        display: "Problem List Item"
+
+# Code (diagnosis code)
+code:
+  coding:
+    - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.728285"
+      code:
+        source: DX_ID
+        description: "Diagnosis ID"
+      display:
+        source: DX_ID_DX_NAME
+        description: "Diagnosis name from Epic PROBLEM_LIST table column 2"
+  text:
+    source: DESCRIPTION
+    description: "Custom display name from Epic PROBLEM_LIST table column 3"
+    condition:
+      field: DESCRIPTION
+      not_null: true
+
+# Subject (reference to Patient)
+subject:
+  reference:
+    source: PAT_ID
+    transform: patient_reference
+    required: true
+    description: "Patient ID from Epic PROBLEM_LIST table"
+  display:
+    source: PAT_ID
+    transform: patient_display
+
+# Onset (when problem was first noted)
+onsetDateTime:
+  source: NOTED_DATE
+  transform: format_datetime
+  description: "First possible date problem was noted from Epic PROBLEM_LIST table column 4"
+  condition:
+    field: NOTED_DATE
+    not_null: true
+
+# Abatement (when problem was resolved)
+abatementDateTime:
+  source: RESOLVED_DATE
+  transform: format_datetime
+  description: "Date problem was resolved from Epic PROBLEM_LIST table column 5"
+  condition:
+    field: RESOLVED_DATE
+    not_null: true
+
+# Recorded date
+recordedDate:
+  source: DATE_OF_ENTRY
+  transform: format_datetime
+  description: "Date problem was last edited from Epic PROBLEM_LIST table column 6"
+  condition:
+    field: DATE_OF_ENTRY
+    not_null: true
+
+# Recorder (who entered/updated the problem)
+recorder:
+  reference:
+    source: ENTRY_USER_ID
+    transform: practitioner_reference
+    description: "User who last edited from Epic PROBLEM_LIST table column 7"
+    condition:
+      field: ENTRY_USER_ID
+      not_null: true
+  display:
+    source: ENTRY_USER_ID_NAME
+    description: "User name from Epic PROBLEM_LIST table column 8"
+
+# Note (problem comments)
+note:
+  - text:
+      source: PROBLEM_CMT
+      description: "Overview note preview from Epic PROBLEM_LIST table column 9"
+    condition:
+      field: PROBLEM_CMT
+      not_null: true
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-problem-list"
+  lastUpdated:
+    source: DATE_OF_ENTRY
+    transform: format_datetime
+
+# Transform functions
+transforms:
+  epic_condition_id:
+    description: "Convert Epic PROBLEM_LIST_ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  determine_clinical_status:
+    description: "Determine if problem is active or resolved"
+    operation: "conditional_map"
+    logic:
+      - if: "field_is_null"
+        then: "active"
+      - else: "resolved"
+
+  clinical_status_display:
+    description: "Display text for clinical status"
+    operation: "conditional_map"
+    logic:
+      - if: "field_is_null"
+        then: "Active"
+      - else: "Resolved"
+
+  patient_reference:
+    description: "Create Patient reference from PAT_ID"
+    operation: "create_reference"
+    resource_type: "Patient"
+
+  patient_display:
+    description: "Create patient display text"
+    operation: "format_display"
+
+  practitioner_reference:
+    description: "Create Practitioner reference from user ID"
+    operation: "create_reference"
+    resource_type: "Practitioner"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - PROBLEM_LIST_ID
+
+  fhir_required_elements:
+    - clinicalStatus
+    - code
+    - subject
+
+# Epic PROBLEM_LIST Key Columns Reference:
+# Column 1: PROBLEM_LIST_ID (NUMERIC) - Primary Key - Unique problem list entry ID
+# Column 2: DX_ID_DX_NAME (VARCHAR) - Diagnosis name
+# Column 3: DESCRIPTION (VARCHAR) - Display name (if changed from default)
+# Column 4: NOTED_DATE (DATETIME) - First possible date problem was noted/diagnosed
+# Column 5: RESOLVED_DATE (DATETIME) - Date problem was resolved
+# Column 6: DATE_OF_ENTRY (DATETIME) - Date problem was last edited
+# Column 7: ENTRY_USER_ID (VARCHAR) - User who last edited
+# Column 8: ENTRY_USER_ID_NAME (VARCHAR) - User name
+# Column 9: PROBLEM_CMT (VARCHAR) - Overview note preview text

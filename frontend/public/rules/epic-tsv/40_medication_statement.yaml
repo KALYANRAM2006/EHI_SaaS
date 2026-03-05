@@ -1,0 +1,214 @@
+# Epic TSV to FHIR R4 MedicationStatement Resource Mapping
+# Source: ORDER_MED.tsv (Epic EHI Tables Export)
+# Target: MedicationStatement (http://hl7.org/fhir/R4/medicationstatement.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables/GetTable/ORDER_MED.htm
+# Spec Date: February 22, 2026
+
+resource_type: MedicationStatement
+source_file: ORDER_MED.tsv
+epic_table: ORDER_MED
+description: |
+  The ORDER_MED table enables you to report on medications ordered in EpicCare (prescriptions).
+  Includes patient and contact identification information for each record.
+
+# Resource identity
+id:
+  source: ORDER_MED_ID
+  transform: epic_medication_id
+  required: true
+  description: "Unique medication order ID from Epic ORDER_MED table column 1"
+
+# Identifier
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.798268"
+    value:
+      source: ORDER_MED_ID
+      required: true
+
+# Status (FHIR status element - required)
+status:
+  value: "active"
+  description: "Default to active - adjust based on order status if available"
+
+# Medication (what medication)
+medicationCodeableConcept:
+  coding:
+    - system: "http://www.nlm.nih.gov/research/umls/rxnorm"
+      code:
+        source: MEDICATION_ID
+        description: "Medication ID"
+      display:
+        source: MEDICATION_ID_MEDICATION_NAME
+        description: "Medication name from Epic ORDER_MED table column 11"
+  text:
+    source: DESCRIPTION
+    description: "Order description from Epic ORDER_MED table column 12"
+
+# Subject (reference to Patient)
+subject:
+  reference:
+    source: PAT_ID
+    transform: patient_reference
+    required: true
+    description: "Patient ID from Epic ORDER_MED table column 2"
+  display:
+    source: PAT_ID
+    transform: patient_display
+
+# Context (reference to Encounter)
+context:
+  reference:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_reference
+    description: "Encounter CSN from Epic ORDER_MED table column 4"
+    condition:
+      field: PAT_ENC_CSN_ID
+      not_null: true
+  display:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_display
+
+# Effective period (when medication was ordered/taken)
+effectiveDateTime:
+  source: ORDERING_DATE
+  transform: format_datetime
+  description: "Date medication order was placed from Epic ORDER_MED table column 5"
+  condition:
+    field: ORDERING_DATE
+    not_null: true
+
+# Date asserted
+dateAsserted:
+  source: ORDERING_DATE
+  transform: format_datetime
+  description: "Order date from Epic ORDER_MED table column 5"
+
+# Information source (who ordered)
+informationSource:
+  reference:
+    source: ORD_CREATR_USER_ID
+    transform: practitioner_reference
+    description: "User who signed order from Epic ORDER_MED table column 9"
+    condition:
+      field: ORD_CREATR_USER_ID
+      not_null: true
+  display:
+    source: ORD_CREATR_USER_ID_NAME
+    description: "User name from Epic ORDER_MED table column 10"
+
+# Dosage information
+dosage:
+  - text:
+      source: DOSAGE
+      description: "Dispensation amount from Epic ORDER_MED table column 13"
+    doseAndRate:
+      - doseQuantity:
+          value:
+            source: QUANTITY
+            transform: parse_quantity
+            description: "Quantity dispensed from Epic ORDER_MED table column 14"
+    additionalInstruction:
+      - text:
+          source: REFILLS
+          transform: format_refills
+          description: "Number of refills from Epic ORDER_MED table column 15"
+          condition:
+            field: REFILLS
+            not_null: true
+
+# Note (pharmacy information)
+note:
+  - text:
+      source: PHARMACY_ID_PHARMACY_NAME
+      transform: format_pharmacy_note
+      description: "Pharmacy name from Epic ORDER_MED table column 8"
+    condition:
+      field: PHARMACY_ID_PHARMACY_NAME
+      not_null: true
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-order-med"
+  lastUpdated:
+    source: ORDERING_DATE
+    transform: format_datetime
+
+# Transform functions
+transforms:
+  epic_medication_id:
+    description: "Convert Epic ORDER_MED_ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  patient_reference:
+    description: "Create Patient reference from PAT_ID"
+    operation: "create_reference"
+    resource_type: "Patient"
+
+  patient_display:
+    description: "Create patient display text"
+    operation: "format_display"
+
+  encounter_reference:
+    description: "Create Encounter reference from PAT_ENC_CSN_ID"
+    operation: "create_reference"
+    resource_type: "Encounter"
+
+  encounter_display:
+    description: "Create encounter display text"
+    operation: "format_display"
+
+  practitioner_reference:
+    description: "Create Practitioner reference from user ID"
+    operation: "create_reference"
+    resource_type: "Practitioner"
+
+  parse_quantity:
+    description: "Parse quantity string to decimal"
+    operation: "parse_decimal"
+
+  format_refills:
+    description: "Format refill text"
+    operation: "string_format"
+    template: "{value} refills authorized"
+
+  format_pharmacy_note:
+    description: "Format pharmacy as note text"
+    operation: "string_format"
+    template: "Pharmacy: {value}"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - ORDER_MED_ID
+
+  fhir_required_elements:
+    - status
+    - medicationCodeableConcept
+    - subject
+
+# Epic ORDER_MED Key Columns Reference:
+# Column 1: ORDER_MED_ID (NUMERIC) - Primary Key - Unique medication order ID
+# Column 2: PAT_ID (VARCHAR) - Patient ID
+# Column 3: PAT_ENC_DATE_REAL (FLOAT) - Contact date in decimal format
+# Column 4: PAT_ENC_CSN_ID (NUMERIC) - Encounter CSN
+# Column 5: ORDERING_DATE (DATETIME) - Date medication order was placed
+# Column 6: ORDER_CLASS_C_NAME (VARCHAR) - Order class
+# Column 7: PHARMACY_ID (NUMERIC) - Pharmacy ID
+# Column 8: PHARMACY_ID_PHARMACY_NAME (VARCHAR) - Pharmacy name
+# Column 9: ORD_CREATR_USER_ID (VARCHAR) - User who signed order
+# Column 10: ORD_CREATR_USER_ID_NAME (VARCHAR) - User name
+# Column 11: MEDICATION_ID_MEDICATION_NAME (VARCHAR) - Medication name
+# Column 12: DESCRIPTION (VARCHAR) - Order description
+# Column 13: DOSAGE (VARCHAR) - Dispensation amount
+# Column 14: QUANTITY (VARCHAR) - Quantity dispensed
+# Column 15: REFILLS (VARCHAR) - Number of refills

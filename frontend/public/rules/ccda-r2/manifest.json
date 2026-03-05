@@ -1,0 +1,152 @@
+{
+  "ruleset_version": "2026.03.04-ccda-r2",
+  "vendor": "generic-ccda",
+  "vendor_name": "Universal C-CDA (All EHR Vendors)",
+  "export_type": "CCDA",
+  "fhir_target": "R4",
+  "description": "Consolidated Clinical Document Architecture (C-CDA) R2.1 - Universal XML format supported by all certified EHR systems",
+  "author": "Health Data Alchemist",
+  "last_updated": "2026-03-04",
+  "official_spec": "http://www.hl7.org/implement/standards/product_brief.cfm?product_id=492",
+  "spec_version": "C-CDA R2.1",
+  "supports_uscdi": ["v1", "v2", "v3", "v4"],
+  "document_types": [
+    "Continuity of Care Document (CCD)",
+    "Consultation Note",
+    "Discharge Summary",
+    "History and Physical",
+    "Operative Note",
+    "Progress Note",
+    "Referral Note",
+    "Transfer Summary"
+  ],
+  "files": [
+    "10_patient_ccda.yaml",
+    "20_encounter_ccda.yaml",
+    "30_condition_ccda.yaml",
+    "40_medication_ccda.yaml",
+    "50_observation_ccda.yaml",
+    "60_document_ccda.yaml",
+    "70_allergy_ccda.yaml",
+    "80_immunization_ccda.yaml",
+    "90_procedure_ccda.yaml",
+    "95_care_plan_ccda.yaml"
+  ],
+  "source_sections": {
+    "recordTarget": {
+      "rules": "10_patient_ccda.yaml",
+      "resource_type": "Patient",
+      "description": "Patient demographics from C-CDA recordTarget",
+      "xpath": "/ClinicalDocument/recordTarget/patientRole",
+      "oid": "2.16.840.1.113883.10.20.22.1.1"
+    },
+    "Encounters": {
+      "rules": "20_encounter_ccda.yaml",
+      "resource_type": "Encounter",
+      "description": "Encounters section",
+      "xpath": "/ClinicalDocument/component/structuredBody/component/section[code/@code='46240-8']",
+      "loinc": "46240-8",
+      "oid": "2.16.840.1.113883.10.20.22.2.22.1"
+    },
+    "Problems": {
+      "rules": "30_condition_ccda.yaml",
+      "resource_type": "Condition",
+      "description": "Problem List section",
+      "xpath": "/ClinicalDocument/component/structuredBody/component/section[code/@code='11450-4']",
+      "loinc": "11450-4",
+      "oid": "2.16.840.1.113883.10.20.22.2.5.1"
+    },
+    "Medications": {
+      "rules": "40_medication_ccda.yaml",
+      "resource_type": "MedicationStatement",
+      "description": "Medications section",
+      "xpath": "/ClinicalDocument/component/structuredBody/component/section[code/@code='10160-0']",
+      "loinc": "10160-0",
+      "oid": "2.16.840.1.113883.10.20.22.2.1.1"
+    },
+    "Results": {
+      "rules": "50_observation_ccda.yaml",
+      "resource_type": "Observation",
+      "description": "Results/Lab Results section",
+      "xpath": "/ClinicalDocument/component/structuredBody/component/section[code/@code='30954-2']",
+      "loinc": "30954-2",
+      "oid": "2.16.840.1.113883.10.20.22.2.3.1"
+    },
+    "VitalSigns": {
+      "rules": "50_observation_ccda.yaml",
+      "resource_type": "Observation",
+      "description": "Vital Signs section",
+      "xpath": "/ClinicalDocument/component/structuredBody/component/section[code/@code='8716-3']",
+      "loinc": "8716-3",
+      "oid": "2.16.840.1.113883.10.20.22.2.4.1"
+    },
+    "Allergies": {
+      "rules": "70_allergy_ccda.yaml",
+      "resource_type": "AllergyIntolerance",
+      "description": "Allergies and Intolerances section",
+      "xpath": "/ClinicalDocument/component/structuredBody/component/section[code/@code='48765-2']",
+      "loinc": "48765-2",
+      "oid": "2.16.840.1.113883.10.20.22.2.6.1"
+    },
+    "Immunizations": {
+      "rules": "80_immunization_ccda.yaml",
+      "resource_type": "Immunization",
+      "description": "Immunizations section",
+      "xpath": "/ClinicalDocument/component/structuredBody/component/section[code/@code='11369-6']",
+      "loinc": "11369-6",
+      "oid": "2.16.840.1.113883.10.20.22.2.2.1"
+    },
+    "Procedures": {
+      "rules": "90_procedure_ccda.yaml",
+      "resource_type": "Procedure",
+      "description": "Procedures section",
+      "xpath": "/ClinicalDocument/component/structuredBody/component/section[code/@code='47519-4']",
+      "loinc": "47519-4",
+      "oid": "2.16.840.1.113883.10.20.22.2.7.1"
+    },
+    "CarePlan": {
+      "rules": "95_care_plan_ccda.yaml",
+      "resource_type": "CarePlan",
+      "description": "Care Plan section",
+      "xpath": "/ClinicalDocument/component/structuredBody/component/section[code/@code='18776-5']",
+      "loinc": "18776-5",
+      "oid": "2.16.840.1.113883.10.20.22.2.10"
+    }
+  },
+  "requirements": {
+    "min_app_version": "0.1.0",
+    "parser": "xml2js",
+    "schema_validation": true
+  },
+  "validation": {
+    "required_elements": {
+      "ClinicalDocument": ["typeId", "templateId", "id", "code", "effectiveTime", "recordTarget"],
+      "recordTarget": ["patientRole"],
+      "patientRole": ["id", "patient"]
+    },
+    "namespaces": {
+      "default": "urn:hl7-org:v3",
+      "xsi": "http://www.w3.org/2001/XMLSchema-instance",
+      "sdtc": "urn:hl7-org:sdtc"
+    },
+    "template_ids": [
+      "2.16.840.1.113883.10.20.22.1.1",
+      "2.16.840.1.113883.10.20.22.1.2"
+    ]
+  },
+  "code_systems": {
+    "LOINC": "2.16.840.1.113883.6.1",
+    "SNOMED_CT": "2.16.840.1.113883.6.96",
+    "RxNorm": "2.16.840.1.113883.6.88",
+    "ICD10CM": "2.16.840.1.113883.6.90",
+    "CPT": "2.16.840.1.113883.6.12",
+    "CVX": "2.16.840.1.113883.12.292"
+  },
+  "notes": [
+    "C-CDA is mandated by ONC for all certified EHR systems",
+    "Universal format works across all vendors (Epic, Cerner, Allscripts, etc.)",
+    "XML-based format with standardized sections",
+    "Most common export format for patient health record requests",
+    "Requires XML parsing and XPath navigation"
+  ]
+}

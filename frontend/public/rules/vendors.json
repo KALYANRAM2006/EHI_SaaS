@@ -1,0 +1,199 @@
+{
+  "version": "2026.03.04",
+  "author": "Health Data Alchemist",
+  "description": "Multi-vendor EHI normalization rulesets for common EHR systems",
+  "last_updated": "2026-03-04",
+  "references": {
+    "epic_ehi_tables": "https://open.epic.com/EHITables",
+    "oracle_health_specs": "https://www.oracle.com/health/certified-health-it/",
+    "allscripts_fhir": "https://developer.allscripts.com/Content/fhir/",
+    "uscdi_v4": "https://hl7.org/fhir/us/core/",
+    "fhir_r4": "http://hl7.org/fhir/R4/"
+  },
+  "vendors": [
+    {
+      "id": "epic",
+      "name": "Epic Systems",
+      "description": "Epic EHR - EHI Tables TSV Export Format",
+      "products": ["EpicCare", "MyChart"],
+      "export_formats": [
+        {
+          "type": "TSV",
+          "format_id": "epic-tsv",
+          "description": "Epic EHI Tables Export (Tab-Separated Values)",
+          "manifest": "/rules/epic-tsv/manifest.json",
+          "official_spec": "https://open.epic.com/EHITables",
+          "file_extension": ".tsv",
+          "supports_uscdi": ["v3", "v4", "v5"],
+          "fhir_target": "R4",
+          "market_share": "32%",
+          "notes": "Epic EHI Tables export contains thousands of tables in TSV format. Documented publicly at open.epic.com/EHITables as of February 2026."
+        },
+        {
+          "type": "FHIR",
+          "format_id": "epic-fhir",
+          "description": "Epic on FHIR API Export",
+          "manifest": "/rules/epic-fhir/manifest.json",
+          "official_spec": "https://fhir.epic.com/",
+          "supports_uscdi": ["v3", "v4", "v5"],
+          "fhir_target": "R4",
+          "notes": "Epic FHIR API supports patient-mediated access via SMART on FHIR."
+        }
+      ],
+      "status": "production",
+      "priority": 1
+    },
+    {
+      "id": "oracle-health",
+      "name": "Oracle Health (formerly Cerner)",
+      "description": "Oracle Health Millennium EHR - Multiple Export Formats",
+      "products": ["Millennium", "PowerChart", "HealtheLife"],
+      "export_formats": [
+        {
+          "type": "SQL",
+          "format_id": "cerner-sql",
+          "description": "Oracle Health Single Patient Export (MySQL DDL/SQL)",
+          "manifest": "/rules/cerner-sql/manifest.json",
+          "official_spec": "https://www.oracle.com/a/ocom/docs/industries/healthcare/cerner-corp-single-patient-ehi-export-data-overview.pdf",
+          "file_extension": ".sql",
+          "supports_uscdi": ["v3", "v4"],
+          "fhir_target": "R4",
+          "market_share": "25%",
+          "notes": "Export includes SQL files with DDL schema for MySQL database import."
+        },
+        {
+          "type": "FHIR",
+          "format_id": "cerner-fhir",
+          "description": "Oracle Health FHIR API (Ignite APIs)",
+          "manifest": "/rules/cerner-fhir/manifest.json",
+          "official_spec": "https://fhir.cerner.com/",
+          "supports_uscdi": ["v3", "v4"],
+          "fhir_target": "R4",
+          "notes": "Oracle Health Ignite APIs provide FHIR R4 access to patient data."
+        }
+      ],
+      "status": "production",
+      "priority": 2
+    },
+    {
+      "id": "allscripts",
+      "name": "Allscripts (Veradigm)",
+      "description": "Allscripts TouchWorks EHR - FHIR API Export",
+      "products": ["TouchWorks", "Sunrise", "Professional EHR"],
+      "export_formats": [
+        {
+          "type": "FHIR",
+          "format_id": "allscripts-fhir",
+          "description": "Allscripts TouchWorks FHIR R4 API",
+          "manifest": "/rules/allscripts-fhir/manifest.json",
+          "official_spec": "https://developer.allscripts.com/content/fhir/",
+          "supports_uscdi": ["v3", "v4"],
+          "fhir_target": "R4",
+          "market_share": "5%",
+          "notes": "Allscripts FHIR API supports JSON/XML formats with SMART on FHIR integration."
+        }
+      ],
+      "status": "production",
+      "priority": 3
+    },
+    {
+      "id": "meditech",
+      "name": "MEDITECH",
+      "description": "MEDITECH Expanse EHR - FHIR Export",
+      "products": ["Expanse", "Magic"],
+      "export_formats": [
+        {
+          "type": "FHIR",
+          "format_id": "meditech-fhir",
+          "description": "MEDITECH FHIR R4 API",
+          "manifest": "/rules/meditech-fhir/manifest.json",
+          "supports_uscdi": ["v3", "v4"],
+          "fhir_target": "R4",
+          "market_share": "16%",
+          "notes": "MEDITECH Expanse supports native FHIR R4 with patient API access."
+        }
+      ],
+      "status": "planned",
+      "priority": 4
+    },
+    {
+      "id": "athenahealth",
+      "name": "athenahealth",
+      "description": "athenaOne EHR - FHIR Export",
+      "products": ["athenaOne", "athenaClinicals"],
+      "export_formats": [
+        {
+          "type": "FHIR",
+          "format_id": "athena-fhir",
+          "description": "athenahealth FHIR R4 API",
+          "manifest": "/rules/athena-fhir/manifest.json",
+          "supports_uscdi": ["v3", "v4"],
+          "fhir_target": "R4",
+          "market_share": "6%",
+          "notes": "athenaOne provides FHIR R4 patient access API."
+        }
+      ],
+      "status": "planned",
+      "priority": 5
+    },
+    {
+      "id": "generic-ccda",
+      "name": "Generic C-CDA",
+      "description": "Consolidated Clinical Document Architecture (any vendor)",
+      "products": ["All EHR Systems"],
+      "export_formats": [
+        {
+          "type": "CCDA",
+          "format_id": "ccda-r2",
+          "description": "C-CDA R2.1 XML Document",
+          "manifest": "/rules/ccda-r2/manifest.json",
+          "official_spec": "http://www.hl7.org/implement/standards/product_brief.cfm?product_id=492",
+          "file_extension": ".xml",
+          "supports_uscdi": ["v1", "v2", "v3"],
+          "fhir_target": "R4",
+          "notes": "Universal format supported by all certified EHR systems per ONC regulations."
+        }
+      ],
+      "status": "production",
+      "priority": 6
+    }
+  ],
+  "format_capabilities": {
+    "TSV": {
+      "parsing_complexity": "medium",
+      "standardization": "vendor-specific",
+      "requires_mapping": true,
+      "typical_vendors": ["Epic"]
+    },
+    "FHIR": {
+      "parsing_complexity": "low",
+      "standardization": "HL7 FHIR R4",
+      "requires_mapping": false,
+      "typical_vendors": ["Epic", "Cerner", "Allscripts", "MEDITECH", "athenahealth"]
+    },
+    "CCDA": {
+      "parsing_complexity": "high",
+      "standardization": "HL7 C-CDA R2.1",
+      "requires_mapping": true,
+      "typical_vendors": ["All EHR systems"]
+    },
+    "SQL": {
+      "parsing_complexity": "high",
+      "standardization": "vendor-specific",
+      "requires_mapping": true,
+      "typical_vendors": ["Oracle Health/Cerner"]
+    }
+  },
+  "deployment_strategy": {
+    "phase_1_mvp": ["epic-tsv", "ccda-r2"],
+    "phase_2_expansion": ["cerner-fhir", "allscripts-fhir", "epic-fhir"],
+    "phase_3_comprehensive": ["meditech-fhir", "athena-fhir", "cerner-sql"]
+  },
+  "notes": [
+    "All rulesets map vendor-specific formats to FHIR R4 resources",
+    "YAML rules stored in frontend /public/rules/ directory per architecture",
+    "No PHI processed on server - all normalization happens client-side",
+    "Market share data from KLAS Research 2024 EMR Market Share Report",
+    "Official vendor specifications retrieved March 4, 2026"
+  ]
+}

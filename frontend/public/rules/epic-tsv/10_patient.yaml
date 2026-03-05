@@ -1,0 +1,384 @@
+# Epic TSV to FHIR R4 Patient Resource Mapping
+# Source: PATIENT.tsv (Epic EHI Tables Export)
+# Target: Patient (http://hl7.org/fhir/R4/patient.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables/GetTable/PATIENT.htm
+# Spec Date: February 22, 2026
+
+resource_type: Patient
+source_file: PATIENT.tsv
+epic_table: PATIENT
+description: |
+  The PATIENT table contains one record for each patient in your system. The data contained
+  in each record consists of demographics, PCP and primary location information, registration
+  information, and other information.
+
+  This mapping transforms Epic's PATIENT table into FHIR R4 Patient resources compliant with
+  the US Core Patient Profile.
+
+# Resource identity
+id:
+  source: PAT_ID
+  transform: epic_patient_id
+  required: true
+
+# Patient identifiers (FHIR identifier element)
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.698084"
+    type:
+      coding:
+        - system: "http://terminology.hl7.org/CodeSystem/v2-0203"
+          code: "MR"
+          display: "Medical Record Number"
+    value:
+      source: PAT_MRN_ID
+      required: true
+      description: "Patient's Medical Record Number (MRN) from Epic PATIENT table column 30"
+
+  - system: "urn:oid:2.16.840.1.113883.4.1"
+    type:
+      coding:
+        - system: "http://terminology.hl7.org/CodeSystem/v2-0203"
+          code: "SS"
+          display: "Social Security Number"
+    value:
+      source: SSN
+      transform: format_ssn
+      description: "Social Security Number from Epic PATIENT table column 15"
+      condition:
+        field: SSN
+        not_null: true
+
+  - system: "urn:oid:2.16.840.1.113883.4.927"
+    type:
+      coding:
+        - system: "http://terminology.hl7.org/CodeSystem/v2-0203"
+          code: "MC"
+          display: "Patient's Medicare Number"
+    value:
+      source: MEDICARE_NUM
+      description: "Medicare ID from Epic PATIENT table column 18"
+      condition:
+        field: MEDICARE_NUM
+        not_null: true
+
+  - system: "urn:oid:2.16.840.1.113883.4.3.6"
+    type:
+      coding:
+        - system: "http://terminology.hl7.org/CodeSystem/v2-0203"
+          code: "MA"
+          display: "Patient Medicaid Number"
+    value:
+      source: MEDICAID_NUM
+      description: "Medicaid ID from Epic PATIENT table column 19"
+      condition:
+        field: MEDICAID_NUM
+        not_null: true
+
+# Name (FHIR HumanName element)
+name:
+  - use: "official"
+    family:
+      source: PAT_LAST_NAME
+      required: true
+      description: "Last name from Epic PATIENT table column 44"
+    given:
+      - source: PAT_FIRST_NAME
+        required: true
+        description: "First name from Epic PATIENT table column 45"
+      - source: PAT_MIDDLE_NAME
+        description: "Middle name from Epic PATIENT table column 46"
+        condition:
+          field: PAT_MIDDLE_NAME
+          not_null: true
+    prefix:
+      - source: PAT_TITLE_C_NAME
+        description: "Patient title from Epic PATIENT table column 47"
+        condition:
+          field: PAT_TITLE_C_NAME
+          not_null: true
+    text:
+      source: PAT_NAME
+      description: "Full formatted name from Epic PATIENT table column 2"
+
+# Gender/Sex (FHIR gender element)
+gender:
+  source: SEX_C_NAME
+  description: "Patient sex from Epic PATIENT table column 85"
+  mapping:
+    M: "male"
+    F: "female"
+    Male: "male"
+    Female: "female"
+    MALE: "male"
+    FEMALE: "female"
+    U: "unknown"
+    Unknown: "unknown"
+    O: "other"
+    Other: "other"
+    "": "unknown"
+  default: "unknown"
+
+# Birth Date (FHIR birthDate element)
+birthDate:
+  source: BIRTH_DATE
+  transform: format_date
+  format: "YYYY-MM-DD"
+  required: true
+  description: "Date of birth from Epic PATIENT table column 11"
+
+# Multiple Birth (FHIR multipleBirth element)
+multipleBirthBoolean:
+  source: PED_MULT_BIRTH_TOT
+  transform: is_greater_than_one
+  description: "Derived from Epic PATIENT table column 27 (total births)"
+  condition:
+    field: PED_MULT_BIRTH_TOT
+    not_null: true
+
+multipleBirthInteger:
+  source: PED_MULT_BIRTH_ORD
+  description: "Birth order from Epic PATIENT table column 26"
+  condition:
+    field: PED_MULT_BIRTH_ORD
+    not_null: true
+
+# Deceased indicator
+deceasedBoolean:
+  source: DEATH_DATE
+  transform: is_not_null
+  condition:
+    field: DEATH_DATE
+    not_null: true
+
+deceasedDateTime:
+  source: DEATH_DATE
+  transform: format_datetime
+  condition:
+    field: DEATH_DATE
+    not_null: true
+
+# Address
+address:
+  - use: "home"
+    type: "physical"
+    line:
+      - source: ADD_LINE_1
+        condition:
+          field: ADD_LINE_1
+          not_null: true
+      - source: ADD_LINE_2
+        condition:
+          field: ADD_LINE_2
+          not_null: true
+    city:
+      source: CITY
+    state:
+      source: STATE_PROVINCE
+    postalCode:
+      source: ZIP
+      transform: format_zip
+    country:
+      source: COUNTRY
+      default: "USA"
+
+# Contact information
+telecom:
+  - system: "phone"
+    value:
+      source: HOME_PHONE
+      transform: format_phone
+    use: "home"
+    condition:
+      field: HOME_PHONE
+      not_null: true
+
+  - system: "phone"
+    value:
+      source: WORK_PHONE
+      transform: format_phone
+    use: "work"
+    condition:
+      field: WORK_PHONE
+      not_null: true
+
+  - system: "phone"
+    value:
+      source: MOBILE_PHONE
+      transform: format_phone
+    use: "mobile"
+    condition:
+      field: MOBILE_PHONE
+      not_null: true
+
+  - system: "email"
+    value:
+      source: EMAIL_ADDRESS
+    use: "home"
+    condition:
+      field: EMAIL_ADDRESS
+      not_null: true
+
+# Marital status
+maritalStatus:
+  coding:
+    - system: "http://terminology.hl7.org/CodeSystem/v3-MaritalStatus"
+      code:
+        source: MARITAL_STATUS
+        mapping:
+          S: "S"
+          M: "M"
+          D: "D"
+          W: "W"
+          Single: "S"
+          Married: "M"
+          Divorced: "D"
+          Widowed: "W"
+      display:
+        source: MARITAL_STATUS
+        mapping:
+          S: "Never Married"
+          M: "Married"
+          D: "Divorced"
+          W: "Widowed"
+          Single: "Never Married"
+          Married: "Married"
+          Divorced: "Divorced"
+          Widowed: "Widowed"
+  condition:
+    field: MARITAL_STATUS
+    not_null: true
+
+# Communication (preferred language)
+communication:
+  - language:
+      coding:
+        - system: "urn:ietf:bcp:47"
+          code:
+            source: LANGUAGE
+            mapping:
+              English: "en"
+              Spanish: "es"
+              Chinese: "zh"
+              Vietnamese: "vi"
+              Tagalog: "tl"
+              Korean: "ko"
+              Armenian: "hy"
+              Persian: "fa"
+              Russian: "ru"
+              Arabic: "ar"
+            default: "en"
+      text:
+        source: LANGUAGE
+    preferred: true
+    condition:
+      field: LANGUAGE
+      not_null: true
+
+# Race
+extension:
+  - url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race"
+    extension:
+      - url: "ombCategory"
+        valueCoding:
+          system: "urn:oid:2.16.840.1.113883.6.238"
+          code:
+            source: RACE
+            mapping:
+              "White": "2106-3"
+              "Black or African American": "2054-5"
+              "Asian": "2028-9"
+              "American Indian or Alaska Native": "1002-5"
+              "Native Hawaiian or Other Pacific Islander": "2076-8"
+          display:
+            source: RACE
+      - url: "text"
+        valueString:
+          source: RACE
+    condition:
+      field: RACE
+      not_null: true
+
+  - url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity"
+    extension:
+      - url: "ombCategory"
+        valueCoding:
+          system: "urn:oid:2.16.840.1.113883.6.238"
+          code:
+            source: ETHNICITY
+            mapping:
+              "Hispanic or Latino": "2135-2"
+              "Not Hispanic or Latino": "2186-5"
+          display:
+            source: ETHNICITY
+      - url: "text"
+        valueString:
+          source: ETHNICITY
+    condition:
+      field: ETHNICITY
+      not_null: true
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-patient-export"
+  lastUpdated:
+    source: LAST_UPDATED
+    transform: format_datetime
+    default: current_timestamp
+
+# Active status
+active: true
+
+# Transform functions referenced
+transforms:
+  epic_patient_id:
+    description: "Convert Epic PAT_ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  format_date:
+    description: "Convert date to FHIR date format (YYYY-MM-DD)"
+    operation: "parse_date"
+    output_format: "YYYY-MM-DD"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+  format_phone:
+    description: "Format phone number to E.164 or readable format"
+    operation: "format_phone_number"
+
+  format_zip:
+    description: "Format ZIP code (5 or 9 digit)"
+    operation: "format_postal_code"
+
+  format_ssn:
+    description: "Format SSN with dashes"
+    operation: "format_identifier"
+
+  is_not_null:
+    description: "Return true if field has value"
+    operation: "exists"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - PAT_MRN_ID
+    - PAT_FIRST_NAME
+    - PAT_LAST_NAME
+    - BIRTH_DATE
+
+  date_formats:
+    - "MM/DD/YYYY"
+    - "YYYY-MM-DD"
+    - "M/D/YYYY"
+
+  datetime_formats:
+    - "MM/DD/YYYY HH:mm:ss"
+    - "YYYY-MM-DD HH:mm:ss"
+    - "MM/DD/YYYY HH:mm"

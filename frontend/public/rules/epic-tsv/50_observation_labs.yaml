@@ -1,0 +1,205 @@
+# Epic TSV to FHIR R4 Observation Resource Mapping (Lab Results)
+# Source: ORDER_PROC.tsv (Epic EHI Tables Export)
+# Target: Observation (http://hl7.org/fhir/R4/observation.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables/GetTable/ORDER_PROC.htm
+# Spec Date: February 22, 2026
+
+resource_type: Observation
+source_file: ORDER_PROC.tsv
+epic_table: ORDER_PROC
+description: |
+  The ORDER_PROC table enables you to report on the procedures ordered in the clinical system,
+  including lab results, diagnostic tests, and observations.
+  Includes patient and contact identification information for each record.
+
+# Resource identity
+id:
+  source: ORDER_PROC_ID
+  transform: epic_observation_id
+  required: true
+  description: "Unique procedure order ID from Epic ORDER_PROC table column 1"
+
+# Identifier
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.798268"
+    value:
+      source: ORDER_PROC_ID
+      required: true
+
+# Status (FHIR status element - required)
+status:
+  value: "final"
+  description: "Default to final - adjust based on order status if available"
+
+# Category (FHIR category element)
+category:
+  - coding:
+      - system: "http://terminology.hl7.org/CodeSystem/observation-category"
+        code: "laboratory"
+        display: "Laboratory"
+
+# Code (what was observed)
+code:
+  coding:
+    - system: "http://loinc.org"
+      code:
+        source: PROC_ID
+        description: "Procedure ID"
+      display:
+        source: PROC_ID_PROC_NAME
+        description: "Procedure name from Epic ORDER_PROC table column 9"
+  text:
+    source: DESCRIPTION
+    description: "Procedure description from Epic ORDER_PROC table column 10"
+
+# Subject (reference to Patient)
+subject:
+  reference:
+    source: PAT_ID
+    transform: patient_reference
+    required: true
+    description: "Patient ID from Epic ORDER_PROC table column 2"
+  display:
+    source: PAT_ID
+    transform: patient_display
+
+# Encounter (reference to Encounter)
+encounter:
+  reference:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_reference
+    description: "Encounter CSN from Epic ORDER_PROC table column 4"
+    condition:
+      field: PAT_ENC_CSN_ID
+      not_null: true
+  display:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_display
+
+# Effective date/time (when observation was made)
+effectiveDateTime:
+  source: ORDERING_DATE
+  transform: format_datetime
+  description: "Date procedure order was placed from Epic ORDER_PROC table column 7"
+  condition:
+    field: ORDERING_DATE
+    not_null: true
+
+# Performer (who performed the observation)
+performer:
+  - reference:
+      source: AUTHRZING_PROV_ID
+      transform: practitioner_reference
+      description: "Authorizing provider from Epic ORDER_PROC table column 12"
+      condition:
+        field: AUTHRZING_PROV_ID_PROV_NAME
+        not_null: true
+    display:
+      source: AUTHRZING_PROV_ID_PROV_NAME
+      description: "Authorizing provider name from Epic ORDER_PROC table column 12"
+
+# Interpretation (abnormal flag)
+interpretation:
+  - coding:
+      - system: "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation"
+        code:
+          source: ABNORMAL_YN
+          description: "Abnormal flag from Epic ORDER_PROC table column 13"
+          mapping:
+            Y: "A"
+            N: "N"
+            Abnormal: "A"
+            Normal: "N"
+        display:
+          source: ABNORMAL_YN
+          mapping:
+            Y: "Abnormal"
+            N: "Normal"
+            Abnormal: "Abnormal"
+            Normal: "Normal"
+
+# Note (result lab information)
+note:
+  - text:
+      source: RESULT_LAB_ID_LLB_NAME
+      transform: format_lab_note
+      description: "Lab name from Epic ORDER_PROC table column 6"
+    condition:
+      field: RESULT_LAB_ID_LLB_NAME
+      not_null: true
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-order-proc"
+  lastUpdated:
+    source: ORDERING_DATE
+    transform: format_datetime
+
+# Transform functions
+transforms:
+  epic_observation_id:
+    description: "Convert Epic ORDER_PROC_ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  patient_reference:
+    description: "Create Patient reference from PAT_ID"
+    operation: "create_reference"
+    resource_type: "Patient"
+
+  patient_display:
+    description: "Create patient display text"
+    operation: "format_display"
+
+  encounter_reference:
+    description: "Create Encounter reference from PAT_ENC_CSN_ID"
+    operation: "create_reference"
+    resource_type: "Encounter"
+
+  encounter_display:
+    description: "Create encounter display text"
+    operation: "format_display"
+
+  practitioner_reference:
+    description: "Create Practitioner reference from provider ID"
+    operation: "create_reference"
+    resource_type: "Practitioner"
+
+  format_lab_note:
+    description: "Format lab information as note"
+    operation: "string_format"
+    template: "Performing Lab: {value}"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - ORDER_PROC_ID
+
+  fhir_required_elements:
+    - status
+    - code
+    - subject
+
+# Epic ORDER_PROC Key Columns Reference:
+# Column 1: ORDER_PROC_ID (NUMERIC) - Primary Key - Unique procedure order ID
+# Column 2: PAT_ID (VARCHAR) - Patient ID
+# Column 3: PAT_ENC_DATE_REAL (FLOAT) - Contact date in decimal format
+# Column 4: PAT_ENC_CSN_ID (NUMERIC) - Encounter CSN
+# Column 5: RESULT_LAB_ID (NUMERIC) - Lab ID
+# Column 6: RESULT_LAB_ID_LLB_NAME (VARCHAR) - Lab name
+# Column 7: ORDERING_DATE (DATETIME) - Date procedure order was placed
+# Column 8: ORDER_TYPE_C_NAME (VARCHAR) - Order type
+# Column 9: PROC_ID_PROC_NAME (VARCHAR) - Procedure name
+# Column 10: DESCRIPTION (VARCHAR) - Procedure description
+# Column 11: ORDER_CLASS_C_NAME (VARCHAR) - Order class
+# Column 12: AUTHRZING_PROV_ID_PROV_NAME (VARCHAR) - Authorizing provider name
+# Column 13: ABNORMAL_YN (VARCHAR) - Abnormal result flag (Y/N)

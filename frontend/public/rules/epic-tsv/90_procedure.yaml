@@ -1,0 +1,262 @@
+# Epic TSV to FHIR R4 Procedure Resource Mapping
+# Source: PROCEDURES.tsv / OR_CASE (Epic EHI Tables Export)
+# Target: Procedure (http://hl7.org/fhir/R4/procedure.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables
+# Spec Date: February 22, 2026
+
+resource_type: Procedure
+source_file: PROCEDURES.tsv
+epic_table: OR_CASE
+description: |
+  Surgical and diagnostic procedures performed on patients, including operative procedures,
+  surgical cases, and other clinical procedures documented in the Epic system.
+
+# Resource identity
+id:
+  source: PROCEDURE_ID
+  transform: epic_procedure_id
+  required: true
+  description: "Unique procedure ID"
+
+# Identifier
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.798268"
+    value:
+      source: PROCEDURE_ID
+      required: true
+
+# Status (FHIR status element - required)
+status:
+  value: "completed"
+  description: "Default to completed status for documented procedures"
+
+# Code (what procedure was performed - FHIR code element - required)
+code:
+  coding:
+    - system: "http://www.ama-assn.org/go/cpt"
+      code:
+        source: PROC_CPT_CODE
+        description: "CPT procedure code"
+      display:
+        source: PROC_NAME
+        description: "Procedure name"
+    - system: "http://snomed.info/sct"
+      code:
+        source: PROC_SNOMED_CODE
+        description: "SNOMED CT procedure code"
+      display:
+        source: PROC_NAME
+  text:
+    source: PROC_NAME
+    description: "Procedure name"
+
+# Subject (reference to Patient - FHIR subject element - required)
+subject:
+  reference:
+    source: PAT_ID
+    transform: patient_reference
+    required: true
+    description: "Patient ID"
+  display:
+    source: PAT_ID
+    transform: patient_display
+
+# Encounter (associated visit)
+encounter:
+  reference:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_reference
+    description: "Associated encounter"
+    condition:
+      field: PAT_ENC_CSN_ID
+      not_null: true
+  display:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_display
+
+# Performed date/time (when procedure was performed)
+performedDateTime:
+  source: PROC_DATE
+  transform: format_datetime
+  description: "Date procedure was performed"
+  condition:
+    field: PROC_DATE
+    not_null: true
+
+# Performed period (for procedures with start and end times)
+performedPeriod:
+  start:
+    source: PROC_START_TIME
+    transform: format_datetime
+    description: "Procedure start time"
+  end:
+    source: PROC_END_TIME
+    transform: format_datetime
+    description: "Procedure end time"
+
+# Recorder (who documented the procedure)
+recorder:
+  reference:
+    source: ENTRY_USER_ID
+    transform: practitioner_reference
+    description: "User who documented procedure"
+    condition:
+      field: ENTRY_USER_ID
+        not_null: true
+  display:
+    source: ENTRY_USER_NAME
+    description: "User name"
+
+# Performer (who performed the procedure)
+performer:
+  - function:
+      coding:
+        - system: "http://snomed.info/sct"
+          code: "304292004"
+          display: "Surgeon"
+    actor:
+      reference:
+        source: SURGEON_PROV_ID
+        transform: practitioner_reference
+        description: "Surgeon/primary performer"
+        condition:
+          field: SURGEON_PROV_NAME
+          not_null: true
+      display:
+        source: SURGEON_PROV_NAME
+        description: "Surgeon name"
+
+# Location (where procedure was performed)
+location:
+  reference:
+    source: OR_ROOM_ID
+    transform: location_reference
+    description: "Operating room or procedure location"
+    condition:
+      field: OR_ROOM_NAME
+      not_null: true
+  display:
+    source: OR_ROOM_NAME
+    description: "Room name"
+
+# Reason code (why procedure was performed)
+reasonCode:
+  - coding:
+      - system: "http://hl7.org/fhir/sid/icd-10-cm"
+        code:
+          source: INDICATION_ICD_CODE
+          description: "ICD-10 diagnosis code for indication"
+        display:
+          source: INDICATION_DESCRIPTION
+          description: "Indication description"
+    text:
+      source: INDICATION_DESCRIPTION
+
+# Body site (where on body)
+bodySite:
+  - coding:
+      - system: "http://snomed.info/sct"
+        code:
+          source: BODY_SITE_CODE
+          description: "SNOMED CT body site code"
+        display:
+          source: BODY_SITE_NAME
+          description: "Body site"
+    text:
+      source: BODY_SITE_NAME
+
+# Outcome (result of procedure)
+outcome:
+  text:
+    source: PROC_OUTCOME
+    description: "Procedure outcome"
+  condition:
+    field: PROC_OUTCOME
+    not_null: true
+
+# Note (procedure comments)
+note:
+  - text:
+      source: PROC_COMMENTS
+      description: "Procedure comments"
+    condition:
+      field: PROC_COMMENTS
+      not_null: true
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-procedure"
+  lastUpdated:
+    source: PROC_DATE
+    transform: format_datetime
+
+# Transform functions
+transforms:
+  epic_procedure_id:
+    description: "Convert Epic PROCEDURE_ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  patient_reference:
+    description: "Create Patient reference from PAT_ID"
+    operation: "create_reference"
+    resource_type: "Patient"
+
+  patient_display:
+    description: "Create patient display text"
+    operation: "format_display"
+
+  encounter_reference:
+    description: "Create Encounter reference from PAT_ENC_CSN_ID"
+    operation: "create_reference"
+    resource_type: "Encounter"
+
+  encounter_display:
+    description: "Create encounter display text"
+    operation: "format_display"
+
+  practitioner_reference:
+    description: "Create Practitioner reference from provider ID"
+    operation: "create_reference"
+    resource_type: "Practitioner"
+
+  location_reference:
+    description: "Create Location reference from room ID"
+    operation: "create_reference"
+    resource_type: "Location"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - PROCEDURE_ID
+
+  fhir_required_elements:
+    - status
+    - code
+    - subject
+
+# Epic OR_CASE/PROCEDURES Key Columns:
+# - PROCEDURE_ID - Unique procedure record ID
+# - PAT_ID - Patient ID
+# - PAT_ENC_CSN_ID - Encounter CSN
+# - PROC_NAME - Procedure name
+# - PROC_CPT_CODE - CPT procedure code
+# - PROC_SNOMED_CODE - SNOMED CT procedure code
+# - PROC_DATE - Date procedure was performed
+# - PROC_START_TIME - Procedure start time
+# - PROC_END_TIME - Procedure end time
+# - SURGEON_PROV_NAME - Surgeon/primary performer name
+# - OR_ROOM_NAME - Operating room or procedure location
+# - BODY_SITE_NAME - Anatomical site where procedure was performed
+# - INDICATION_DESCRIPTION - Reason for procedure
+# - PROC_OUTCOME - Outcome/result of procedure
+# - PROC_COMMENTS - Additional procedure comments

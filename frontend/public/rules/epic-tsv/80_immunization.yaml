@@ -1,0 +1,270 @@
+# Epic TSV to FHIR R4 Immunization Resource Mapping
+# Source: IMMUNIZATION.tsv (Epic EHI Tables Export)
+# Target: Immunization (http://hl7.org/fhir/R4/immunization.html)
+# Version: 2026.03.04-epic-mvp
+# Author: Health Data Alchemist
+# Epic Specification: https://open.epic.com/EHITables
+# Spec Date: February 22, 2026
+
+resource_type: Immunization
+source_file: IMMUNIZATION.tsv
+epic_table: IMMUNE
+description: |
+  The IMMUNE/IMMUNIZATION table contains vaccination history and immunization records
+  for patients, including vaccine type, administration date, dose, site, route, and provider information.
+
+# Resource identity
+id:
+  source: IMMUNIZATION_ID
+  transform: epic_immunization_id
+  required: true
+  description: "Unique immunization ID"
+
+# Identifier
+identifier:
+  - system: "urn:oid:1.2.840.114350.1.13.0.1.7.2.768076"
+    value:
+      source: IMMUNIZATION_ID
+      required: true
+
+# Status (FHIR status element - required)
+status:
+  value: "completed"
+  description: "Default to completed status"
+
+# Vaccine code (FHIR vaccineCode element - required)
+vaccineCode:
+  coding:
+    - system: "http://hl7.org/fhir/sid/cvx"
+      code:
+        source: VACCINE_CVX_CODE
+        description: "CDC CVX vaccine code"
+      display:
+        source: VACCINE_NAME
+        description: "Vaccine name"
+  text:
+    source: VACCINE_NAME
+    description: "Vaccine product name"
+
+# Patient (FHIR patient element - required)
+patient:
+  reference:
+    source: PAT_ID
+    transform: patient_reference
+    required: true
+    description: "Patient ID"
+  display:
+    source: PAT_ID
+    transform: patient_display
+
+# Encounter (associated visit)
+encounter:
+  reference:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_reference
+    description: "Associated encounter"
+    condition:
+      field: PAT_ENC_CSN_ID
+      not_null: true
+  display:
+    source: PAT_ENC_CSN_ID
+    transform: encounter_display
+
+# Occurrence date/time (FHIR occurrence element - required)
+occurrenceDateTime:
+  source: ADMIN_DATE
+  transform: format_datetime
+  required: true
+  description: "Date vaccine was administered"
+
+# Recorded date
+recorded:
+  source: ENTRY_DATE
+  transform: format_datetime
+  description: "Date record was entered"
+  condition:
+    field: ENTRY_DATE
+    not_null: true
+
+# Primary source (was this info from primary source)
+primarySource:
+  value: true
+  description: "Indicates data from primary source"
+
+# Lot number
+lotNumber:
+  source: LOT_NUMBER
+  description: "Vaccine lot number"
+  condition:
+    field: LOT_NUMBER
+    not_null: true
+
+# Expiration date
+expirationDate:
+  source: EXPIRATION_DATE
+  transform: format_date
+  description: "Vaccine expiration date"
+  condition:
+    field: EXPIRATION_DATE
+    not_null: true
+
+# Site (body site where vaccine was administered)
+site:
+  coding:
+    - system: "http://snomed.info/sct"
+      code:
+        source: ADMIN_SITE_CODE
+        description: "SNOMED CT code for administration site"
+      display:
+        source: ADMIN_SITE_NAME
+        description: "Administration site"
+  text:
+    source: ADMIN_SITE_NAME
+
+# Route (how vaccine was administered)
+route:
+  coding:
+    - system: "http://terminology.hl7.org/CodeSystem/v3-RouteOfAdministration"
+      code:
+        source: ADMIN_ROUTE_CODE
+        description: "Route code"
+      display:
+        source: ADMIN_ROUTE_NAME
+        description: "Administration route"
+  text:
+    source: ADMIN_ROUTE_NAME
+
+# Dose quantity
+doseQuantity:
+  value:
+    source: DOSE_AMOUNT
+    transform: parse_decimal
+    description: "Dose amount"
+  unit:
+    source: DOSE_UNIT
+    description: "Dose unit"
+  system: "http://unitsofmeasure.org"
+
+# Performer (who administered the vaccine)
+performer:
+  - function:
+      coding:
+        - system: "http://terminology.hl7.org/CodeSystem/v2-0443"
+          code: "AP"
+          display: "Administering Provider"
+    actor:
+      reference:
+        source: ADMIN_PROV_ID
+        transform: practitioner_reference
+        description: "Provider who administered vaccine"
+        condition:
+          field: ADMIN_PROV_NAME
+          not_null: true
+      display:
+        source: ADMIN_PROV_NAME
+        description: "Provider name"
+
+# Note (comments)
+note:
+  - text:
+      source: COMMENTS
+      description: "Immunization comments"
+    condition:
+      field: COMMENTS
+      not_null: true
+
+# Protocol applied (dose number in series)
+protocolApplied:
+  - doseNumberPositiveInt:
+      source: DOSE_NUMBER
+      transform: parse_integer
+      description: "Dose number in series"
+    seriesDosesPositiveInt:
+      source: SERIES_DOSES
+      transform: parse_integer
+      description: "Total doses in series"
+
+# Meta information
+meta:
+  source:
+    system: "https://fhir.epic.com"
+    code: "epic-immunization"
+  lastUpdated:
+    source: ENTRY_DATE
+    transform: format_datetime
+
+# Transform functions
+transforms:
+  epic_immunization_id:
+    description: "Convert Epic IMMUNIZATION_ID to FHIR-safe ID"
+    operation: "sanitize_id"
+
+  patient_reference:
+    description: "Create Patient reference from PAT_ID"
+    operation: "create_reference"
+    resource_type: "Patient"
+
+  patient_display:
+    description: "Create patient display text"
+    operation: "format_display"
+
+  encounter_reference:
+    description: "Create Encounter reference from PAT_ENC_CSN_ID"
+    operation: "create_reference"
+    resource_type: "Encounter"
+
+  encounter_display:
+    description: "Create encounter display text"
+    operation: "format_display"
+
+  practitioner_reference:
+    description: "Create Practitioner reference from provider ID"
+    operation: "create_reference"
+    resource_type: "Practitioner"
+
+  parse_decimal:
+    description: "Parse decimal value"
+    operation: "parse_decimal"
+
+  parse_integer:
+    description: "Parse integer value"
+    operation: "parse_integer"
+
+  format_datetime:
+    description: "Convert datetime to FHIR dateTime format"
+    operation: "parse_datetime"
+    output_format: "YYYY-MM-DDTHH:mm:ssZ"
+
+  format_date:
+    description: "Convert to FHIR date format"
+    operation: "parse_date"
+    output_format: "YYYY-MM-DD"
+
+# Validation rules
+validation:
+  required_fields:
+    - PAT_ID
+    - IMMUNIZATION_ID
+    - ADMIN_DATE
+
+  fhir_required_elements:
+    - status
+    - vaccineCode
+    - patient
+    - occurrenceDateTime
+
+# Epic IMMUNE/IMMUNIZATION Key Columns:
+# - IMMUNIZATION_ID - Unique immunization record ID
+# - PAT_ID - Patient ID
+# - PAT_ENC_CSN_ID - Encounter CSN
+# - VACCINE_NAME - Vaccine product name
+# - VACCINE_CVX_CODE - CDC CVX vaccine code
+# - ADMIN_DATE - Date vaccine was administered
+# - ADMIN_SITE_NAME - Administration site (e.g., left arm, right thigh)
+# - ADMIN_ROUTE_NAME - Route (e.g., intramuscular, subcutaneous)
+# - LOT_NUMBER - Vaccine lot number
+# - EXPIRATION_DATE - Vaccine expiration date
+# - DOSE_AMOUNT - Dose amount
+# - DOSE_UNIT - Dose unit
+# - ADMIN_PROV_NAME - Provider who administered vaccine
+# - COMMENTS - Immunization comments
