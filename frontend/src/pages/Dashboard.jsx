@@ -52,6 +52,7 @@ export default function Dashboard() {
       sex: selectedPatient.sex,
       conditions: selectedPatient.conditions || [],
       medications: selectedPatient.medications || [],
+      allergies: selectedPatient.allergies || [],
       encounters: selectedPatient.encounters || [],
       results: selectedPatient.results || [],
       orders: selectedPatient.orders || [],
@@ -491,101 +492,203 @@ export default function Dashboard() {
 
         {/* ===== AI SUMMARY VIEW ===== */}
         {activeView === 'ai-summary' && aiSummary && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">AI Health Summary</h2>
-              <div className="flex items-center gap-2">
+          <div className="space-y-8">
+            {/* Header with glass effect — matches Figma */}
+            <div className="flex items-center justify-between backdrop-blur-sm bg-white/50 rounded-2xl p-6 border border-gray-200/50">
+              <div>
+                <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-2">
+                  AI Health Summary
+                </h2>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Sparkles className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm">Generated using AI • Based on {aiSummary.basedOn}</span>
+                </div>
+              </div>
+              <div className="flex gap-2">
                 <button
                   onClick={handleRegenerateAI}
                   disabled={regenerating}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50 shadow-md"
-                  style={{boxShadow:'0 4px 14px rgba(59,130,246,0.3)'}}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700 disabled:opacity-50"
                 >
                   <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
                   <span>Regenerate</span>
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700">
+                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700">
                   <Share2 className="w-4 h-4" />
                   <span>Share</span>
                 </button>
               </div>
             </div>
 
-            {/* Main Summary Gradient Card */}
-            <div className="relative rounded-2xl overflow-hidden shadow-xl" style={{boxShadow:'0 10px 40px rgba(59,130,246,0.12)'}}>
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
-              <div className="absolute inset-0 opacity-10" style={{backgroundImage:'radial-gradient(circle, white 1px, transparent 1px)',backgroundSize:'20px 20px'}} />
+            {/* Main AI Summary Gradient Card — matches Figma exactly */}
+            <div className="rounded-2xl overflow-hidden relative shadow-xl" style={{boxShadow:'0 10px 40px rgba(59,130,246,0.10)'}}>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600" />
+              <div className="absolute inset-0 opacity-10" style={{backgroundImage:'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',backgroundSize:'32px 32px'}} />
               <div className="relative p-8">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                    <Sparkles className="w-7 h-7 text-white" />
+                    <Sparkles className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-white">Overall Health Story</h3>
-                    <p className="text-blue-100 text-sm">Based on {aiSummary.basedOn}</p>
+                    <p className="text-sm text-white/80">AI-generated insights from your records</p>
                   </div>
                 </div>
-                {aiSummary.sections.filter(s => s.id === 'overall').map(section => (
-                  <div key={section.id} className="text-white/90 leading-relaxed space-y-3">
-                    {section.content.split('\n\n').map((paragraph, i) => (
-                      <p key={i}>{renderFormattedText(paragraph)}</p>
-                    ))}
-                  </div>
-                ))}
+                <div className="space-y-4">
+                  {aiSummary.sections.filter(s => s.id === 'overall').map(section => (
+                    <div key={section.id} className="text-white/95 leading-relaxed space-y-4 text-base">
+                      {section.content.split('\n\n').map((paragraph, i) => (
+                        <p key={i}>{renderFormattedText(paragraph)}</p>
+                      ))}
+                    </div>
+                  ))}
+
+                  {/* Allergy Warning Bar — matches Figma */}
+                  {selectedPatient?.allergies?.length > 0 && (
+                    <p className="text-white leading-relaxed text-base bg-red-500/30 backdrop-blur-sm p-4 rounded-xl border border-white/20">
+                      <strong>⚠️ Critical Safety Information:</strong> The patient has documented allergies to{' '}
+                      {selectedPatient.allergies.map((a, idx) => (
+                        <span key={idx}>
+                          <strong>{a.allergen || a.name}</strong> ({(a.severity || 'unknown').toLowerCase()} - {(a.reaction || 'unknown').toLowerCase()})
+                          {idx < selectedPatient.allergies.length - 1 ? ', ' : ''}
+                        </span>
+                      ))}
+                      . All healthcare providers should be informed of these allergies before any treatment.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Domain Summary Cards */}
-            {aiSummary.sections.filter(s => s.id !== 'overall').map((section) => {
-              const sectionColors = {
-                medications: { gradient: 'from-purple-500 to-purple-600', border: 'border-l-purple-500', bgHover: 'hover:border-l-purple-600' },
-                labs: { gradient: 'from-green-500 to-emerald-600', border: 'border-l-green-500', bgHover: 'hover:border-l-green-600' },
-                conditions: { gradient: 'from-red-500 to-red-600', border: 'border-l-red-500', bgHover: 'hover:border-l-red-600' },
-                encounters: { gradient: 'from-blue-500 to-blue-600', border: 'border-l-blue-500', bgHover: 'hover:border-l-blue-600' },
-              }
-              const colors = sectionColors[section.id] || sectionColors.encounters
-              return (
-                <div key={section.id} className={`bg-white rounded-2xl shadow-lg overflow-hidden border-l-4 ${colors.border} ${colors.bgHover} transition-all`}>
-                  <button
-                    onClick={() => toggleSection(section.id)}
-                    className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{section.icon}</span>
-                      <h3 className="text-lg font-bold text-gray-900">{section.title}</h3>
+            {/* Domain-Specific Summaries — 2-column grid matching Figma */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Medications Summary */}
+              <div className="bg-white rounded-2xl shadow-lg overflow-hidden relative" style={{boxShadow:'0 4px 20px rgba(168,85,247,0.10)'}}>
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 to-purple-600" />
+                <div className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow:'0 4px 14px rgba(168,85,247,0.30)'}}>
+                      <Pill className="w-6 h-6 text-white" />
                     </div>
-                    {expandedSections[section.id] ? (
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Medications Summary</h3>
+                      <p className="text-sm text-gray-500">{stats.medications.length} active prescriptions</p>
+                    </div>
+                  </div>
+                  <p className="text-gray-700 mb-4">
+                    You are currently taking <strong>{stats.medications.length} active medication{stats.medications.length !== 1 ? 's' : ''}</strong>.
+                    {stats.medications.length > 0 && (
+                      <> The primary medications include {stats.medications.slice(0, 2).map((m, idx) => (
+                        <span key={idx}>
+                          <strong>{m.name}</strong> ({m.dose || m.dosage || m.frequency || ''})
+                          {idx < Math.min(stats.medications.length, 2) - 1 ? ' and ' : ''}
+                        </span>
+                      ))}. All medications show active prescriptions with documented prescribers.</>
                     )}
-                  </button>
-                  {expandedSections[section.id] && (
-                    <div className="px-6 pb-6">
-                      <div className="text-gray-700 leading-relaxed space-y-3 pl-11">
-                        {section.content.split('\n\n').map((paragraph, i) => (
-                          <div key={i}>
-                            {paragraph.split('\n').map((line, j) => (
-                              <p key={j} className={line.startsWith('•') || line.startsWith('✓') || line.startsWith('⚠') || line.startsWith('ℹ') ? 'ml-2 mb-1' : 'mb-2'}>
-                                {renderFormattedText(line)}
-                              </p>
-                            ))}
+                  </p>
+                  {stats.medications.length > 0 && (
+                    <div className="space-y-3">
+                      {stats.medications.map((med, index) => (
+                        <div key={index} className="flex items-center justify-between p-4 bg-purple-50 rounded-xl border border-purple-100 hover:bg-purple-100 transition-colors">
+                          <div>
+                            <p className="font-semibold text-gray-900">{med.name}</p>
+                            <p className="text-sm text-gray-600">{med.dosage || `${med.dose || ''} - ${med.frequency || ''}`}</p>
+                          </div>
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">Active</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Lab Results & Trends */}
+              <div className="bg-white rounded-2xl shadow-lg overflow-hidden relative" style={{boxShadow:'0 4px 20px rgba(34,197,94,0.10)'}}>
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-green-500 to-emerald-600" />
+                <div className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow:'0 4px 14px rgba(34,197,94,0.30)'}}>
+                      <Activity className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Lab Results & Trends</h3>
+                      <p className="text-sm text-gray-500">Recent test results</p>
+                    </div>
+                  </div>
+                  {stats.results.length > 0 ? (
+                    <div>
+                      <p className="text-gray-700 mb-4">
+                        Most recent comprehensive lab panel from{' '}
+                        <strong>{new Date(stats.results[0].resultTime || Date.now()).toLocaleDateString()}</strong>:
+                      </p>
+                      <div className="space-y-3">
+                        {stats.results.slice(0, 5).map((result, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100 hover:bg-green-100 transition-colors">
+                            <div>
+                              <p className="font-semibold text-gray-900">{result.component}</p>
+                              <p className="text-sm text-gray-600">Range: {result.refLow}-{result.refHigh}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold text-gray-900">{result.value}{result.unit ? ` ${result.unit}` : ''}</p>
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                result.flag === 'Normal' ? 'bg-green-100 text-green-800 border border-green-200' :
+                                result.flag === 'High' ? 'bg-red-100 text-red-800 border border-red-200' :
+                                'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                              }`}>
+                                {result.flag}
+                              </span>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
+                  ) : (
+                    <p className="text-gray-600">No lab results available in current records.</p>
                   )}
                 </div>
-              )
-            })}
+              </div>
+            </div>
 
-            {/* Export actions */}
-            <div className="flex items-center gap-3 pt-4">
-              <button onClick={handleExport} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all" style={{boxShadow:'0 4px 14px rgba(59,130,246,0.3)'}}>
+            {/* Care Coordination — full width card below */}
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden relative" style={{boxShadow:'0 4px 20px rgba(59,130,246,0.10)'}}>
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-500 to-blue-600" />
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow:'0 4px 14px rgba(59,130,246,0.30)'}}>
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Care Coordination</h3>
+                    <p className="text-sm text-gray-500">Your healthcare team</p>
+                  </div>
+                </div>
+                <p className="text-gray-700 mb-4">
+                  Your care is coordinated across multiple healthcare providers ensuring comprehensive treatment:
+                </p>
+                {stats.encounters.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[...new Set(stats.encounters.map(e => providers[e.visitProvider]?.name).filter(Boolean))].map((provName, idx) => (
+                      <div key={idx} className="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100 hover:bg-blue-100 transition-colors">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                          <User className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="font-medium text-gray-900">{provName}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-600">No care team information available.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Export Actions — side by side matching Figma */}
+            <div className="flex gap-4">
+              <button onClick={handleExport} className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all text-base" style={{boxShadow:'0 4px 14px rgba(59,130,246,0.3)'}}>
                 <Download className="w-5 h-5" />
                 <span>Export as PDF</span>
               </button>
-              <button className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+              <button className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white border-2 border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors text-base">
                 <Share2 className="w-5 h-5" />
                 <span>Share with Provider</span>
               </button>

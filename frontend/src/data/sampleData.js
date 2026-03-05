@@ -13,6 +13,10 @@ export const samplePatients = [
     ethnicGroup: 'Not Hispanic or Latino',
     language: 'English',
     maritalStatus: 'Married',
+    allergies: [
+      { allergen: 'Penicillin', severity: 'moderate', reaction: 'rash' },
+      { allergen: 'Sulfa drugs', severity: 'mild', reaction: 'nausea' },
+    ],
   },
   {
     patId: 'Z2345678',
@@ -25,6 +29,9 @@ export const samplePatients = [
     ethnicGroup: 'Hispanic or Latino',
     language: 'Spanish',
     maritalStatus: 'Single',
+    allergies: [
+      { allergen: 'Aspirin', severity: 'severe', reaction: 'anaphylaxis' },
+    ],
   },
   {
     patId: 'Z3456789',
