@@ -30,12 +30,15 @@ import {
   Shield,
   Trash2,
   ShieldCheck,
+  Bot,
+  MessageSquare,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { generateAISummary, providers } from '../data/sampleData'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 import { PrivacyBadge, PrivacyPanel } from '../components/PrivacyBanner'
 import AISettingsPanel from '../components/AISettingsPanel'
+import AIChatView from '../components/AIChatView'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 import { getRuleIntegrity } from '../parsers/ruleEngine'
 
@@ -195,6 +198,7 @@ export default function Dashboard() {
     { id: 'timeline', label: 'Timeline' },
     { id: 'insights', label: 'Insights' },
     { id: 'data-explorer', label: 'Data Explorer' },
+    { id: 'ai-assistant', label: 'AI Assistant' },
   ]
 
   // Generate AI-driven health insights from patient data
@@ -1550,6 +1554,11 @@ export default function Dashboard() {
         })()}
 
         {/* ===== FALLBACK PLACEHOLDER VIEWS ===== */}
+        {/* ===== AI ASSISTANT VIEW ===== */}
+        {activeView === 'ai-assistant' && (
+          <AIChatView selectedPatient={selectedPatient} stats={stats} />
+        )}
+
         {['labs', 'encounters', 'procedures', 'trends'].includes(activeView) && (
           <div className="space-y-6">
             <div className="flex items-center space-x-3">
