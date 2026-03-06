@@ -35,15 +35,17 @@ import { useData } from '../context/DataContext'
 import { generateAISummary, providers } from '../data/sampleData'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 import { PrivacyBadge, PrivacyPanel } from '../components/PrivacyBanner'
+import AISettingsPanel from '../components/AISettingsPanel'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 import { getRuleIntegrity } from '../parsers/ruleEngine'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { uploadedFiles, parsedData, loading, isSampleData, aiSummary, setAiSummary, selectedPatient, selectPatient, secureWipe, memoryCleared } = useData()
+  const { uploadedFiles, parsedData, loading, isSampleData, aiSummary, setAiSummary, selectedPatient, selectPatient, secureWipe, memoryCleared, aiConfig, regenerateAISummary, aiLoading } = useData()
   const [activeView, setActiveView] = useState('overview')
   const [expandedSections, setExpandedSections] = useState({ overall: true })
   const [regenerating, setRegenerating] = useState(false)
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
   const [timelineYear, setTimelineYear] = useState(null)
   const [timelineCategory, setTimelineCategory] = useState('All')
   const [timelineSearch, setTimelineSearch] = useState('')
@@ -157,13 +159,16 @@ export default function Dashboard() {
     setExpandedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }))
   }
 
-  const handleRegenerateAI = () => {
+  const handleRegenerateAI = async () => {
     if (!selectedPatient) return
     setRegenerating(true)
-    setTimeout(() => {
-      setAiSummary(generateAISummary(selectedPatient))
+    try {
+      await regenerateAISummary(selectedPatient)
+    } catch {
+      // fallback already handled in context
+    } finally {
       setRegenerating(false)
-    }, 1200)
+    }
   }
 
   const handleExport = () => {
@@ -328,6 +333,14 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-2">
               <PrivacyBadge onClick={() => setPrivacyOpen(true)} />
+              <button
+                onClick={() => setAiSettingsOpen(true)}
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors group"
+                title="AI Settings"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-indigo-500 group-hover:scale-110 transition-transform" />
+                <span>AI: {aiConfig.mode === 'local' ? 'Local' : aiConfig.mode === 'cloud' ? 'Cloud' : 'Browser'}</span>
+              </button>
               {parsedData?.patients?.length > 1 && (
                 <select
                   value={selectedPatient?.patId || ''}
@@ -1664,6 +1677,9 @@ export default function Dashboard() {
 
       {/* Privacy Panel Modal */}
       <PrivacyPanel isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+
+      {/* AI Settings Panel */}
+      <AISettingsPanel isOpen={aiSettingsOpen} onClose={() => setAiSettingsOpen(false)} />
     </div>
   )
 }

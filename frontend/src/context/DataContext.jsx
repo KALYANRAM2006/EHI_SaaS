@@ -9,6 +9,7 @@ import {
   isPersistenceEnabled,
   setPersistenceEnabled,
 } from '../utils/privacy'
+import { generateAIHealthSummary, getAIConfig, saveAIConfig, AI_MODES, testDeidentification } from '../services/aiService'
 
 const DataContext = createContext()
 
@@ -28,6 +29,11 @@ export function DataProvider({ children }) {
   const [persistEnabled, setPersistEnabled] = useState(isPersistenceEnabled())
   const [memoryCleared, setMemoryCleared] = useState(false)
   const clearTimerRef = useRef(null)
+
+  // ─── AI Mode State ────────────────────────────────────────────────────────
+  const [aiConfig, setAiConfigState] = useState(getAIConfig())
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState(null)
 
   // Auto-clear data when browser tab closes or navigates away
   useEffect(() => {
@@ -185,6 +191,39 @@ export function DataProvider({ children }) {
     }
   }, [parsedData])
 
+  // ─── AI Functions ─────────────────────────────────────────────────────────
+
+  // Update AI configuration
+  const updateAIConfig = useCallback((newConfig) => {
+    const merged = { ...aiConfig, ...newConfig }
+    saveAIConfig(merged)
+    setAiConfigState(merged)
+  }, [aiConfig])
+
+  // Regenerate AI summary using the configured mode
+  const regenerateAISummary = useCallback(async (patient) => {
+    const target = patient || selectedPatient
+    if (!target) return
+    setAiLoading(true)
+    setAiError(null)
+    try {
+      const summary = await generateAIHealthSummary(target, aiConfig)
+      setAiSummary(summary)
+    } catch (err) {
+      setAiError(err.message)
+      // Fall back to local template on error
+      setAiSummary(generateAISummary(target))
+    } finally {
+      setAiLoading(false)
+    }
+  }, [selectedPatient, aiConfig])
+
+  // Test de-identification (for the Privacy Panel / dev tools)
+  const testDeidentify = useCallback(() => {
+    if (!selectedPatient) return null
+    return testDeidentification(selectedPatient)
+  }, [selectedPatient])
+
   const value = {
     uploadedFiles,
     addFile,
@@ -209,6 +248,13 @@ export function DataProvider({ children }) {
     persistEnabled,
     togglePersistence,
     memoryCleared,
+    // AI Service
+    aiConfig,
+    updateAIConfig,
+    regenerateAISummary,
+    aiLoading,
+    aiError,
+    testDeidentify,
   }
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
