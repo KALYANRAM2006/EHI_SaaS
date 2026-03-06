@@ -32,6 +32,7 @@ import {
   ShieldCheck,
   Bot,
   MessageSquare,
+  FileBarChart,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { generateAISummary, providers } from '../data/sampleData'
@@ -459,7 +460,17 @@ export default function Dashboard() {
                       </div>
                     ))}
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+                      {aiSummary.riskScore !== undefined && (
+                        <div className={`backdrop-blur-sm rounded-xl p-3 border ${
+                          aiSummary.riskScore >= 80 ? 'bg-green-500/20 border-green-300/30' :
+                          aiSummary.riskScore >= 60 ? 'bg-yellow-500/20 border-yellow-300/30' :
+                          'bg-red-500/20 border-red-300/30'
+                        }`}>
+                          <p className="text-white/60 text-xs">Risk Score</p>
+                          <p className="text-white text-xl font-bold">{aiSummary.riskScore}<span className="text-sm font-normal">/100</span></p>
+                        </div>
+                      )}
                       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
                         <p className="text-white/60 text-xs">Medications</p>
                         <p className="text-white text-xl font-bold">{stats.medications.length}</p>
@@ -541,6 +552,15 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 text-gray-600">
                   <Sparkles className="w-4 h-4 text-blue-600" />
                   <span className="text-sm">Generated using AI • Based on {aiSummary.basedOn}</span>
+                  {aiSummary.riskScore && (
+                    <span className={`ml-2 px-3 py-1 rounded-full text-xs font-bold border ${
+                      aiSummary.riskScore >= 80 ? 'bg-green-100 text-green-800 border-green-200' :
+                      aiSummary.riskScore >= 60 ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                      'bg-red-100 text-red-800 border-red-200'
+                    }`}>
+                      Risk Score: {aiSummary.riskScore}/100
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -599,96 +619,53 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Domain-Specific Summaries — 2-column grid matching Figma */}
+            {/* Domain-Specific Summaries — dynamically render all AI sections */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Medications Summary */}
-              <div className="bg-white rounded-2xl shadow-lg overflow-hidden relative" style={{boxShadow:'0 4px 20px rgba(168,85,247,0.10)'}}>
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 to-purple-600" />
-                <div className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow:'0 4px 14px rgba(168,85,247,0.30)'}}>
-                      <Pill className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">Medications Summary</h3>
-                      <p className="text-sm text-gray-500">{stats.medications.length} active prescriptions</p>
-                    </div>
-                  </div>
-                  <p className="text-gray-700 mb-4">
-                    You are currently taking <strong>{stats.medications.length} active medication{stats.medications.length !== 1 ? 's' : ''}</strong>.
-                    {stats.medications.length > 0 && (
-                      <> The primary medications include {stats.medications.slice(0, 2).map((m, idx) => (
-                        <span key={idx}>
-                          <strong>{m.name}</strong> ({m.dose || m.dosage || m.frequency || ''})
-                          {idx < Math.min(stats.medications.length, 2) - 1 ? ' and ' : ''}
-                        </span>
-                      ))}. All medications show active prescriptions with documented prescribers.</>
-                    )}
-                  </p>
-                  {stats.medications.length > 0 && (
-                    <div className="space-y-3">
-                      {stats.medications.map((med, index) => (
-                        <div key={index} className="flex items-center justify-between p-4 bg-purple-50 rounded-xl border border-purple-100 hover:bg-purple-100 transition-colors">
-                          <div>
-                            <p className="font-semibold text-gray-900">{med.name}</p>
-                            <p className="text-sm text-gray-600">{med.dosage || `${med.dose || ''} - ${med.frequency || ''}`}</p>
-                          </div>
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">Active</span>
+              {aiSummary.sections.filter(s => s.id !== 'overall').map(section => {
+                const sectionColors = {
+                  medications: { from: 'from-purple-500', to: 'to-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', shadow: 'rgba(168,85,247,0.10)', shadowIcon: 'rgba(168,85,247,0.30)' },
+                  labs: { from: 'from-green-500', to: 'to-emerald-600', bg: 'bg-green-50', border: 'border-green-100', shadow: 'rgba(34,197,94,0.10)', shadowIcon: 'rgba(34,197,94,0.30)' },
+                  allergies: { from: 'from-red-500', to: 'to-red-600', bg: 'bg-red-50', border: 'border-red-100', shadow: 'rgba(239,68,68,0.10)', shadowIcon: 'rgba(239,68,68,0.30)' },
+                  care: { from: 'from-blue-500', to: 'to-blue-600', bg: 'bg-blue-50', border: 'border-blue-100', shadow: 'rgba(59,130,246,0.10)', shadowIcon: 'rgba(59,130,246,0.30)' },
+                  conditions: { from: 'from-orange-500', to: 'to-orange-600', bg: 'bg-orange-50', border: 'border-orange-100', shadow: 'rgba(249,115,22,0.10)', shadowIcon: 'rgba(249,115,22,0.30)' },
+                  recommendations: { from: 'from-indigo-500', to: 'to-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', shadow: 'rgba(99,102,241,0.10)', shadowIcon: 'rgba(99,102,241,0.30)' },
+                }
+                const sectionIcons = {
+                  medications: Pill,
+                  labs: Activity,
+                  allergies: AlertCircle,
+                  care: User,
+                  conditions: FileBarChart,
+                  recommendations: Sparkles,
+                }
+                const sc = sectionColors[section.id] || sectionColors.care
+                const SIcon = sectionIcons[section.id] || FileBarChart
+                return (
+                  <div key={section.id} className="bg-white rounded-2xl shadow-lg overflow-hidden relative" style={{boxShadow:`0 4px 20px ${sc.shadow}`}}>
+                    <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${sc.from} ${sc.to}`} />
+                    <div className="p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className={`w-12 h-12 bg-gradient-to-br ${sc.from} ${sc.to} rounded-xl flex items-center justify-center shadow-lg`} style={{boxShadow:`0 4px 14px ${sc.shadowIcon}`}}>
+                          <SIcon className="w-6 h-6 text-white" />
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Lab Results & Trends */}
-              <div className="bg-white rounded-2xl shadow-lg overflow-hidden relative" style={{boxShadow:'0 4px 20px rgba(34,197,94,0.10)'}}>
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-green-500 to-emerald-600" />
-                <div className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow:'0 4px 14px rgba(34,197,94,0.30)'}}>
-                      <Activity className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">Lab Results & Trends</h3>
-                      <p className="text-sm text-gray-500">Recent test results</p>
-                    </div>
-                  </div>
-                  {stats.results.length > 0 ? (
-                    <div>
-                      <p className="text-gray-700 mb-4">
-                        Most recent comprehensive lab panel from{' '}
-                        <strong>{new Date(stats.results[0].resultTime || Date.now()).toLocaleDateString()}</strong>:
-                      </p>
-                      <div className="space-y-3">
-                        {stats.results.slice(0, 5).map((result, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100 hover:bg-green-100 transition-colors">
-                            <div>
-                              <p className="font-semibold text-gray-900">{result.component}</p>
-                              <p className="text-sm text-gray-600">Range: {result.refLow}-{result.refHigh}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-bold text-gray-900">{result.value}{result.unit ? ` ${result.unit}` : ''}</p>
-                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                result.flag === 'Normal' ? 'bg-green-100 text-green-800 border border-green-200' :
-                                result.flag === 'High' ? 'bg-red-100 text-red-800 border border-red-200' :
-                                'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                              }`}>
-                                {result.flag}
-                              </span>
-                            </div>
-                          </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">{section.title}</h3>
+                          {section.subtitle && <p className="text-sm text-gray-500">{section.subtitle}</p>}
+                        </div>
+                      </div>
+                      <div className="text-gray-700 leading-relaxed space-y-3">
+                        {section.content.split('\n\n').map((paragraph, i) => (
+                          <p key={i}>{renderFormattedText(paragraph)}</p>
                         ))}
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-gray-600">No lab results available in current records.</p>
-                  )}
-                </div>
-              </div>
+                  </div>
+                )
+              })}
             </div>
 
-            {/* Care Coordination — full width card below */}
+            {/* Care Coordination — full width card using AI section data */}
+            {aiSummary.sections.find(s => s.id === 'care') && (
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden relative" style={{boxShadow:'0 4px 20px rgba(59,130,246,0.10)'}}>
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-500 to-blue-600" />
               <div className="p-6">
@@ -698,13 +675,15 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Care Coordination</h3>
-                    <p className="text-sm text-gray-500">Your healthcare team</p>
+                    <p className="text-sm text-gray-500">Your healthcare team & visit analytics</p>
                   </div>
                 </div>
-                <p className="text-gray-700 mb-4">
-                  Your care is coordinated across multiple healthcare providers ensuring comprehensive treatment:
-                </p>
-                {stats.encounters.length > 0 ? (
+                <div className="text-gray-700 leading-relaxed space-y-3 mb-4">
+                  {aiSummary.sections.find(s => s.id === 'care').content.split('\n\n').map((p, i) => (
+                    <p key={i}>{renderFormattedText(p)}</p>
+                  ))}
+                </div>
+                {stats.encounters.length > 0 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {[...new Set(stats.encounters.map(e => providers[e.visitProvider]?.name).filter(Boolean))].map((provName, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100 hover:bg-blue-100 transition-colors">
@@ -715,11 +694,10 @@ export default function Dashboard() {
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-gray-600">No care team information available.</p>
                 )}
               </div>
             </div>
+            )}
 
             {/* Export Actions — side by side matching Figma */}
             <div className="flex gap-4">

@@ -13,7 +13,7 @@ import {
   Activity,
   ChevronRight,
 } from 'lucide-react'
-import { processQuery, getSuggestedQuestions } from '../services/chatEngine'
+import { processQuery, getSuggestedQuestions, getFollowUpQuestions } from '../services/chatEngine'
 
 /**
  * AIChatView — Figma-matched AI Query Assistant chat interface.
@@ -86,6 +86,7 @@ export default function AIChatView({ selectedPatient, stats }) {
         intent: result.intent,
         icon: result.icon,
         color: result.color,
+        followUp: result.followUp || getFollowUpQuestions(result.intent),
         timestamp: new Date(),
       }
       setMessages(prev => [...prev, aiMsg])
@@ -156,13 +157,14 @@ export default function AIChatView({ selectedPatient, stats }) {
   }
 
   // Suggestion card color map
-  const suggestionColors = {
+  const suggestionColorsFull = {
     purple: { bg: 'bg-purple-50 hover:bg-purple-100', border: 'border-purple-200', text: 'text-purple-800' },
     green: { bg: 'bg-green-50 hover:bg-green-100', border: 'border-green-200', text: 'text-green-800' },
     red: { bg: 'bg-red-50 hover:bg-red-100', border: 'border-red-200', text: 'text-red-800' },
     blue: { bg: 'bg-blue-50 hover:bg-blue-100', border: 'border-blue-200', text: 'text-blue-800' },
     teal: { bg: 'bg-teal-50 hover:bg-teal-100', border: 'border-teal-200', text: 'text-teal-800' },
     orange: { bg: 'bg-orange-50 hover:bg-orange-100', border: 'border-orange-200', text: 'text-orange-800' },
+    indigo: { bg: 'bg-indigo-50 hover:bg-indigo-100', border: 'border-indigo-200', text: 'text-indigo-800' },
   }
 
   // Render structured data cards inside AI messages
@@ -266,6 +268,10 @@ export default function AIChatView({ selectedPatient, stats }) {
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 border border-purple-200">
+              <Sparkles className="w-3 h-3" />
+              Deep Analysis
+            </span>
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
               Local Processing
@@ -304,6 +310,21 @@ export default function AIChatView({ selectedPatient, stats }) {
                 {/* Structured data cards (AI messages only) */}
                 {msg.role === 'ai' && msg.data && (
                   renderDataCards(msg.data, msg.dataType, msg.color)
+                )}
+
+                {/* Follow-up question chips */}
+                {msg.role === 'ai' && msg.followUp && msg.followUp.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {msg.followUp.map((fq, fi) => (
+                      <button
+                        key={fi}
+                        onClick={() => handleSend(fq)}
+                        className="px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-full hover:bg-blue-100 hover:border-blue-300 transition-all hover:scale-105"
+                      >
+                        {fq}
+                      </button>
+                    ))}
+                  </div>
                 )}
 
                 {/* Timestamp */}
@@ -346,7 +367,7 @@ export default function AIChatView({ selectedPatient, stats }) {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {suggestions.map((s, i) => {
-                  const sc = suggestionColors[s.color] || suggestionColors.blue
+                  const sc = suggestionColorsFull[s.color] || suggestionColorsFull.blue
                   return (
                     <button
                       key={i}

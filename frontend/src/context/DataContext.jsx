@@ -163,13 +163,19 @@ export function DataProvider({ children }) {
     }
   }, [rawFiles])
 
-  const loadSampleData = useCallback(() => {
+  const loadSampleData = useCallback(async () => {
     setLoading(true)
     try {
       const data = generateSampleParsedData()
       setParsedData(data)
       setSelectedPatient(data.selectedPatient)
-      setAiSummary(generateAISummary(data.selectedPatient))
+      // Use rich AI generator for initial load
+      try {
+        const richSummary = await generateAIHealthSummary(data.selectedPatient, aiConfig)
+        setAiSummary(richSummary)
+      } catch {
+        setAiSummary(generateAISummary(data.selectedPatient))
+      }
       setIsSampleData(true)
       // Add a virtual file entry so Dashboard doesn't redirect
       setUploadedFiles([{ name: 'sample_data.tsv', size: 0, type: 'text/tab-separated-values' }])
@@ -180,16 +186,22 @@ export function DataProvider({ children }) {
       setLoading(false)
       return false
     }
-  }, [])
+  }, [aiConfig])
 
-  const selectPatient = useCallback((patientId) => {
+  const selectPatient = useCallback(async (patientId) => {
     if (!parsedData) return
     const patient = parsedData.patients.find(p => p.patId === patientId)
     if (patient) {
       setSelectedPatient(patient)
-      setAiSummary(generateAISummary(patient))
+      // Use rich AI generator on patient switch
+      try {
+        const richSummary = await generateAIHealthSummary(patient, aiConfig)
+        setAiSummary(richSummary)
+      } catch {
+        setAiSummary(generateAISummary(patient))
+      }
     }
-  }, [parsedData])
+  }, [parsedData, aiConfig])
 
   // ─── AI Functions ─────────────────────────────────────────────────────────
 
