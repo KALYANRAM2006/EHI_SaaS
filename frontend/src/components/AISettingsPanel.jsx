@@ -57,13 +57,31 @@ export default function AISettingsPanel({ isOpen, onClose }) {
     updateAIConfig({ mode: modeId })
   }
 
-  const handleSaveCloud = () => {
-    updateAIConfig({
+  const handleSaveCloud = async () => {
+    // Auto-clean endpoint: extract just the base URL (e.g. https://xxx.openai.azure.com)
+    let cleanedEndpoint = localEndpoint.trim()
+    try {
+      const u = new URL(cleanedEndpoint)
+      // Strip everything after the host — user may have pasted the full API URL
+      cleanedEndpoint = `${u.protocol}//${u.host}`
+    } catch { /* leave as-is if not a valid URL */ }
+    setLocalEndpoint(cleanedEndpoint)
+
+    const newConfig = {
       mode: 'cloud',
-      azureEndpoint: localEndpoint,
+      azureEndpoint: cleanedEndpoint,
       azureApiKey: localKey,
       azureDeployment: localDeployment,
-    })
+    }
+    updateAIConfig(newConfig)
+
+    // Auto-regenerate summary with the NEW config explicitly passed
+    // (React state won't be updated yet in this same microtask)
+    if (selectedPatient) {
+      try {
+        await regenerateAISummary(selectedPatient, { ...aiConfig, ...newConfig })
+      } catch { /* error will show in aiError state */ }
+    }
   }
 
   const handleTest = () => {
@@ -169,6 +187,9 @@ export default function AISettingsPanel({ isOpen, onClose }) {
                     placeholder="https://your-resource.openai.azure.com"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
+                  <p className="text-[10px] text-blue-600 mt-1">
+                    Enter only the base URL (e.g. <strong>https://ehitest.openai.azure.com</strong>). The deployment path is added automatically.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Deployment Name</label>

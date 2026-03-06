@@ -12,8 +12,11 @@ import {
   FileText,
   Activity,
   ChevronRight,
+  Cloud,
 } from 'lucide-react'
 import { processQuery, getSuggestedQuestions, getFollowUpQuestions } from '../services/chatEngine'
+import { sendCloudChatQuery, getAIConfig } from '../services/aiService'
+import { useData } from '../context/DataContext'
 
 /**
  * AIChatView — Figma-matched AI Query Assistant chat interface.
@@ -27,6 +30,8 @@ import { processQuery, getSuggestedQuestions, getFollowUpQuestions } from '../se
  *   - Keyboard submit (Enter)
  */
 export default function AIChatView({ selectedPatient, stats }) {
+  const { aiConfig } = useData()
+  const isCloudMode = aiConfig?.mode === 'cloud'
   const [messages, setMessages] = useState([
     {
       id: Date.now(),
@@ -74,25 +79,75 @@ export default function AIChatView({ selectedPatient, stats }) {
     // Show typing indicator
     setIsTyping(true)
 
-    // Simulate brief processing delay for natural feel
-    setTimeout(() => {
-      const result = processQuery(q, selectedPatient || stats)
-      const aiMsg = {
-        id: Date.now() + 1,
-        role: 'ai',
-        text: result.text,
-        data: result.data,
-        dataType: result.dataType,
-        intent: result.intent,
-        icon: result.icon,
-        color: result.color,
-        followUp: result.followUp || getFollowUpQuestions(result.intent),
-        timestamp: new Date(),
-      }
-      setMessages(prev => [...prev, aiMsg])
-      setIsTyping(false)
-    }, 600 + Math.random() * 400)
-  }, [input, selectedPatient, stats])
+    // Route to cloud or local processing based on AI mode
+    if (isCloudMode && selectedPatient) {
+      // Cloud mode: send query to Azure OpenAI
+      ;(async () => {
+        try {
+          const aiText = await sendCloudChatQuery(q, selectedPatient)
+          const aiMsg = {
+            id: Date.now() + 1,
+            role: 'ai',
+            text: aiText,
+            data: null,
+            dataType: null,
+            intent: 'cloud',
+            icon: '☁️',
+            color: 'blue',
+            followUp: getFollowUpQuestions('summary'),
+            timestamp: new Date(),
+            isCloud: true,
+          }
+          setMessages(prev => [...prev, aiMsg])
+        } catch (err) {
+          const errorMsg = {
+            id: Date.now() + 1,
+            role: 'ai',
+            text: `**Cloud AI Error**: ${err.message}\n\nFalling back to local analysis...`,
+            icon: '⚠️',
+            color: 'red',
+            timestamp: new Date(),
+          }
+          // Fall back to local processing
+          const result = processQuery(q, selectedPatient || stats)
+          const fallbackMsg = {
+            id: Date.now() + 2,
+            role: 'ai',
+            text: result.text,
+            data: result.data,
+            dataType: result.dataType,
+            intent: result.intent,
+            icon: result.icon,
+            color: result.color,
+            followUp: result.followUp || getFollowUpQuestions(result.intent),
+            timestamp: new Date(),
+          }
+          setMessages(prev => [...prev, errorMsg, fallbackMsg])
+        } finally {
+          setIsTyping(false)
+        }
+      })()
+    } else {
+      // Local mode: use local chatEngine
+      setTimeout(() => {
+        const result = processQuery(q, selectedPatient || stats)
+        const aiMsg = {
+          id: Date.now() + 1,
+          role: 'ai',
+          text: result.text,
+          data: result.data,
+          dataType: result.dataType,
+          intent: result.intent,
+          icon: result.icon,
+          color: result.color,
+          followUp: result.followUp || getFollowUpQuestions(result.intent),
+          timestamp: new Date(),
+        }
+        setMessages(prev => [...prev, aiMsg])
+        setIsTyping(false)
+      }, 600 + Math.random() * 400)
+    }
+  }, [input, selectedPatient, stats, isCloudMode])
 
   // Keyboard handler
   const handleKeyDown = (e) => {
@@ -272,10 +327,17 @@ export default function AIChatView({ selectedPatient, stats }) {
               <Sparkles className="w-3 h-3" />
               Deep Analysis
             </span>
-            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-              Local Processing
-            </span>
+            {isCloudMode ? (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                <Cloud className="w-3 h-3" />
+                Azure OpenAI
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                Local Processing
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -422,7 +484,10 @@ export default function AIChatView({ selectedPatient, stats }) {
             </button>
           </div>
           <p className="text-[10px] text-gray-400 mt-2 text-center">
-            All queries are processed locally. Your health data never leaves your device.
+            {isCloudMode
+              ? 'Queries are de-identified before sending to Azure OpenAI. PHI never leaves your device.'
+              : 'All queries are processed locally. Your health data never leaves your device.'
+            }
           </p>
         </div>
       </div>

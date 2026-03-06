@@ -362,7 +362,14 @@ async function generateCloudSummary(patient, config) {
     throw new Error('Azure OpenAI endpoint and API key are required for cloud AI mode.')
   }
 
-  const url = `${config.azureEndpoint}/openai/deployments/${config.azureDeployment}/chat/completions?api-version=2024-02-01`
+  // Clean endpoint — strip trailing slashes and any path the user may have pasted
+  let baseEndpoint = config.azureEndpoint.trim().replace(/\/+$/, '')
+  try {
+    const eu = new URL(baseEndpoint)
+    baseEndpoint = `${eu.protocol}//${eu.host}`
+  } catch { /* leave as-is */ }
+
+  const url = `${baseEndpoint}/openai/deployments/${config.azureDeployment}/chat/completions?api-version=2024-02-01`
 
   const response = await fetch(url, {
     method: 'POST',
@@ -519,6 +526,75 @@ export async function generateAIHealthSummary(patient, overrideConfig = null) {
       return { ...summary, mode: 'local' }
   }
 }
+
+/**
+ * Send a chat query to Azure OpenAI with de-identified patient context.
+ * Used by AIChatView when in cloud mode.
+ *
+ * @param {string} userQuery - The user's natural language question
+ * @param {Object} patient - Full patient record (will be de-identified)
+ * @param {Object} overrideConfig - Optional config override
+ * @returns {Promise<string>} AI response text (re-identified)
+ */
+export async function sendCloudChatQuery(userQuery, patient, overrideConfig = null) {
+  const config = overrideConfig || getAIConfig()
+
+  if (config.mode !== 'cloud') {
+    throw new Error('Cloud mode is not active.')
+  }
+
+  // De-identify patient context
+  const { deidentified } = deidentifyPatient(patient, { mode: 'tokenized' })
+  const contextPrompt = buildSafePrompt(deidentified)
+
+  const apiKey = getAzureKey()
+  if (!config.azureEndpoint || !apiKey) {
+    throw new Error('Azure OpenAI endpoint and API key are required.')
+  }
+
+  // Clean endpoint — strip trailing slashes and any path the user may have pasted
+  let baseEndpoint = config.azureEndpoint.trim().replace(/\/+$/, '')
+  try {
+    const u = new URL(baseEndpoint)
+    baseEndpoint = `${u.protocol}//${u.host}`
+  } catch { /* leave as-is */ }
+
+  const url = `${baseEndpoint}/openai/deployments/${config.azureDeployment}/chat/completions?api-version=2024-02-01`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': apiKey,
+    },
+    body: JSON.stringify({
+      messages: [
+        {
+          role: 'system',
+          content: `You are a clinical health assistant embedded in a patient health records viewer called HealthLens. Answer the patient's questions about their health data clearly and empathetically. Use markdown **bold** for emphasis. Never invent data. If unsure, say so.\n\nPatient Context (de-identified):\n${contextPrompt}`,
+        },
+        {
+          role: 'user',
+          content: userQuery,
+        },
+      ],
+      temperature: 0.4,
+      max_tokens: 1500,
+    }),
+  })
+
+  if (!response.ok) {
+    const errText = await response.text()
+    throw new Error(`Azure OpenAI error (${response.status}): ${errText}`)
+  }
+
+  const data = await response.json()
+  const rawText = data.choices?.[0]?.message?.content || 'No response generated.'
+
+  // Re-identify any tokens that may be in the response
+  return reidentify(rawText)
+}
+
 
 /**
  * Test the de-identification pipeline without calling any AI.

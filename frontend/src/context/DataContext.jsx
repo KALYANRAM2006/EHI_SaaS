@@ -213,13 +213,16 @@ export function DataProvider({ children }) {
   }, [aiConfig])
 
   // Regenerate AI summary using the configured mode
-  const regenerateAISummary = useCallback(async (patient) => {
+  // Accepts optional configOverride to avoid stale-closure issues
+  // (e.g. when called immediately after updateAIConfig before React re-renders)
+  const regenerateAISummary = useCallback(async (patient, configOverride) => {
     const target = patient || selectedPatient
     if (!target) return
+    const effectiveConfig = configOverride || aiConfig
     setAiLoading(true)
     setAiError(null)
     try {
-      const summary = await generateAIHealthSummary(target, aiConfig)
+      const summary = await generateAIHealthSummary(target, effectiveConfig)
       setAiSummary(summary)
     } catch (err) {
       setAiError(err.message)
