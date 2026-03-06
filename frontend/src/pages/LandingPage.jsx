@@ -10,6 +10,11 @@ import {
   ShieldCheck,
   Lock,
   Eye,
+  Plus,
+  X,
+  FileText,
+  GitBranch,
+  AlertTriangle,
 } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import { useData } from '../context/DataContext'
@@ -18,13 +23,24 @@ import { APP_VERSION } from '../utils/privacy'
 
 export default function LandingPage() {
   const navigate = useNavigate()
-  const { uploadedFiles, loadSampleData } = useData()
+  const { uploadedFiles, loadSampleData, dataSources, patientMismatch, confirmMismatch, dismissMismatch, removeDataSource, parseFiles } = useData()
   const [showUpload, setShowUpload] = useState(false)
   const [loadingSample, setLoadingSample] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
 
+  const hasSources = dataSources.length > 0
+
   const handleFilesUploaded = () => navigate('/dashboard')
+
+  // When user finishes uploading a new source file and wants to add another
+  const handleSourceAdded = () => {
+    setShowUpload(false)
+  }
+
+  const handleContinueToDashboard = () => {
+    navigate('/dashboard')
+  }
 
   const handleTrySampleData = () => {
     setLoadingSample(true)
@@ -38,7 +54,6 @@ export default function LandingPage() {
   const handleDrop = (e) => {
     e.preventDefault()
     setIsDragging(false)
-    // Trigger the FileUpload component view for actual handling
     setShowUpload(true)
   }
 
@@ -90,7 +105,73 @@ export default function LandingPage() {
 
           {/* Upload Card with Glassmorphism */}
           <div className="rounded-2xl shadow-2xl overflow-hidden" style={{boxShadow: '0 25px 50px rgba(59,130,246,0.1)'}}>
-            {!showUpload ? (
+
+            {/* Patient Mismatch Warning */}
+            {patientMismatch && (
+              <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-yellow-800">Different Patient Detected</p>
+                    <p className="text-sm text-yellow-700 mt-1">{patientMismatch.message}</p>
+                    <div className="flex gap-3 mt-3">
+                      <button onClick={confirmMismatch} className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 transition-colors">
+                        Add Anyway
+                      </button>
+                      <button onClick={dismissMismatch} className="px-4 py-1.5 text-xs font-semibold rounded-lg border border-yellow-300 text-yellow-700 hover:bg-yellow-100 transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loaded Data Sources Card */}
+            {hasSources && !showUpload && (
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200/50 px-6 py-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <GitBranch className="w-4 h-4 text-emerald-600" />
+                  <h3 className="text-sm font-semibold text-gray-900">Loaded Data Sources</h3>
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{dataSources.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {dataSources.map(source => (
+                    <div key={source.id} className="flex items-center gap-3 bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: source.color }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{source.name}</p>
+                        <p className="text-xs text-gray-500">{source.recordCount} records · {new Date(source.uploadDate).toLocaleDateString()}</p>
+                      </div>
+                      <button
+                        onClick={() => removeDataSource(source.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        title="Remove source"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => setShowUpload(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border-2 border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Another Data Source
+                  </button>
+                  <button
+                    onClick={handleContinueToDashboard}
+                    className="px-6 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg"
+                  >
+                    Continue to Dashboard →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!showUpload && !hasSources ? (
               <div
                 className={`relative p-16 text-center transition-all duration-300 bg-white ${
                   isDragging ? 'bg-gradient-to-br from-blue-50 to-indigo-50' : ''
@@ -153,9 +234,23 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : !showUpload ? null : (
               <div className="bg-white p-8">
-                <FileUpload onComplete={handleFilesUploaded} />
+                {hasSources && (
+                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-gray-900">Add Another Data Source</span>
+                    </div>
+                    <button
+                      onClick={() => setShowUpload(false)}
+                      className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+                    >
+                      ← Back to Sources
+                    </button>
+                  </div>
+                )}
+                <FileUpload onComplete={hasSources ? handleSourceAdded : handleFilesUploaded} />
               </div>
             )}
           </div>

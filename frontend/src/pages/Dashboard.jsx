@@ -40,6 +40,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { PrivacyBadge, PrivacyPanel } from '../components/PrivacyBanner'
 import AISettingsPanel from '../components/AISettingsPanel'
 import AIChatView from '../components/AIChatView'
+import DataLineageView from '../components/DataLineageView'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 import { getRuleIntegrity } from '../parsers/ruleEngine'
 
@@ -200,6 +201,7 @@ export default function Dashboard() {
     { id: 'insights', label: 'Insights' },
     { id: 'data-explorer', label: 'Data Explorer' },
     { id: 'ai-assistant', label: 'AI Assistant' },
+    { id: 'data-lineage', label: 'Data Lineage' },
   ]
 
   // Generate AI-driven health insights from patient data
@@ -1535,6 +1537,11 @@ export default function Dashboard() {
         {/* ===== AI ASSISTANT VIEW ===== */}
         {activeView === 'ai-assistant' && (
           <AIChatView selectedPatient={selectedPatient} stats={stats} />
+        )}
+
+        {/* ===== DATA LINEAGE VIEW ===== */}
+        {activeView === 'data-lineage' && (
+          <DataLineageView />
         )}
 
         {['labs', 'encounters', 'procedures', 'trends'].includes(activeView) && (
