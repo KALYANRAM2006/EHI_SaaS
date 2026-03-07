@@ -17,9 +17,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║       DEMO AZURE STATIC WEB APP SETUP                 ║" -ForegroundColor Cyan
-Write-Host "╚═══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "=========================================================" -ForegroundColor Cyan
+Write-Host "       DEMO AZURE STATIC WEB APP SETUP                   " -ForegroundColor Cyan
+Write-Host "=========================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Check Azure CLI
@@ -70,22 +70,22 @@ $token = az staticwebapp secrets list --name $AppName --resource-group $Resource
 
 if ($token) {
     Write-Host ""
-    Write-Host "╔═══════════════════════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "║       SETUP COMPLETE                                   ║" -ForegroundColor Green
-    Write-Host "╚═══════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "=========================================================" -ForegroundColor Green
+    Write-Host "       SETUP COMPLETE                                     " -ForegroundColor Green
+    Write-Host "=========================================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "  Demo App URL will be shown after first deploy." -ForegroundColor White
     Write-Host ""
-    Write-Host "  ┌──────────────────────────────────────────────────┐" -ForegroundColor Yellow
-    Write-Host "  │  NEXT STEP: Add this as a GitHub secret           │" -ForegroundColor Yellow
-    Write-Host "  │                                                    │" -ForegroundColor Yellow
-    Write-Host "  │  1. Go to: https://github.com/KALYANRAM2006/      │" -ForegroundColor Yellow
-    Write-Host "  │     EHI_SaaS/settings/secrets/actions              │" -ForegroundColor Yellow
-    Write-Host "  │                                                    │" -ForegroundColor Yellow
-    Write-Host "  │  2. Create secret:                                 │" -ForegroundColor Yellow
-    Write-Host "  │     Name:  AZURE_STATIC_WEB_APPS_API_TOKEN_DEMO    │" -ForegroundColor Yellow
-    Write-Host "  │     Value: (token shown below)                     │" -ForegroundColor Yellow
-    Write-Host "  └──────────────────────────────────────────────────┘" -ForegroundColor Yellow
+    Write-Host "  ---------------------------------------------------------" -ForegroundColor Yellow
+    Write-Host "    NEXT STEP: Add this as a GitHub secret" -ForegroundColor Yellow
+    Write-Host "" -ForegroundColor Yellow
+    Write-Host "    1. Go to: https://github.com/KALYANRAM2006/" -ForegroundColor Yellow
+    Write-Host "       EHI_SaaS/settings/secrets/actions" -ForegroundColor Yellow
+    Write-Host "" -ForegroundColor Yellow
+    Write-Host "    2. Create secret:" -ForegroundColor Yellow
+    Write-Host "       Name:  AZURE_STATIC_WEB_APPS_API_TOKEN_DEMO" -ForegroundColor Yellow
+    Write-Host "       Value: (token shown below)" -ForegroundColor Yellow
+    Write-Host "  ---------------------------------------------------------" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "  Deployment Token:" -ForegroundColor White
     Write-Host "  $token" -ForegroundColor Cyan

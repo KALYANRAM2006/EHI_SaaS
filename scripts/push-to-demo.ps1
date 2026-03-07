@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Push tested features from main → demo branch with a configurable expiry date.
+  Push tested features from main to demo branch with a configurable expiry date.
 
 .DESCRIPTION
   This script is the SINGLE CONTROL POINT for updating the demo environment.
@@ -40,7 +40,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# ─── Defaults ─────────────────────────────────────────────────────────────────
+# --- Defaults ---
 if (-not $ExpiryDate) {
     $ExpiryDate = (Get-Date).AddDays(30).ToString("yyyy-MM-dd")
     Write-Host "No expiry specified. Defaulting to 30 days: $ExpiryDate" -ForegroundColor Yellow
@@ -61,9 +61,9 @@ if ($daysRemaining -le 0) {
 }
 
 Write-Host ""
-Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║           PUSH TO DEMO ENVIRONMENT                   ║" -ForegroundColor Cyan
-Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "=========================================================" -ForegroundColor Cyan
+Write-Host "           PUSH TO DEMO ENVIRONMENT                      " -ForegroundColor Cyan
+Write-Host "=========================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Expiry Date : $ExpiryDate ($daysRemaining days from now)" -ForegroundColor White
 Write-Host "  Source      : main (production)" -ForegroundColor White
@@ -75,7 +75,7 @@ if ($CommitRange) {
 }
 Write-Host ""
 
-# ─── Safety checks ───────────────────────────────────────────────────────────
+# --- Safety checks ---
 Write-Host "Checking for uncommitted changes..." -ForegroundColor Gray
 $status = git status --porcelain
 if ($status) {
@@ -88,7 +88,7 @@ if ($status) {
 $currentBranch = git branch --show-current
 Write-Host "Current branch: $currentBranch" -ForegroundColor Gray
 
-# ─── Ensure demo branch exists ───────────────────────────────────────────────
+# --- Ensure demo branch exists ---
 $demoBranchExists = git branch --list "demo" | Measure-Object -Line | Select-Object -ExpandProperty Lines
 $remoteExists = git ls-remote --heads origin demo 2>$null | Measure-Object -Line | Select-Object -ExpandProperty Lines
 
@@ -106,7 +106,7 @@ if ($demoBranchExists -eq 0 -and $remoteExists -gt 0) {
     }
 }
 
-# ─── Merge or cherry-pick ────────────────────────────────────────────────────
+# --- Merge or cherry-pick ---
 if ($CommitRange) {
     Write-Host "Cherry-picking $CommitRange..." -ForegroundColor Cyan
     git cherry-pick $CommitRange
@@ -123,7 +123,7 @@ if ($CommitRange) {
     }
 }
 
-# ─── Create a tagged commit with expiry ──────────────────────────────────────
+# --- Create a tagged commit with expiry ---
 $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
 if (-not $Message) {
     $Message = "demo: update from main ($timestamp) [expiry:$ExpiryDate]"
@@ -142,16 +142,16 @@ Write-Host "Pushing demo branch to origin..." -ForegroundColor Cyan
 git push origin demo 2>&1
 
 Write-Host ""
-Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║           DEMO PUSH COMPLETE                         ║" -ForegroundColor Green
-Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "=========================================================" -ForegroundColor Green
+Write-Host "           DEMO PUSH COMPLETE                            " -ForegroundColor Green
+Write-Host "=========================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Demo expires: $ExpiryDate ($daysRemaining days)" -ForegroundColor White
-Write-Host "  GitHub Actions will build & deploy automatically." -ForegroundColor White
+Write-Host "  GitHub Actions will build and deploy automatically." -ForegroundColor White
 Write-Host "  Check deployment at: https://github.com/KALYANRAM2006/EHI_SaaS/actions" -ForegroundColor Gray
 Write-Host ""
 
-# ─── Return to original branch ───────────────────────────────────────────────
+# --- Return to original branch ---
 git checkout $currentBranch
 
 if ($stashed) {
@@ -159,4 +159,4 @@ if ($stashed) {
     git stash pop
 }
 
-Write-Host "Done. You're back on '$currentBranch'." -ForegroundColor Green
+Write-Host "Done. You are back on '$currentBranch'." -ForegroundColor Green
