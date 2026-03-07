@@ -43,10 +43,13 @@ import AIChatView from '../components/AIChatView'
 import DataLineageView from '../components/DataLineageView'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 import { getRuleIntegrity } from '../parsers/ruleEngine'
+import { isDemo } from '../config/demo'
+import GuidedTour, { TourStartButton } from '../components/GuidedTour'
+import { DemoExpiryBanner } from '../components/DemoExpiredGate'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { uploadedFiles, parsedData, loading, isSampleData, aiSummary, setAiSummary, selectedPatient, selectPatient, secureWipe, memoryCleared, aiConfig, regenerateAISummary, aiLoading } = useData()
+  const { uploadedFiles, parsedData, loading, isSampleData, aiSummary, setAiSummary, selectedPatient, selectPatient, secureWipe, memoryCleared, aiConfig, regenerateAISummary, aiLoading, loadSampleData } = useData()
   const [activeView, setActiveView] = useState('overview')
   const [expandedSections, setExpandedSections] = useState({ overall: true })
   const [regenerating, setRegenerating] = useState(false)
@@ -57,12 +60,22 @@ export default function Dashboard() {
   const [explorerSearch, setExplorerSearch] = useState('')
   const [expandedExplorer, setExpandedExplorer] = useState({ patient: true })
   const [privacyOpen, setPrivacyOpen] = useState(false)
+  const [showTour, setShowTour] = useState(false)
+  const demoMode = isDemo()
 
+  // In demo mode, auto-load sample data if nothing is loaded yet
   useEffect(() => {
-    if (uploadedFiles.length === 0) {
+    if (demoMode && uploadedFiles.length === 0 && !loading && !parsedData) {
+      loadSampleData().then(() => {
+        // Auto-start the guided tour after sample data loads
+        setTimeout(() => setShowTour(true), 800)
+      })
+      return
+    }
+    if (uploadedFiles.length === 0 && !demoMode) {
       navigate('/')
     }
-  }, [uploadedFiles, navigate])
+  }, [uploadedFiles, navigate, demoMode, loading, parsedData, loadSampleData])
 
   // Derive dashboard stats from parsed data
   const stats = useMemo(() => {
@@ -380,12 +393,13 @@ export default function Dashboard() {
       </header>
 
       {/* Tab Navigation — Gradient pill style matching Figma */}
-      <div className="max-w-7xl mx-auto px-6 pt-8">
+      <div className="max-w-7xl mx-auto px-6 pt-8" data-tour="tab-nav">
         <div className="inline-flex bg-white/80 backdrop-blur-sm border border-gray-200 p-1.5 rounded-2xl shadow-lg" style={{boxShadow:'0 4px 14px rgba(148,163,184,0.15)'}}>
           {tabItems.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveView(tab.id)}
+              data-tour={`tab-${tab.id}`}
               className={`px-6 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 activeView === tab.id
                   ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
@@ -406,7 +420,7 @@ export default function Dashboard() {
         {activeView === 'overview' && (
           <div className="space-y-8">
             {/* Patient Header with Badges */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between" data-tour="patient-header">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">
                   Health Summary for {stats.patientName}
@@ -428,7 +442,7 @@ export default function Dashboard() {
             </div>
 
             {/* AI Health Summary Card — Full gradient background matching Figma */}
-            <div className="relative rounded-2xl overflow-hidden shadow-xl" style={{boxShadow:'0 10px 40px rgba(59,130,246,0.15)'}}>
+            <div className="relative rounded-2xl overflow-hidden shadow-xl" data-tour="ai-summary-card" style={{boxShadow:'0 10px 40px rgba(59,130,246,0.15)'}}>
               <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
               <div className="absolute inset-0 opacity-10" style={{backgroundImage:'radial-gradient(circle, white 1px, transparent 1px)',backgroundSize:'20px 20px'}} />
               <div className="relative p-8">
@@ -504,7 +518,7 @@ export default function Dashboard() {
             </div>
 
             {/* Category Cards — Figma-style gradient icon + top border accent + hover lift */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" data-tour="category-cards">
               {categoryCards.map((card, index) => {
                 const Icon = card.icon
                 return (
@@ -1674,6 +1688,19 @@ export default function Dashboard() {
 
       {/* AI Settings Panel */}
       <AISettingsPanel isOpen={aiSettingsOpen} onClose={() => setAiSettingsOpen(false)} />
+
+      {/* Demo Mode: Guided Tour + Expiry Banner */}
+      {demoMode && (
+        <>
+          <GuidedTour
+            active={showTour}
+            onEnd={() => setShowTour(false)}
+            onStepAction={(action) => { if (action?.view) setActiveView(action.view) }}
+          />
+          {!showTour && <TourStartButton onClick={() => setShowTour(true)} />}
+          <DemoExpiryBanner />
+        </>
+      )}
     </div>
   )
 }
