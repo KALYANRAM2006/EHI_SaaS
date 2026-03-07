@@ -44,8 +44,6 @@ import DataLineageView from '../components/DataLineageView'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 import { getRuleIntegrity } from '../parsers/ruleEngine'
 import { isDemo } from '../config/demo'
-import GuidedTour, { TourStartButton } from '../components/GuidedTour'
-import { DemoExpiryBanner } from '../components/DemoExpiredGate'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -60,16 +58,21 @@ export default function Dashboard() {
   const [explorerSearch, setExplorerSearch] = useState('')
   const [expandedExplorer, setExpandedExplorer] = useState({ patient: true })
   const [privacyOpen, setPrivacyOpen] = useState(false)
-  const [showTour, setShowTour] = useState(false)
   const demoMode = isDemo()
 
-  // In demo mode, auto-load sample data if nothing is loaded yet
+  // Listen for tour view-switch events from App-level GuidedTour
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail) setActiveView(e.detail)
+    }
+    window.addEventListener('tour-switch-view', handler)
+    return () => window.removeEventListener('tour-switch-view', handler)
+  }, [])
+
+  // In demo mode, auto-load sample data if arriving at dashboard without data
   useEffect(() => {
     if (demoMode && uploadedFiles.length === 0 && !loading && !parsedData) {
-      loadSampleData().then(() => {
-        // Auto-start the guided tour after sample data loads
-        setTimeout(() => setShowTour(true), 800)
-      })
+      loadSampleData()
       return
     }
     if (uploadedFiles.length === 0 && !demoMode) {
@@ -1688,19 +1691,6 @@ export default function Dashboard() {
 
       {/* AI Settings Panel */}
       <AISettingsPanel isOpen={aiSettingsOpen} onClose={() => setAiSettingsOpen(false)} />
-
-      {/* Demo Mode: Guided Tour + Expiry Banner */}
-      {demoMode && (
-        <>
-          <GuidedTour
-            active={showTour}
-            onEnd={() => setShowTour(false)}
-            onStepAction={(action) => { if (action?.view) setActiveView(action.view) }}
-          />
-          {!showTour && <TourStartButton onClick={() => setShowTour(true)} />}
-          <DemoExpiryBanner />
-        </>
-      )}
     </div>
   )
 }

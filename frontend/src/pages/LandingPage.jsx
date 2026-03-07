@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { isDemo } from '../config/demo'
 import {
   Upload,
   Database,
@@ -25,13 +26,20 @@ import { useData } from '../context/DataContext'
 import { PrivacyPanel } from '../components/PrivacyBanner'
 import { APP_VERSION } from '../utils/privacy'
 
-export default function LandingPage() {
+export default function LandingPage({ onDemoReady }) {
   const navigate = useNavigate()
   const { uploadedFiles, loadSampleData, dataSources, patientMismatch, confirmMismatch, dismissMismatch, removeDataSource } = useData()
   const [showUpload, setShowUpload] = useState(false)
   const [loadingSample, setLoadingSample] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
+
+  // Trigger demo tour auto-start when landing page mounts in demo mode
+  useEffect(() => {
+    if (isDemo() && onDemoReady) {
+      onDemoReady()
+    }
+  }, [onDemoReady])
 
   const hasSources = dataSources.length > 0
 
@@ -69,7 +77,7 @@ export default function LandingPage() {
       <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] bg-gradient-to-br from-indigo-400/10 to-blue-400/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
 
       {/* Header with Glass Effect */}
-      <header className="backdrop-blur-md bg-white/70 border-b border-gray-200/50 sticky top-0 z-50">
+      <header className="backdrop-blur-md bg-white/70 border-b border-gray-200/50 sticky top-0 z-50" data-tour="landing-header">
         <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}>
@@ -94,7 +102,7 @@ export default function LandingPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-16 relative z-10">
         <div className="max-w-5xl w-full space-y-16">
           {/* Hero Section */}
-          <div className="text-center space-y-6">
+          <div className="text-center space-y-6" data-tour="landing-hero">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full mb-4">
               <Zap className="w-4 h-4" />
               <span className="text-sm font-semibold">AI-Powered Health Insights</span>
@@ -108,7 +116,7 @@ export default function LandingPage() {
           </div>
 
           {/* Upload Card with Glassmorphism */}
-          <div className="rounded-2xl shadow-2xl overflow-hidden" style={{boxShadow: '0 25px 50px rgba(59,130,246,0.1)'}}>
+          <div className="rounded-2xl shadow-2xl overflow-hidden" data-tour="landing-upload" style={{boxShadow: '0 25px 50px rgba(59,130,246,0.1)'}}>
 
             {/* Patient Mismatch Warning */}
             {patientMismatch && (
@@ -354,6 +362,7 @@ export default function LandingPage() {
                     <button
                       onClick={handleTrySampleData}
                       disabled={loadingSample}
+                      data-tour="landing-sample-btn"
                       className="px-8 py-3 text-sm font-semibold rounded-lg border-2 border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-colors disabled:opacity-50"
                     >
                       {loadingSample ? (
@@ -388,7 +397,7 @@ export default function LandingPage() {
           </div>
 
           {/* Feature Cards Grid — Matches Figma exactly */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6" data-tour="landing-features">
             <div className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:border-blue-300 transition-all hover:shadow-xl" style={{['--tw-shadow-color']: 'rgba(59,130,246,0.1)'}}>
               <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}>
                 <Database className="w-7 h-7 text-white" />
@@ -423,7 +432,7 @@ export default function LandingPage() {
           </div>
 
           {/* Privacy Badge */}
-          <div className="flex justify-center">
+          <div className="flex justify-center" data-tour="landing-privacy">
             <button
               onClick={() => setPrivacyOpen(true)}
               className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-full hover:shadow-lg hover:border-green-300 transition-all group cursor-pointer"
