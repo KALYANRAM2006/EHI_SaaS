@@ -105,34 +105,58 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
 
   if (!active || !pos || !currentStep) return null
 
-  // Calculate tooltip position
+  // Calculate tooltip position with viewport clamping
   const GAP = 16
+  const TOOLTIP_WIDTH = 320
+  const TOOLTIP_HEIGHT_ESTIMATE = 220 // approximate max height of tooltip
   let tooltipStyle = {}
   const { target, placement } = pos
 
-  if (placement === 'bottom') {
+  // Get viewport dimensions
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  // Target position in viewport coordinates
+  const targetViewTop = target.top - window.scrollY
+  const targetViewLeft = target.left - window.scrollX
+  const targetViewBottom = targetViewTop + target.height
+  const targetViewRight = targetViewLeft + target.width
+
+  // Determine best placement (auto-flip if would overflow)
+  let effectivePlacement = placement
+  if (placement === 'bottom' && targetViewBottom + GAP + TOOLTIP_HEIGHT_ESTIMATE > vh) {
+    effectivePlacement = 'top'
+  } else if (placement === 'top' && targetViewTop - GAP - TOOLTIP_HEIGHT_ESTIMATE < 0) {
+    effectivePlacement = 'bottom'
+  }
+
+  // Calculate tooltip center X, clamped to viewport
+  const centerX = targetViewLeft + target.width / 2
+  const halfTooltip = TOOLTIP_WIDTH / 2
+  const clampedLeft = Math.max(12, Math.min(centerX - halfTooltip, vw - TOOLTIP_WIDTH - 12))
+
+  if (effectivePlacement === 'bottom') {
     tooltipStyle = {
-      top: target.top + target.height + GAP,
-      left: target.left + target.width / 2,
-      transform: 'translateX(-50%)',
+      top: Math.min(targetViewBottom + GAP, vh - TOOLTIP_HEIGHT_ESTIMATE - 12),
+      left: clampedLeft,
     }
-  } else if (placement === 'top') {
+  } else if (effectivePlacement === 'top') {
     tooltipStyle = {
-      top: target.top - GAP,
-      left: target.left + target.width / 2,
-      transform: 'translate(-50%, -100%)',
+      top: Math.max(12, targetViewTop - GAP - TOOLTIP_HEIGHT_ESTIMATE),
+      left: clampedLeft,
     }
-  } else if (placement === 'right') {
+  } else if (effectivePlacement === 'right') {
+    const topCenter = targetViewTop + target.height / 2 - TOOLTIP_HEIGHT_ESTIMATE / 2
     tooltipStyle = {
-      top: target.top + target.height / 2,
-      left: target.left + target.width + GAP,
-      transform: 'translateY(-50%)',
+      top: Math.max(12, Math.min(topCenter, vh - TOOLTIP_HEIGHT_ESTIMATE - 12)),
+      left: Math.min(targetViewRight + GAP, vw - TOOLTIP_WIDTH - 12),
     }
   } else {
+    // left
+    const topCenter = targetViewTop + target.height / 2 - TOOLTIP_HEIGHT_ESTIMATE / 2
     tooltipStyle = {
-      top: target.top + target.height / 2,
-      left: target.left - GAP,
-      transform: 'translate(-100%, -50%)',
+      top: Math.max(12, Math.min(topCenter, vh - TOOLTIP_HEIGHT_ESTIMATE - 12)),
+      left: Math.max(12, targetViewLeft - GAP - TOOLTIP_WIDTH),
     }
   }
 
@@ -181,11 +205,12 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
       {/* Tooltip */}
       <div
         ref={tooltipRef}
-        className="fixed z-[9999] w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
+        className="fixed z-[9999] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
         style={{
-          top: tooltipStyle.top - window.scrollY,
-          left: tooltipStyle.left - window.scrollX,
-          transform: tooltipStyle.transform,
+          top: tooltipStyle.top,
+          left: tooltipStyle.left,
+          width: TOOLTIP_WIDTH,
+          maxHeight: vh - 24,
           boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
         }}
       >
