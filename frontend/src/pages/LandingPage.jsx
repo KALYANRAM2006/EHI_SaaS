@@ -8,6 +8,7 @@ import {
   TrendingUp,
   Zap,
   ShieldCheck,
+  ShieldAlert,
   Lock,
   Eye,
   Plus,
@@ -15,6 +16,8 @@ import {
   FileText,
   GitBranch,
   AlertTriangle,
+  User,
+  Calendar,
 } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import { useData } from '../context/DataContext'
@@ -23,7 +26,7 @@ import { APP_VERSION } from '../utils/privacy'
 
 export default function LandingPage() {
   const navigate = useNavigate()
-  const { uploadedFiles, loadSampleData, dataSources, patientMismatch, confirmMismatch, dismissMismatch, removeDataSource, parseFiles } = useData()
+  const { uploadedFiles, loadSampleData, dataSources, patientMismatch, confirmMismatch, dismissMismatch, removeDataSource } = useData()
   const [showUpload, setShowUpload] = useState(false)
   const [loadingSample, setLoadingSample] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -127,7 +130,7 @@ export default function LandingPage() {
               </div>
             )}
 
-            {/* Loaded Data Sources Card */}
+            {/* Loaded Data Sources with Patient Identity Cards */}
             {hasSources && !showUpload && (
               <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200/50 px-6 py-5">
                 <div className="flex items-center gap-2 mb-3">
@@ -135,21 +138,75 @@ export default function LandingPage() {
                   <h3 className="text-sm font-semibold text-gray-900">Loaded Data Sources</h3>
                   <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{dataSources.length}</span>
                 </div>
+
+                {/* Patient Match Summary */}
+                {dataSources.length >= 2 && (
+                  <div className={`mb-3 p-3 rounded-lg border flex items-center gap-2 ${
+                    dataSources.every(s => s.matchStatus === 'match' || s.matchStatus === 'first')
+                      ? 'bg-green-50 border-green-200'
+                      : 'bg-amber-50 border-amber-200'
+                  }`}>
+                    {dataSources.every(s => s.matchStatus === 'match' || s.matchStatus === 'first') ? (
+                      <><ShieldCheck className="w-4 h-4 text-green-600" /><span className="text-sm font-medium text-green-800">All sources verified — same patient</span></>
+                    ) : (
+                      <><ShieldAlert className="w-4 h-4 text-amber-600" /><span className="text-sm font-medium text-amber-800">Patient mismatch detected across sources</span></>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  {dataSources.map(source => (
-                    <div key={source.id} className="flex items-center gap-3 bg-white rounded-lg p-3 border border-gray-200">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: source.color }} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{source.name}</p>
-                        <p className="text-xs text-gray-500">{source.recordCount} records · {new Date(source.uploadDate).toLocaleDateString()}</p>
+                  {dataSources.map((source, idx) => (
+                    <div key={source.id} className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: source.color }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{source.name}</p>
+                          <p className="text-xs text-gray-500">{source.recordCount} records · {new Date(source.uploadDate).toLocaleDateString()}</p>
+                        </div>
+                        {/* Match Badge */}
+                        {source.matchStatus === 'match' && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                            <ShieldCheck className="w-3 h-3" /> Match
+                          </span>
+                        )}
+                        {(source.matchStatus === 'mismatch' || source.matchStatus === 'mismatch-confirmed') && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+                            <ShieldAlert className="w-3 h-3" /> Mismatch
+                          </span>
+                        )}
+                        {(source.matchStatus === 'first' || idx === 0) && !source.matchStatus?.startsWith('mis') && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                            <User className="w-3 h-3" /> Primary
+                          </span>
+                        )}
+                        <button
+                          onClick={() => removeDataSource(source.id)}
+                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                          title="Remove source"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => removeDataSource(source.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                        title="Remove source"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      {/* Patient Identity */}
+                      {source.patient && (
+                        <div className="mt-2 ml-6 pl-3 border-l-2 border-indigo-200">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                            <span className="flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5 text-indigo-500" />
+                              <span className="font-medium text-gray-900">
+                                {source.patient.name || `${source.patient.firstName || ''} ${source.patient.lastName || ''}`.trim() || 'N/A'}
+                              </span>
+                            </span>
+                            <span className="flex items-center gap-1.5 text-gray-600">
+                              <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                              DOB: {source.patient.birthDate || 'N/A'}
+                            </span>
+                            <span className="text-gray-600">
+                              Sex: {source.patient.sex || 'N/A'}{source.patient.age ? ` · Age ${source.patient.age}` : ''}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

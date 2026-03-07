@@ -4,8 +4,10 @@
  * Handles:
  *   1. Data source registration (each uploaded file = one source)
  *   2. Per-record lineage tagging (_source, _sourceName, _sourceColor)
- *   3. Patient identity verification across sources
+ *   3. Patient identity verification using demographics (Name + DOB + Sex)
+ *      — NOT MRN, since MRNs differ across EMR systems
  *   4. Data reconciliation / merge into unified patient view
+ *   5. Patient ID remapping when same patient has different IDs across sources
  *
  * All processing is 100% client-side. No data leaves the browser.
  */
@@ -49,6 +51,9 @@ export function createDataSource(fileName, existingCount = 0) {
     bgClass: SOURCE_BG_COLORS[idx],
     recordCount: 0,
     categories: { medications: 0, encounters: 0, allergies: 0, immunizations: 0, conditions: 0, results: 0, orders: 0 },
+    patient: null,       // { name, firstName, lastName, birthDate, sex, age }
+    matchStatus: null,   // 'first' | 'match' | 'mismatch'
+    matchDetails: '',    // human-readable match explanation
   }
 }
 
@@ -65,92 +70,149 @@ export function tagRecordsWithSource(records, source) {
   }))
 }
 
+// ─── Patient Identity (Demographics-Based — No MRN) ────────────────────────
+
 /**
  * Extract patient identity from a parsed patient record.
  * Returns a normalized identity object for comparison.
+ * Uses Name + DOB + Sex — NOT MRN/PatID (those differ across EMRs).
  */
-function extractPatientIdentity(patient) {
+export function extractPatientIdentity(patient) {
   if (!patient) return null
-  return {
-    patId: (patient.patId || '').trim().toUpperCase(),
-    firstName: (patient.firstName || '').trim().toLowerCase(),
-    lastName: (patient.lastName || '').trim().toLowerCase(),
-    birthDate: (patient.birthDate || patient.dob || '').trim(),
-    sex: (patient.sex || patient.gender || '').trim().toLowerCase(),
-    name: (patient.name || '').trim().toLowerCase(),
+
+  // Parse "Last, First M" format
+  let firstName = (patient.firstName || '').trim().toLowerCase()
+  let lastName = (patient.lastName || '').trim().toLowerCase()
+  const fullName = (patient.name || '').trim().toLowerCase()
+
+  if (!firstName && !lastName && fullName) {
+    const parts = fullName.split(',').map(s => s.trim())
+    if (parts.length >= 2) {
+      lastName = parts[0]
+      firstName = parts[1].split(' ')[0]
+    } else {
+      const words = fullName.split(' ')
+      firstName = words[0] || ''
+      lastName = words[words.length - 1] || ''
+    }
   }
+
+  let birthDate = (patient.birthDate || patient.dob || '').trim()
+  // Normalize date to YYYY-MM-DD
+  if (birthDate) {
+    try { birthDate = new Date(birthDate).toISOString().split('T')[0] } catch { /* keep original */ }
+  }
+
+  let sex = (patient.sex || patient.gender || '').trim().toLowerCase()
+  if (sex) sex = sex.charAt(0) // 'm' or 'f'
+
+  let age = patient.age
+  if (!age && birthDate) {
+    const birth = new Date(birthDate)
+    const now = new Date()
+    age = now.getFullYear() - birth.getFullYear()
+    if (now.getMonth() < birth.getMonth() ||
+        (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--
+  }
+
+  return { firstName, lastName, birthDate, sex, age, fullName }
 }
 
 /**
- * Verify that a new patient matches the existing patient.
- * Returns { match: boolean, confidence: 'high'|'medium'|'low', reason: string }
+ * Verify that a new patient matches the existing patient using
+ * DEMOGRAPHICS ONLY: Name + Date of Birth + Sex.
+ * MRN / Patient ID is intentionally NOT used — it differs across EMR systems.
+ *
+ * Returns { match, confidence, reason, score }
  */
 export function verifyPatientMatch(existingPatient, newPatient) {
   const a = extractPatientIdentity(existingPatient)
   const b = extractPatientIdentity(newPatient)
 
-  if (!a || !b) return { match: false, confidence: 'low', reason: 'Missing patient data' }
+  if (!a || !b) return { match: false, confidence: 'low', reason: 'Missing patient data', score: 0 }
 
   let score = 0
   const checks = []
 
-  // Patient ID match (strongest signal)
-  if (a.patId && b.patId) {
-    if (a.patId === b.patId) {
-      score += 50
-      checks.push('Patient ID matches')
-    } else {
-      // Different patient IDs from different systems is OK, not a reject
-    }
-  }
-
-  // Name match
+  // ── Name match (strongest demographic signal) ──
   if (a.firstName && b.firstName && a.lastName && b.lastName) {
     if (a.firstName === b.firstName && a.lastName === b.lastName) {
-      score += 30
+      score += 40
       checks.push('Full name matches')
     } else if (a.lastName === b.lastName) {
-      score += 10
+      score += 15
       checks.push('Last name matches')
+    } else {
+      score -= 25
+      checks.push('Name MISMATCH')
     }
-  } else if (a.name && b.name) {
-    if (a.name === b.name) {
-      score += 30
+  } else if (a.fullName && b.fullName) {
+    if (a.fullName === b.fullName) {
+      score += 40
       checks.push('Name matches')
     }
   }
 
-  // DOB match
+  // ── DOB match ──
   if (a.birthDate && b.birthDate) {
-    // Normalize dates for comparison
-    const dateA = new Date(a.birthDate).toISOString().split('T')[0]
-    const dateB = new Date(b.birthDate).toISOString().split('T')[0]
-    if (dateA === dateB) {
-      score += 30
+    if (a.birthDate === b.birthDate) {
+      score += 35
       checks.push('Date of birth matches')
     } else {
-      score -= 20
+      score -= 30
       checks.push('Date of birth MISMATCH')
     }
   }
 
-  // Sex match
+  // ── Sex match ──
   if (a.sex && b.sex) {
-    const normA = a.sex.charAt(0) // 'm' or 'f'
-    const normB = b.sex.charAt(0)
-    if (normA === normB) {
-      score += 10
+    if (a.sex === b.sex) {
+      score += 15
       checks.push('Sex matches')
     } else {
-      score -= 10
+      score -= 15
       checks.push('Sex MISMATCH')
     }
   }
 
   if (score >= 50) return { match: true, confidence: 'high', reason: checks.join(', '), score }
-  if (score >= 25) return { match: true, confidence: 'medium', reason: checks.join(', '), score }
+  if (score >= 30) return { match: true, confidence: 'medium', reason: checks.join(', '), score }
   if (score > 0)   return { match: false, confidence: 'low', reason: `Weak match (${checks.join(', ')}). May be a different patient.`, score }
-  return { match: false, confidence: 'low', reason: 'No matching identity fields found. Likely a different patient.', score }
+  return { match: false, confidence: 'low', reason: checks.length > 0 ? checks.join(', ') : 'No matching identity fields found. Likely a different patient.', score }
+}
+
+/**
+ * Check if two patients are demographically the same person.
+ * Used for merging when patients from different EMRs have different IDs.
+ */
+export function demographicMatch(patA, patB) {
+  const a = extractPatientIdentity(patA)
+  const b = extractPatientIdentity(patB)
+  if (!a || !b) return false
+  const nameMatch = a.firstName && b.firstName && a.lastName && b.lastName &&
+    a.firstName === b.firstName && a.lastName === b.lastName
+  const dobMatch = a.birthDate && b.birthDate && a.birthDate === b.birthDate
+  // Name + DOB is sufficient for demographic match
+  return nameMatch && dobMatch
+}
+
+/**
+ * Remap patient IDs in all clinical records.
+ * When the same patient has different IDs across EMR sources,
+ * remap all records from oldId → newId so they appear under one patient.
+ */
+export function remapPatientIds(data, oldId, newId) {
+  if (!data || oldId === newId) return data
+  const remapped = { ...data }
+  const cats = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations']
+  cats.forEach(cat => {
+    if (Array.isArray(remapped[cat])) {
+      remapped[cat] = remapped[cat].map(r =>
+        r.patId === oldId ? { ...r, patId: newId } : r
+      )
+    }
+  })
+  return remapped
 }
 
 /**
@@ -177,6 +239,19 @@ export function mergePatientSources(patients) {
     if (!merged.language && p.language) merged.language = p.language
     if (!merged.maritalStatus && p.maritalStatus) merged.maritalStatus = p.maritalStatus
     if (!merged.ethnicGroup && p.ethnicGroup) merged.ethnicGroup = p.ethnicGroup
+    // Merge clinical arrays
+    const arrayCats = ['encounters', 'orders', 'results', 'conditions', 'medications', 'allergies', 'immunizations', 'abnormalResults']
+    arrayCats.forEach(cat => {
+      if (Array.isArray(p[cat]) && p[cat].length > 0) {
+        merged[cat] = [...(merged[cat] || []), ...p[cat]]
+      }
+    })
+    // Update counts
+    merged.encounterCount = (merged.encounters || []).length
+    merged.orderCount = (merged.orders || []).length
+    merged.resultCount = (merged.results || []).length
+    merged.conditionCount = (merged.conditions || []).length
+    merged.medicationCount = (merged.medications || []).length
   }
 
   return merged

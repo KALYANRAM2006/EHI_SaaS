@@ -1,15 +1,13 @@
 import { useState, useRef } from 'react'
-import { Upload, File, X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { Upload, File, X, CheckCircle2, AlertCircle, Loader2, User, Calendar, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { useData } from '../context/DataContext'
 
 export default function FileUpload({ onComplete }) {
   const [dragOver, setDragOver] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState(null)
-  const [files, setFiles] = useState([])
+  const [files, setFiles] = useState([])       // { file, status, progress, patient, matchStatus, matchDetails }
   const fileInputRef = useRef(null)
-  const { addFile, setLoading, parseFiles } = useData()
+  const { addFileAndParse, dataSources } = useData()
 
   const handleDragOver = (e) => {
     e.preventDefault()
@@ -51,36 +49,80 @@ export default function FileUpload({ onComplete }) {
       return
     }
 
+    const startIndex = files.length
+
     setFiles(prev => [...prev, ...validFiles.map(f => ({
       file: f,
-      status: 'pending',
-      progress: 0
+      status: 'uploading',
+      progress: 0,
+      patient: null,
+      matchStatus: null,
+      matchDetails: '',
     }))])
 
-    // Simulate upload progress
+    // Simulate upload progress then parse each file
     validFiles.forEach((file, index) => {
       setTimeout(() => {
-        simulateUpload(file, index)
+        simulateUpload(file, startIndex + index)
       }, index * 500)
     })
   }
 
-  const simulateUpload = (file, index) => {
+  const simulateUpload = (file, fileIndex) => {
     let progress = 0
     const interval = setInterval(() => {
       progress += 10
       setFiles(prev => prev.map((f, i) =>
-        i === index + (files.length) ? { ...f, progress } : f
+        i === fileIndex ? { ...f, progress } : f
       ))
 
       if (progress >= 100) {
         clearInterval(interval)
+        // Mark as parsing, then parse the file
         setFiles(prev => prev.map((f, i) =>
-          i === index + (files.length) ? { ...f, status: 'complete' } : f
+          i === fileIndex ? { ...f, status: 'parsing', progress: 100 } : f
         ))
-        addFile(file)
+        parseFileAndUpdate(file, fileIndex)
       }
     }, 100)
+  }
+
+  const parseFileAndUpdate = async (file, fileIndex) => {
+    try {
+      const result = await addFileAndParse(file)
+
+      if (result.status === 'mismatch') {
+        setFiles(prev => prev.map((f, i) =>
+          i === fileIndex ? {
+            ...f,
+            status: 'mismatch',
+            patient: result.patient,
+            matchStatus: 'mismatch',
+            matchDetails: 'Different patient detected — confirm to proceed',
+          } : f
+        ))
+      } else if (result.status === 'error') {
+        setFiles(prev => prev.map((f, i) =>
+          i === fileIndex ? { ...f, status: 'error', matchDetails: result.error } : f
+        ))
+        setParseError(result.error)
+      } else {
+        setFiles(prev => prev.map((f, i) =>
+          i === fileIndex ? {
+            ...f,
+            status: 'complete',
+            patient: result.patient,
+            matchStatus: result.source?.matchStatus || 'first',
+            matchDetails: result.source?.matchDetails || '',
+          } : f
+        ))
+      }
+    } catch (err) {
+      setFiles(prev => prev.map((f, i) =>
+        i === fileIndex ? { ...f, status: 'error', matchDetails: err.message } : f
+      ))
+      setParseError(err.message)
+    }
   }
 
   const removeFile = (index) => {
@@ -101,22 +143,73 @@ export default function FileUpload({ onComplete }) {
     return { type: 'Unknown', color: 'text-gray-600 bg-gray-50' }
   }
 
-  const handleContinue = async () => {
-    if (files.length > 0 && files.every(f => f.status === 'complete')) {
-      setParsing(true)
-      setParseError(null)
-      try {
-        const success = await parseFiles()
-        if (success) {
-          onComplete()
-        } else {
-          setParseError('Failed to parse the uploaded files. Please ensure they are valid health record files (TSV, CSV, JSON, NDJSON, XML, ZIP).')
-        }
-      } catch (err) {
-        setParseError(err.message || 'An error occurred while parsing files.')
-      }
-      setParsing(false)
+  const allDone = files.length > 0 && files.every(f => f.status === 'complete' || f.status === 'mismatch')
+  const anyParsing = files.some(f => f.status === 'parsing' || f.status === 'uploading')
+
+  const handleContinue = () => {
+    // Data is already parsed per-file. Just navigate to Dashboard.
+    if (allDone) {
+      onComplete()
     }
+  }
+
+  // ─── Patient Identity Card (shown per file after parsing) ─────────────────
+  const PatientCard = ({ patient, matchStatus, matchDetails, isFirst }) => {
+    if (!patient) return null
+    const displayName = patient.name || `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'Unknown'
+    const dob = patient.birthDate || 'N/A'
+    const sex = patient.sex || 'N/A'
+    const age = patient.age || ''
+
+    const matchBadge = () => {
+      if (isFirst || matchStatus === 'first') {
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+            <User className="w-3 h-3" /> Primary Patient
+          </span>
+        )
+      }
+      if (matchStatus === 'match') {
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+            <ShieldCheck className="w-3 h-3" /> Same Patient
+          </span>
+        )
+      }
+      if (matchStatus === 'mismatch' || matchStatus === 'mismatch-confirmed') {
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+            <ShieldAlert className="w-3 h-3" /> Different Patient
+          </span>
+        )
+      }
+      return null
+    }
+
+    return (
+      <div className="mt-2 p-2.5 bg-indigo-50/60 border border-indigo-100 rounded-lg">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Patient Identified</span>
+          {matchBadge()}
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="font-medium text-gray-900">{displayName}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="text-gray-700">DOB: {dob}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-700">Sex: {sex}{age ? ` · Age ${age}` : ''}</span>
+          </div>
+        </div>
+        {matchDetails && matchStatus !== 'first' && (
+          <p className="mt-1 text-xs text-gray-500">{matchDetails}</p>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -149,52 +242,99 @@ export default function FileUpload({ onComplete }) {
         className="hidden"
       />
 
-      {/* File List */}
+      {/* File List with Patient Identity Cards */}
       {files.length > 0 && (
         <div className="mt-6 space-y-3">
           <h3 className="font-semibold text-gray-900 mb-3">Uploaded Files ({files.length})</h3>
           {files.map((item, index) => {
             const fileType = detectFileType(item.file.name)
             return (
-              <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-3 flex-1">
-                  <File className="w-8 h-8 text-gray-400" />
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <p className="font-medium text-gray-900">{item.file.name}</p>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${fileType.color}`}>
-                        {fileType.type}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      {(item.file.size / 1024).toFixed(1)} KB
-                    </p>
-                    {item.status === 'pending' && item.progress < 100 && (
-                      <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-primary-600 h-2 rounded-full transition-all duration-200"
-                          style={{ width: `${item.progress}%` }}
-                        />
+              <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3 flex-1">
+                    <File className="w-8 h-8 text-gray-400" />
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2">
+                        <p className="font-medium text-gray-900">{item.file.name}</p>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${fileType.color}`}>
+                          {fileType.type}
+                        </span>
                       </div>
-                    )}
+                      <p className="text-sm text-gray-500">
+                        {(item.file.size / 1024).toFixed(1)} KB
+                      </p>
+                      {item.status === 'uploading' && item.progress < 100 && (
+                        <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-primary-600 h-2 rounded-full transition-all duration-200"
+                            style={{ width: `${item.progress}%` }}
+                          />
+                        </div>
+                      )}
+                      {item.status === 'parsing' && (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-indigo-600">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Analyzing patient data…</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {item.status === 'complete' ? (
+                      <CheckCircle2 className="w-6 h-6 text-green-500" />
+                    ) : item.status === 'error' ? (
+                      <AlertCircle className="w-6 h-6 text-red-500" />
+                    ) : item.status === 'mismatch' ? (
+                      <ShieldAlert className="w-6 h-6 text-amber-500" />
+                    ) : null}
+                    <button
+                      onClick={() => removeFile(index)}
+                      className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    >
+                      <X className="w-5 h-5 text-gray-500" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  {item.status === 'complete' ? (
-                    <CheckCircle2 className="w-6 h-6 text-green-500" />
-                  ) : item.status === 'error' ? (
-                    <AlertCircle className="w-6 h-6 text-red-500" />
-                  ) : null}
-                  <button
-                    onClick={() => removeFile(index)}
-                    className="p-1 hover:bg-gray-200 rounded transition-colors"
-                  >
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
-                </div>
+
+                {/* Patient Identity Card */}
+                {item.patient && (
+                  <PatientCard
+                    patient={item.patient}
+                    matchStatus={item.matchStatus}
+                    matchDetails={item.matchDetails}
+                    isFirst={index === 0}
+                  />
+                )}
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Patient Match Summary (shown when 2+ files) */}
+      {files.filter(f => f.patient).length >= 2 && (
+        <div className={`mt-4 p-4 rounded-lg border ${
+          files.every(f => !f.patient || f.matchStatus === 'match' || f.matchStatus === 'first')
+            ? 'bg-green-50 border-green-200'
+            : 'bg-amber-50 border-amber-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            {files.every(f => !f.patient || f.matchStatus === 'match' || f.matchStatus === 'first') ? (
+              <>
+                <ShieldCheck className="w-5 h-5 text-green-600" />
+                <span className="font-medium text-green-800">
+                  All files belong to the same patient — records will be merged
+                </span>
+              </>
+            ) : (
+              <>
+                <ShieldAlert className="w-5 h-5 text-amber-600" />
+                <span className="font-medium text-amber-800">
+                  Patient mismatch detected across files — please verify
+                </span>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -210,20 +350,20 @@ export default function FileUpload({ onComplete }) {
         <div className="mt-6 flex justify-end space-x-4">
           <button
             onClick={() => { setFiles([]); setParseError(null) }}
-            disabled={parsing}
+            disabled={anyParsing}
             className="px-6 py-3 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
           >
             Clear All
           </button>
           <button
             onClick={handleContinue}
-            disabled={!files.every(f => f.status === 'complete') || parsing}
+            disabled={!allDone || anyParsing}
             className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {parsing ? (
+            {anyParsing ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Parsing Files...
+                Processing Files...
               </>
             ) : (
               'Continue to Dashboard'

@@ -16,6 +16,10 @@ import {
   verifyPatientMatch,
   reconcileData,
   computeSourceStats,
+  extractPatientIdentity,
+  demographicMatch,
+  remapPatientIds,
+  mergePatientSources,
 } from '../services/sourceManager'
 
 const DataContext = createContext()
@@ -181,82 +185,220 @@ export function DataProvider({ children }) {
   }
 
   function mergeIntoExisting(existing, incoming) {
-    const merged = { ...existing }
+    let merged = { ...existing }
     const cats = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations']
     cats.forEach(cat => {
       const a = Array.isArray(merged[cat]) ? merged[cat] : []
       const b = Array.isArray(incoming[cat]) ? incoming[cat] : []
       merged[cat] = [...a, ...b]
     })
-    // Merge patients — add new ones that aren't already present
+
+    // ─── Merge patients by DEMOGRAPHICS (Name + DOB + Sex), not by patient ID ──
+    // MRN / Patient IDs differ across EMR systems, so we match by demographics
     if (incoming.patients) {
-      const existingIds = new Set((merged.patients || []).map(p => p.patId))
-      const newPatients = incoming.patients.filter(p => !existingIds.has(p.patId))
-      merged.patients = [...(merged.patients || []), ...newPatients]
+      const mergedPatients = [...(merged.patients || [])]
+      for (const newPat of incoming.patients) {
+        const existingMatch = mergedPatients.find(p => demographicMatch(p, newPat))
+        if (existingMatch) {
+          // Same person from a different EMR — remap records to use unified patient ID
+          merged = remapPatientIds(merged, newPat.patId, existingMatch.patId)
+          // Merge demographics (fill gaps)
+          const combinedPat = mergePatientSources([existingMatch, newPat])
+          Object.assign(existingMatch, combinedPat)
+        } else {
+          // Truly different patient
+          mergedPatients.push(newPat)
+        }
+      }
+      merged.patients = mergedPatients
     }
+
     merged.totalRecords = countRecords(merged)
     merged.totalPatients = (merged.patients || []).length
     return merged
   }
 
-  // Parse real uploaded files (ZIP/TSV)
-  // When additive=true, merges new files into existing data sources
+  /**
+   * Rebuild the selectedPatient summary from the merged parsedData.
+   * This re-attaches clinical data arrays after merge/remap operations.
+   */
+  function rebuildSelectedPatient(data, patId) {
+    if (!data || !data.patients) return null
+    const patient = data.patients.find(p => p.patId === patId) || data.patients[0]
+    if (!patient) return null
+    const pid = patient.patId
+    const isSingle = data.patients.length === 1
+
+    const enc  = (data.encounters || []).filter(e => isSingle || e.patId === pid)
+    const ord  = (data.orders || []).filter(o => isSingle || o.patId === pid)
+    const orderIds = new Set(ord.map(o => o.orderId))
+    const res  = isSingle
+      ? (data.results || [])
+      : (data.results || []).filter(r => orderIds.has(r.orderId) || r.patId === pid)
+    const cond = isSingle ? (data.conditions || []) : (data.conditions || []).filter(c => c.patId === pid)
+    const meds = isSingle ? (data.medications || []) : (data.medications || []).filter(m => m.patId === pid)
+    const alrg = isSingle ? (data.allergies || []) : (data.allergies || []).filter(a => a.patId === pid)
+    const immn = isSingle ? (data.immunizations || []) : (data.immunizations || []).filter(i => i.patId === pid)
+    const abnormal = res.filter(r => r.flag && r.flag !== 'Normal')
+
+    return {
+      ...patient,
+      encounters: enc, orders: ord, results: res,
+      conditions: cond, medications: meds, allergies: alrg,
+      immunizations: immn, abnormalResults: abnormal,
+      encounterCount: enc.length, orderCount: ord.length, resultCount: res.length,
+      conditionCount: cond.length, medicationCount: meds.length,
+    }
+  }
+
+  // ─── Core: Parse a SINGLE file immediately on upload ──────────────────────
+  // This replaces the old "batch all files → parse on Continue" flow.
+  // Benefits: instant patient ID display, per-file lineage, correct merge.
+
+  const addFileAndParse = useCallback(async (file) => {
+    setLoading(true)
+    setError(null)
+    try {
+      // 1. Parse just this one file
+      const result = await parseUploadedFiles([file])
+
+      // 2. Create a data source for this file
+      const newSource = createDataSource(file.name, dataSources.length)
+
+      // 3. Extract patient demographics for preview
+      const parsedPatient = result.parsedData?.patients?.[0] || result.selectedPatient
+      const patIdentity = extractPatientIdentity(parsedPatient)
+      newSource.patient = parsedPatient ? {
+        name: parsedPatient.name || `${parsedPatient.firstName || ''} ${parsedPatient.lastName || ''}`.trim(),
+        firstName: parsedPatient.firstName || patIdentity?.firstName || '',
+        lastName: parsedPatient.lastName || patIdentity?.lastName || '',
+        birthDate: parsedPatient.birthDate || '',
+        sex: parsedPatient.sex || '',
+        age: parsedPatient.age || patIdentity?.age || '',
+      } : null
+
+      // 4. Patient verification against existing data (using demographics, NOT MRN)
+      if (dataSources.length > 0 && dataSources[0].patient && newSource.patient) {
+        const verification = verifyPatientMatch(dataSources[0].patient, newSource.patient)
+        if (verification.match) {
+          newSource.matchStatus = 'match'
+          newSource.matchDetails = verification.reason
+        } else {
+          newSource.matchStatus = 'mismatch'
+          newSource.matchDetails = verification.reason
+          // Store mismatch info but still allow adding
+          setPatientMismatch({
+            message: verification.reason,
+            existingPatient: dataSources[0].patient,
+            newPatient: newSource.patient,
+            pendingSource: newSource,
+            pendingData: result,
+          })
+          setLoading(false)
+          return { status: 'mismatch', patient: newSource.patient, source: newSource }
+        }
+      } else {
+        newSource.matchStatus = 'first'
+        newSource.matchDetails = 'First data source'
+      }
+
+      // 5. Tag all records with source lineage
+      const taggedData = tagSourceOnParsed(result.parsedData, newSource)
+      newSource.recordCount = countRecords(taggedData)
+
+      // 6. Merge into existing data or set as initial data
+      let finalData
+      if (parsedData && dataSources.length > 0) {
+        finalData = mergeIntoExisting(parsedData, taggedData)
+      } else {
+        finalData = taggedData
+      }
+
+      // 7. Compute stats and update sources
+      const updatedSources = [...dataSources, newSource]
+      updatedSources.forEach(s => { s.categories = computeSourceStats(s, finalData) })
+
+      // 8. Update state
+      setParsedData(finalData)
+      setDataSources(updatedSources)
+      setUploadedFiles(prev => [...prev, { name: file.name, size: file.size, type: file.type }])
+      setDetectedVendor(result.vendor || detectedVendor)
+      setDetectedFormat(result.format || detectedFormat)
+      setIsSampleData(false)
+
+      // 9. Rebuild selectedPatient with merged clinical data
+      const currentPatId = selectedPatient?.patId || finalData?.patients?.[0]?.patId
+      const rebuiltPatient = rebuildSelectedPatient(finalData, currentPatId)
+      if (rebuiltPatient) {
+        setSelectedPatient(rebuiltPatient)
+        // Generate AI summary for the first file only
+        if (dataSources.length === 0) {
+          try {
+            const summary = await generateAIHealthSummary(rebuiltPatient, aiConfig)
+            setAiSummary(summary)
+          } catch {
+            setAiSummary(generateAISummary(rebuiltPatient))
+          }
+        } else {
+          // Re-generate summary with updated data
+          setAiSummary(generateAISummary(rebuiltPatient))
+        }
+      }
+
+      setLoading(false)
+      return { status: 'ok', patient: newSource.patient, source: newSource }
+    } catch (err) {
+      setError(err.message)
+      setLoading(false)
+      return { status: 'error', error: err.message }
+    }
+  }, [dataSources, parsedData, selectedPatient, aiConfig, detectedVendor, detectedFormat])
+
+  // Legacy parseFiles — kept for backward compatibility with FileUpload "Continue" button
   const parseFiles = useCallback(async (additive = false) => {
     if (rawFiles.length === 0) return false
     setLoading(true)
     setError(null)
     try {
       const result = await parseUploadedFiles(rawFiles)
-
-      // Create a data source for this batch of files
       const sourceLabel = rawFiles.length === 1
         ? rawFiles[0].name
         : `${rawFiles[0].name} (+${rawFiles.length - 1} more)`
       const newSource = createDataSource(sourceLabel, dataSources.length)
+      const parsedPatient = result.parsedData?.patients?.[0] || result.selectedPatient
+      newSource.patient = parsedPatient ? {
+        name: parsedPatient.name || `${parsedPatient.firstName || ''} ${parsedPatient.lastName || ''}`.trim(),
+        firstName: parsedPatient.firstName || '',
+        lastName: parsedPatient.lastName || '',
+        birthDate: parsedPatient.birthDate || '',
+        sex: parsedPatient.sex || '',
+        age: parsedPatient.age || '',
+      } : null
+      newSource.matchStatus = 'first'
 
-      // Patient verification against existing data
-      if (additive && parsedData && parsedData.patients?.length > 0 && result.parsedData?.patients?.length > 0) {
-        const existingPat = parsedData.patients[0]
-        const newPat = result.parsedData.patients[0]
-        const verification = verifyPatientMatch(existingPat, newPat)
-        if (!verification.match) {
-          setPatientMismatch({
-            message: verification.reason,
-            existingPatient: existingPat,
-            newPatient: newPat,
-            pendingSource: newSource,
-            pendingData: result,
-          })
-          setLoading(false)
-          return 'mismatch'
-        }
-      }
-
-      // Tag all records with lineage and merge
       const taggedData = tagSourceOnParsed(result.parsedData, newSource)
-      const updatedSources = [...dataSources, { ...newSource, recordCount: countRecords(taggedData) }]
+      newSource.recordCount = countRecords(taggedData)
+      const updatedSources = [...dataSources, newSource]
 
+      let finalData
       if (additive && parsedData) {
-        // Merge with existing data
-        const merged = mergeIntoExisting(parsedData, taggedData)
-        setParsedData(merged)
-        // Recompute stats for all sources
-        updatedSources.forEach(s => { s.categories = computeSourceStats(s, merged) })
+        finalData = mergeIntoExisting(parsedData, taggedData)
       } else {
-        updatedSources.forEach(s => { s.categories = computeSourceStats(s, taggedData) })
-        setParsedData(taggedData)
-        setSelectedPatient(taggedData.selectedPatient || (taggedData.patients && taggedData.patients[0]))
+        finalData = taggedData
       }
+      updatedSources.forEach(s => { s.categories = computeSourceStats(s, finalData) })
 
+      setParsedData(finalData)
       setDataSources(updatedSources)
       if (!additive) {
-        setSelectedPatient(result.selectedPatient)
+        const rebuiltPat = rebuildSelectedPatient(finalData, result.selectedPatient?.patId)
+        setSelectedPatient(rebuiltPat || result.selectedPatient)
         setAiSummary(result.aiSummary)
       }
       setDetectedVendor(result.vendor || null)
       setDetectedFormat(result.format || null)
       setIsSampleData(false)
-      setRawFiles([]) // Clear pending files after successful parse
+      setRawFiles([])
       setLoading(false)
       return true
     } catch (err) {
@@ -270,19 +412,30 @@ export function DataProvider({ children }) {
   const confirmMismatch = useCallback(async () => {
     if (!patientMismatch) return
     const { pendingSource, pendingData } = patientMismatch
+    pendingSource.matchStatus = 'mismatch-confirmed'
     const taggedData = tagSourceOnParsed(pendingData.parsedData, pendingSource)
+    pendingSource.recordCount = countRecords(taggedData)
     const merged = mergeIntoExisting(parsedData, taggedData)
-    const updatedSources = [...dataSources, { ...pendingSource, recordCount: countRecords(taggedData) }]
+    const updatedSources = [...dataSources, pendingSource]
     updatedSources.forEach(s => { s.categories = computeSourceStats(s, merged) })
     setParsedData(merged)
     setDataSources(updatedSources)
+    setUploadedFiles(prev => [...prev, { name: pendingSource.name, size: 0, type: '' }])
+
+    // Rebuild selected patient
+    const currentPatId = selectedPatient?.patId || merged?.patients?.[0]?.patId
+    const rebuiltPat = rebuildSelectedPatient(merged, currentPatId)
+    if (rebuiltPat) {
+      setSelectedPatient(rebuiltPat)
+      setAiSummary(generateAISummary(rebuiltPat))
+    }
+
     setPatientMismatch(null)
     setRawFiles([])
-  }, [patientMismatch, parsedData, dataSources])
+  }, [patientMismatch, parsedData, dataSources, selectedPatient])
 
   const dismissMismatch = useCallback(() => {
     setPatientMismatch(null)
-    setRawFiles([])
   }, [])
 
   // Remove a data source
@@ -417,6 +570,7 @@ export function DataProvider({ children }) {
 
   const value = {
     uploadedFiles,
+    rawFiles,
     addFile,
     clearFiles,
     parsedData,
@@ -428,6 +582,7 @@ export function DataProvider({ children }) {
     isSampleData,
     loadSampleData,
     parseFiles,
+    addFileAndParse,
     aiSummary,
     setAiSummary,
     selectedPatient,
