@@ -69,6 +69,13 @@ export function formatExpiryDate() {
  */
 export const TOUR_STEPS = [
   {
+    target: '[data-tour="tab-nav"]',
+    title: 'Welcome to HealthLens',
+    content: 'This is your dashboard. Use these tabs to switch between Overview, AI Summary, Timeline, Insights, Data Explorer, AI Assistant, and Data Lineage.',
+    placement: 'bottom',
+    action: { view: 'overview' },
+  },
+  {
     target: '[data-tour="patient-header"]',
     title: 'Patient Overview',
     content: 'See the patient\'s demographics, record count, and date range at a glance.',
@@ -77,7 +84,7 @@ export const TOUR_STEPS = [
   {
     target: '[data-tour="ai-summary-card"]',
     title: 'AI Health Summary',
-    content: 'An AI-generated narrative summarizes the patient\'s full health story — conditions, medications, trends, and risk score.',
+    content: 'An AI-generated narrative summarizes the patient\'s full health story including conditions, medications, trends, and risk score.',
     placement: 'bottom',
   },
   {
@@ -85,13 +92,6 @@ export const TOUR_STEPS = [
     title: 'Clinical Categories',
     content: 'Drill into Medications, Encounters, Lab Results, Conditions, and more. Each card shows a count and quick preview.',
     placement: 'top',
-  },
-  {
-    target: '[data-tour="tab-nav"]',
-    title: 'Dashboard Views',
-    content: 'Switch between Overview, AI Summary, Timeline, Insights, Data Explorer, AI Assistant, and Data Lineage.',
-    placement: 'bottom',
-    action: null, // just highlight
   },
   {
     target: '[data-tour="tab-ai-summary"]',
@@ -117,14 +117,14 @@ export const TOUR_STEPS = [
   {
     target: '[data-tour="tab-data-explorer"]',
     title: 'Data Explorer',
-    content: 'Browse the raw parsed data in a tree view — search across all clinical records.',
+    content: 'Browse the raw parsed data in a tree view and search across all clinical records.',
     placement: 'bottom',
     action: { view: 'data-explorer' },
   },
   {
     target: '[data-tour="tab-ai-assistant"]',
     title: 'AI Chat Assistant',
-    content: 'Ask natural-language questions about the patient\'s health — the AI answers using only the loaded data.',
+    content: 'Ask natural-language questions about the patient\'s health. The AI answers using only the loaded data.',
     placement: 'bottom',
     action: { view: 'ai-assistant' },
   },
