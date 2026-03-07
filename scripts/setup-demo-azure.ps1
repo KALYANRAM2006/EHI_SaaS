@@ -91,7 +91,8 @@ if ($token) {
     Write-Host "  $token" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  After adding the secret, run:" -ForegroundColor Gray
-    Write-Host '    .\scripts\push-to-demo.ps1 -ExpiryDate "2026-04-15"' -ForegroundColor Gray
+    $exampleCmd = '    .\scripts\push-to-demo.ps1 -ExpiryDate "2026-04-15"'
+    Write-Host $exampleCmd -ForegroundColor Gray
     Write-Host ""
 } else {
     Write-Host "WARNING: Could not retrieve token. Get it manually:" -ForegroundColor Yellow
