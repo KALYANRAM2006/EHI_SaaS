@@ -1,0 +1,453 @@
+{
+  "resourceType": "Bundle",
+  "type": "document",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "FHIR-PAT-9001",
+        "name": [{ "family": "Everyman", "given": ["Adam", "J"] }],
+        "birthDate": "1954-11-25",
+        "gender": "male",
+        "address": [{ "city": "Los Angeles", "state": "California", "postalCode": "90001" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "enc-f-001",
+        "status": "finished",
+        "class": { "display": "Office Visit" },
+        "type": [{ "text": "Annual Physical" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "period": { "start": "2025-06-15" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "enc-f-002",
+        "status": "finished",
+        "class": { "display": "Telehealth" },
+        "type": [{ "text": "Follow-up Visit" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "period": { "start": "2025-09-20" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "enc-f-003",
+        "status": "finished",
+        "class": { "display": "Office Visit" },
+        "type": [{ "text": "Cardiology Consult" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "period": { "start": "2025-11-05" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "enc-f-004",
+        "status": "finished",
+        "class": { "display": "Emergency" },
+        "type": [{ "text": "Emergency Department" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "period": { "start": "2026-01-10" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond-f-001",
+        "code": { "text": "Essential Hypertension" },
+        "clinicalStatus": { "coding": [{ "code": "active" }] },
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "onsetDateTime": "2018-03-15"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond-f-002",
+        "code": { "text": "Type 2 Diabetes Mellitus" },
+        "clinicalStatus": { "coding": [{ "code": "active" }] },
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "onsetDateTime": "2019-07-22"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond-f-003",
+        "code": { "text": "Hyperlipidemia" },
+        "clinicalStatus": { "coding": [{ "code": "active" }] },
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "onsetDateTime": "2018-03-15"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond-f-004",
+        "code": { "text": "Chronic Kidney Disease Stage 3" },
+        "clinicalStatus": { "coding": [{ "code": "active" }] },
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "onsetDateTime": "2021-11-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond-f-005",
+        "code": { "text": "Coronary Artery Disease" },
+        "clinicalStatus": { "coding": [{ "code": "active" }] },
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "onsetDateTime": "2022-05-10"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond-f-006",
+        "code": { "text": "Gastroesophageal Reflux Disease" },
+        "clinicalStatus": { "coding": [{ "code": "active" }] },
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "onsetDateTime": "2020-01-20"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-001",
+        "medicationCodeableConcept": { "text": "Lisinopril 20mg" },
+        "dosageInstruction": [{ "text": "20mg by mouth once daily" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2023-01-15"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-002",
+        "medicationCodeableConcept": { "text": "Metformin 1000mg" },
+        "dosageInstruction": [{ "text": "1000mg by mouth twice daily" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2023-02-20"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-003",
+        "medicationCodeableConcept": { "text": "Atorvastatin 40mg" },
+        "dosageInstruction": [{ "text": "40mg by mouth once daily at bedtime" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2023-01-15"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-004",
+        "medicationCodeableConcept": { "text": "Aspirin 81mg" },
+        "dosageInstruction": [{ "text": "81mg by mouth once daily" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2022-06-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-005",
+        "medicationCodeableConcept": { "text": "Amlodipine 5mg" },
+        "dosageInstruction": [{ "text": "5mg by mouth once daily" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2023-06-10"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-006",
+        "medicationCodeableConcept": { "text": "Metoprolol Succinate 50mg" },
+        "dosageInstruction": [{ "text": "50mg by mouth once daily" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2022-06-15"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-007",
+        "medicationCodeableConcept": { "text": "Omeprazole 20mg" },
+        "dosageInstruction": [{ "text": "20mg by mouth once daily before breakfast" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2020-02-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-008",
+        "medicationCodeableConcept": { "text": "Glipizide 5mg" },
+        "dosageInstruction": [{ "text": "5mg by mouth once daily before meals" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2024-03-15"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-009",
+        "medicationCodeableConcept": { "text": "Gabapentin 300mg" },
+        "dosageInstruction": [{ "text": "300mg by mouth three times daily" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2024-08-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-f-010",
+        "medicationCodeableConcept": { "text": "Clopidogrel 75mg" },
+        "dosageInstruction": [{ "text": "75mg by mouth once daily" }],
+        "subject": { "reference": "Patient/FHIR-PAT-9001" },
+        "authoredOn": "2022-06-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-001",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "Hemoglobin A1c" },
+        "valueQuantity": { "value": 7.2, "unit": "%" },
+        "interpretation": [{ "text": "High" }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-002",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "Glucose, Fasting" },
+        "valueQuantity": { "value": 142, "unit": "mg/dL" },
+        "interpretation": [{ "text": "High" }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-003",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "Creatinine" },
+        "valueQuantity": { "value": 1.8, "unit": "mg/dL" },
+        "interpretation": [{ "text": "High" }],
+        "referenceRange": [{ "low": { "value": 0.7 }, "high": { "value": 1.3 } }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-004",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "eGFR" },
+        "valueQuantity": { "value": 38, "unit": "mL/min/1.73m2" },
+        "interpretation": [{ "text": "Low" }],
+        "referenceRange": [{ "low": { "value": 60 } }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-005",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "Total Cholesterol" },
+        "valueQuantity": { "value": 215, "unit": "mg/dL" },
+        "interpretation": [{ "text": "High" }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-006",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "LDL Cholesterol" },
+        "valueQuantity": { "value": 130, "unit": "mg/dL" },
+        "interpretation": [{ "text": "High" }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-007",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "HDL Cholesterol" },
+        "valueQuantity": { "value": 42, "unit": "mg/dL" },
+        "interpretation": [{ "text": "Low" }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-008",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "Triglycerides" },
+        "valueQuantity": { "value": 195, "unit": "mg/dL" },
+        "interpretation": [{ "text": "High" }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-009",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "BUN" },
+        "valueQuantity": { "value": 28, "unit": "mg/dL" },
+        "interpretation": [{ "text": "High" }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-010",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "Potassium" },
+        "valueQuantity": { "value": 5.2, "unit": "mEq/L" },
+        "interpretation": [{ "text": "High" }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-011",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "Sodium" },
+        "valueQuantity": { "value": 140, "unit": "mEq/L" },
+        "interpretation": [{ "coding": [{ "code": "N" }] }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-012",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "TSH" },
+        "valueQuantity": { "value": 2.1, "unit": "mIU/L" },
+        "interpretation": [{ "coding": [{ "code": "N" }] }],
+        "effectiveDateTime": "2025-09-20",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-013",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "Troponin I" },
+        "valueQuantity": { "value": 0.02, "unit": "ng/mL" },
+        "interpretation": [{ "coding": [{ "code": "N" }] }],
+        "effectiveDateTime": "2026-01-10",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-014",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "BNP" },
+        "valueQuantity": { "value": 180, "unit": "pg/mL" },
+        "interpretation": [{ "text": "High" }],
+        "effectiveDateTime": "2026-01-10",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-015",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "CBC - WBC" },
+        "valueQuantity": { "value": 7.8, "unit": "K/uL" },
+        "interpretation": [{ "coding": [{ "code": "N" }] }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "lab-f-016",
+        "category": [{ "coding": [{ "code": "laboratory" }] }],
+        "code": { "text": "Hemoglobin" },
+        "valueQuantity": { "value": 12.8, "unit": "g/dL" },
+        "interpretation": [{ "text": "Low" }],
+        "effectiveDateTime": "2025-06-15",
+        "subject": { "reference": "Patient/FHIR-PAT-9001" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "allergy-f-001",
+        "code": { "text": "Penicillin" },
+        "type": "allergy",
+        "criticality": "high",
+        "reaction": [{ "manifestation": [{ "text": "Anaphylaxis" }] }],
+        "clinicalStatus": { "coding": [{ "code": "active" }] },
+        "patient": { "reference": "Patient/FHIR-PAT-9001" },
+        "recordedDate": "2010-05-15"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "allergy-f-002",
+        "code": { "text": "Sulfa Drugs" },
+        "type": "allergy",
+        "criticality": "moderate",
+        "reaction": [{ "manifestation": [{ "text": "Rash, Hives" }] }],
+        "clinicalStatus": { "coding": [{ "code": "active" }] },
+        "patient": { "reference": "Patient/FHIR-PAT-9001" },
+        "recordedDate": "2015-08-20"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "allergy-f-003",
+        "code": { "text": "Iodine Contrast" },
+        "type": "allergy",
+        "criticality": "moderate",
+        "reaction": [{ "manifestation": [{ "text": "Nausea, Flushing" }] }],
+        "clinicalStatus": { "coding": [{ "code": "active" }] },
+        "patient": { "reference": "Patient/FHIR-PAT-9001" },
+        "recordedDate": "2019-11-05"
+      }
+    }
+  ]
+}

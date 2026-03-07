@@ -297,9 +297,22 @@ export function reconcileData(sourcesWithData) {
     }
   }
 
-  // Attempt deduplication (simple name/date matching)
-  merged.medications = deduplicateByKey(merged.medications, m => `${(m.name || '').toLowerCase()}`)
-  merged.allergies = deduplicateByKey(merged.allergies, a => `${(a.allergen || a.name || '').toLowerCase()}`)
+  // ─── Comprehensive Deduplication ────────────────────────────────────────
+  // Medications: dedup by normalized name (removing strength/dose from comparison)
+  merged.medications = deduplicateByKey(merged.medications, m => {
+    const name = (m.name || '').toLowerCase().replace(/\d+\s*(mg|mcg|ml|units?|meq)\b/gi, '').trim()
+    return name
+  })
+  // Lab Results: dedup by component name + date (same lab, same day = duplicate)
+  merged.results = deduplicateByKey(merged.results, r => {
+    const comp = (r.component || '').toLowerCase().trim()
+    const date = (r.resultTime || '').split(' ')[0] || (r.resultTime || '').split('T')[0] || ''
+    return `${comp}|${date}`
+  })
+  // Conditions: dedup by name
+  merged.conditions = deduplicateByKey(merged.conditions, c => (c.name || '').toLowerCase().trim())
+  // Allergies: dedup by allergen name
+  merged.allergies = deduplicateByKey(merged.allergies, a => (a.allergen || a.name || '').toLowerCase().trim())
 
   return merged
 }
@@ -312,12 +325,34 @@ function deduplicateByKey(records, keyFn) {
   const seen = new Map()
   return records.map(r => {
     const key = keyFn(r)
+    if (!key) return r // Cannot compute key — keep as-is
     if (seen.has(key)) {
       return { ...r, _duplicate: true, _duplicateOf: seen.get(key) }
     }
     seen.set(key, r._source)
     return r
   })
+}
+
+/**
+ * Apply deduplication to merged data (called after mergeIntoExisting).
+ * This is the entry point used by DataContext after merging records.
+ */
+export function deduplicateMergedData(data) {
+  if (!data) return data
+  const deduped = { ...data }
+  deduped.medications = deduplicateByKey(deduped.medications || [], m => {
+    const name = (m.name || '').toLowerCase().replace(/\d+\s*(mg|mcg|ml|units?|meq)\b/gi, '').trim()
+    return name
+  })
+  deduped.results = deduplicateByKey(deduped.results || [], r => {
+    const comp = (r.component || '').toLowerCase().trim()
+    const date = (r.resultTime || '').split(' ')[0] || (r.resultTime || '').split('T')[0] || ''
+    return `${comp}|${date}`
+  })
+  deduped.conditions = deduplicateByKey(deduped.conditions || [], c => (c.name || '').toLowerCase().trim())
+  deduped.allergies = deduplicateByKey(deduped.allergies || [], a => (a.allergen || a.name || '').toLowerCase().trim())
+  return deduped
 }
 
 /**

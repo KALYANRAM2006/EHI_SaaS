@@ -20,6 +20,7 @@ import {
   demographicMatch,
   remapPatientIds,
   mergePatientSources,
+  deduplicateMergedData,
 } from '../services/sourceManager'
 
 const DataContext = createContext()
@@ -40,6 +41,15 @@ export function DataProvider({ children }) {
   const [dataSources, setDataSources] = useState([])        // Array of source descriptors
   const [patientMismatch, setPatientMismatch] = useState(null) // { message, newPatient, existingPatient }
 
+  // ─── Refs for race-condition-free file parsing ─────────────────────────────
+  // React state updates are async — when files upload in quick succession,
+  // the second file's closure would see stale state from before file 1 finished.
+  // Refs always hold the latest value, so addFileAndParse reads from refs.
+  const dataSourcesRef = useRef([])
+  const parsedDataRef = useRef(null)
+  const selectedPatientRef = useRef(null)
+  const parseQueueRef = useRef(Promise.resolve()) // sequential queue
+
   // ─── Privacy & Security State ──────────────────────────────────────────────
   const [persistEnabled, setPersistEnabled] = useState(isPersistenceEnabled())
   const [memoryCleared, setMemoryCleared] = useState(false)
@@ -49,6 +59,11 @@ export function DataProvider({ children }) {
   const [aiConfig, setAiConfigState] = useState(getAIConfig())
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState(null)
+
+  // ─── Keep refs in sync with React state ────────────────────────────────────
+  useEffect(() => { dataSourcesRef.current = dataSources }, [dataSources])
+  useEffect(() => { parsedDataRef.current = parsedData }, [parsedData])
+  useEffect(() => { selectedPatientRef.current = selectedPatient }, [selectedPatient])
 
   // Auto-clear data when browser tab closes or navigates away
   useEffect(() => {
@@ -133,6 +148,11 @@ export function DataProvider({ children }) {
     setDetectedFormat(null)
     setDataSources([])
     setPatientMismatch(null)
+    // Also reset refs to prevent stale data in queued parse operations
+    dataSourcesRef.current = []
+    parsedDataRef.current = null
+    selectedPatientRef.current = null
+    parseQueueRef.current = Promise.resolve()
   }
 
   // Secure wipe — clears React state + IndexedDB + sessionStorage
@@ -239,120 +259,145 @@ export function DataProvider({ children }) {
     const meds = isSingle ? (data.medications || []) : (data.medications || []).filter(m => m.patId === pid)
     const alrg = isSingle ? (data.allergies || []) : (data.allergies || []).filter(a => a.patId === pid)
     const immn = isSingle ? (data.immunizations || []) : (data.immunizations || []).filter(i => i.patId === pid)
-    const abnormal = res.filter(r => r.flag && r.flag !== 'Normal')
+
+    // Filter out duplicates (dedup marks them with _duplicate: true but keeps them for lineage)
+    const filteredMeds = meds.filter(m => !m._duplicate)
+    const filteredRes  = res.filter(r => !r._duplicate)
+    const filteredCond = cond.filter(c => !c._duplicate)
+    const filteredAlrg = alrg.filter(a => !a._duplicate)
+    const abnormal = filteredRes.filter(r => r.flag && r.flag !== 'Normal')
 
     return {
       ...patient,
-      encounters: enc, orders: ord, results: res,
-      conditions: cond, medications: meds, allergies: alrg,
+      encounters: enc, orders: ord, results: filteredRes,
+      conditions: filteredCond, medications: filteredMeds, allergies: filteredAlrg,
       immunizations: immn, abnormalResults: abnormal,
-      encounterCount: enc.length, orderCount: ord.length, resultCount: res.length,
-      conditionCount: cond.length, medicationCount: meds.length,
+      encounterCount: enc.length, orderCount: ord.length, resultCount: filteredRes.length,
+      conditionCount: filteredCond.length, medicationCount: filteredMeds.length,
+      // Also keep the raw (with-duplicates) counts for lineage display
+      _rawMedCount: meds.length, _rawResCount: res.length,
+      _dedupedMeds: meds.filter(m => m._duplicate).length,
+      _dedupedResults: res.filter(r => r._duplicate).length,
     }
   }
 
   // ─── Core: Parse a SINGLE file immediately on upload ──────────────────────
-  // This replaces the old "batch all files → parse on Continue" flow.
-  // Benefits: instant patient ID display, per-file lineage, correct merge.
+  // Uses refs + promise queue to prevent race conditions when multiple files
+  // upload in quick succession. Each file parse waits for the previous to finish.
 
-  const addFileAndParse = useCallback(async (file) => {
-    setLoading(true)
-    setError(null)
-    try {
-      // 1. Parse just this one file
-      const result = await parseUploadedFiles([file])
+  const addFileAndParse = useCallback((file) => {
+    const task = parseQueueRef.current.then(async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        // Read latest state from refs (NOT closure — avoids stale data)
+        const currentSources = dataSourcesRef.current
+        const currentParsed = parsedDataRef.current
+        const currentPatient = selectedPatientRef.current
 
-      // 2. Create a data source for this file
-      const newSource = createDataSource(file.name, dataSources.length)
+        // 1. Parse just this one file
+        const result = await parseUploadedFiles([file])
 
-      // 3. Extract patient demographics for preview
-      const parsedPatient = result.parsedData?.patients?.[0] || result.selectedPatient
-      const patIdentity = extractPatientIdentity(parsedPatient)
-      newSource.patient = parsedPatient ? {
-        name: parsedPatient.name || `${parsedPatient.firstName || ''} ${parsedPatient.lastName || ''}`.trim(),
-        firstName: parsedPatient.firstName || patIdentity?.firstName || '',
-        lastName: parsedPatient.lastName || patIdentity?.lastName || '',
-        birthDate: parsedPatient.birthDate || '',
-        sex: parsedPatient.sex || '',
-        age: parsedPatient.age || patIdentity?.age || '',
-      } : null
+        // 2. Create a data source for this file
+        const newSource = createDataSource(file.name, currentSources.length)
 
-      // 4. Patient verification against existing data (using demographics, NOT MRN)
-      if (dataSources.length > 0 && dataSources[0].patient && newSource.patient) {
-        const verification = verifyPatientMatch(dataSources[0].patient, newSource.patient)
-        if (verification.match) {
-          newSource.matchStatus = 'match'
-          newSource.matchDetails = verification.reason
-        } else {
-          newSource.matchStatus = 'mismatch'
-          newSource.matchDetails = verification.reason
-          // Store mismatch info but still allow adding
-          setPatientMismatch({
-            message: verification.reason,
-            existingPatient: dataSources[0].patient,
-            newPatient: newSource.patient,
-            pendingSource: newSource,
-            pendingData: result,
-          })
-          setLoading(false)
-          return { status: 'mismatch', patient: newSource.patient, source: newSource }
-        }
-      } else {
-        newSource.matchStatus = 'first'
-        newSource.matchDetails = 'First data source'
-      }
+        // 3. Extract patient demographics for preview
+        const parsedPatient = result.parsedData?.patients?.[0] || result.selectedPatient
+        const patIdentity = extractPatientIdentity(parsedPatient)
+        newSource.patient = parsedPatient ? {
+          name: parsedPatient.name || `${parsedPatient.firstName || ''} ${parsedPatient.lastName || ''}`.trim(),
+          firstName: parsedPatient.firstName || patIdentity?.firstName || '',
+          lastName: parsedPatient.lastName || patIdentity?.lastName || '',
+          birthDate: parsedPatient.birthDate || '',
+          sex: parsedPatient.sex || '',
+          age: parsedPatient.age || patIdentity?.age || '',
+        } : null
 
-      // 5. Tag all records with source lineage
-      const taggedData = tagSourceOnParsed(result.parsedData, newSource)
-      newSource.recordCount = countRecords(taggedData)
-
-      // 6. Merge into existing data or set as initial data
-      let finalData
-      if (parsedData && dataSources.length > 0) {
-        finalData = mergeIntoExisting(parsedData, taggedData)
-      } else {
-        finalData = taggedData
-      }
-
-      // 7. Compute stats and update sources
-      const updatedSources = [...dataSources, newSource]
-      updatedSources.forEach(s => { s.categories = computeSourceStats(s, finalData) })
-
-      // 8. Update state
-      setParsedData(finalData)
-      setDataSources(updatedSources)
-      setUploadedFiles(prev => [...prev, { name: file.name, size: file.size, type: file.type }])
-      setDetectedVendor(result.vendor || detectedVendor)
-      setDetectedFormat(result.format || detectedFormat)
-      setIsSampleData(false)
-
-      // 9. Rebuild selectedPatient with merged clinical data
-      const currentPatId = selectedPatient?.patId || finalData?.patients?.[0]?.patId
-      const rebuiltPatient = rebuildSelectedPatient(finalData, currentPatId)
-      if (rebuiltPatient) {
-        setSelectedPatient(rebuiltPatient)
-        // Generate AI summary for the first file only
-        if (dataSources.length === 0) {
-          try {
-            const summary = await generateAIHealthSummary(rebuiltPatient, aiConfig)
-            setAiSummary(summary)
-          } catch {
-            setAiSummary(generateAISummary(rebuiltPatient))
+        // 4. Patient verification against existing data (using demographics, NOT MRN)
+        if (currentSources.length > 0 && currentSources[0].patient && newSource.patient) {
+          const verification = verifyPatientMatch(currentSources[0].patient, newSource.patient)
+          if (verification.match) {
+            newSource.matchStatus = 'match'
+            newSource.matchDetails = verification.reason
+          } else {
+            newSource.matchStatus = 'mismatch'
+            newSource.matchDetails = verification.reason
+            // Store mismatch info but still allow adding
+            setPatientMismatch({
+              message: verification.reason,
+              existingPatient: currentSources[0].patient,
+              newPatient: newSource.patient,
+              pendingSource: newSource,
+              pendingData: result,
+            })
+            setLoading(false)
+            return { status: 'mismatch', patient: newSource.patient, source: newSource }
           }
         } else {
-          // Re-generate summary with updated data
-          setAiSummary(generateAISummary(rebuiltPatient))
+          newSource.matchStatus = 'first'
+          newSource.matchDetails = 'First data source'
         }
-      }
 
-      setLoading(false)
-      return { status: 'ok', patient: newSource.patient, source: newSource }
-    } catch (err) {
-      setError(err.message)
-      setLoading(false)
-      return { status: 'error', error: err.message }
-    }
-  }, [dataSources, parsedData, selectedPatient, aiConfig, detectedVendor, detectedFormat])
+        // 5. Tag all records with source lineage
+        const taggedData = tagSourceOnParsed(result.parsedData, newSource)
+        newSource.recordCount = countRecords(taggedData)
+
+        // 6. Merge into existing data or set as initial data
+        let finalData
+        if (currentParsed && currentSources.length > 0) {
+          finalData = mergeIntoExisting(currentParsed, taggedData)
+        } else {
+          finalData = taggedData
+        }
+
+        // 7. Deduplicate merged data (meds, labs, conditions, allergies)
+        finalData = deduplicateMergedData(finalData)
+
+        // 8. Compute stats and update sources
+        const updatedSources = [...currentSources, newSource]
+        updatedSources.forEach(s => { s.categories = computeSourceStats(s, finalData) })
+
+        // 9. Update state (and refs immediately for the next queued file)
+        parsedDataRef.current = finalData
+        dataSourcesRef.current = updatedSources
+        setParsedData(finalData)
+        setDataSources(updatedSources)
+        setUploadedFiles(prev => [...prev, { name: file.name, size: file.size, type: file.type }])
+        setDetectedVendor(result.vendor || detectedVendor)
+        setDetectedFormat(result.format || detectedFormat)
+        setIsSampleData(false)
+
+        // 10. Rebuild selectedPatient with merged clinical data
+        const currentPatId = currentPatient?.patId || finalData?.patients?.[0]?.patId
+        const rebuiltPatient = rebuildSelectedPatient(finalData, currentPatId)
+        if (rebuiltPatient) {
+          selectedPatientRef.current = rebuiltPatient
+          setSelectedPatient(rebuiltPatient)
+          // Generate AI summary for the first file only
+          if (currentSources.length === 0) {
+            try {
+              const summary = await generateAIHealthSummary(rebuiltPatient, aiConfig)
+              setAiSummary(summary)
+            } catch {
+              setAiSummary(generateAISummary(rebuiltPatient))
+            }
+          } else {
+            // Re-generate summary with updated data
+            setAiSummary(generateAISummary(rebuiltPatient))
+          }
+        }
+
+        setLoading(false)
+        return { status: 'ok', patient: newSource.patient, source: newSource }
+      } catch (err) {
+        setError(err.message)
+        setLoading(false)
+        return { status: 'error', error: err.message }
+      }
+    })
+    parseQueueRef.current = task
+    return task
+  }, [aiConfig, detectedVendor, detectedFormat])
 
   // Legacy parseFiles — kept for backward compatibility with FileUpload "Continue" button
   const parseFiles = useCallback(async (additive = false) => {
@@ -415,7 +460,8 @@ export function DataProvider({ children }) {
     pendingSource.matchStatus = 'mismatch-confirmed'
     const taggedData = tagSourceOnParsed(pendingData.parsedData, pendingSource)
     pendingSource.recordCount = countRecords(taggedData)
-    const merged = mergeIntoExisting(parsedData, taggedData)
+    let merged = mergeIntoExisting(parsedData, taggedData)
+    merged = deduplicateMergedData(merged)
     const updatedSources = [...dataSources, pendingSource]
     updatedSources.forEach(s => { s.categories = computeSourceStats(s, merged) })
     setParsedData(merged)
@@ -494,6 +540,24 @@ export function DataProvider({ children }) {
       fhirSource.categories = computeSourceStats(fhirSource, data)
       epicSource.recordCount = Object.values(epicSource.categories).reduce((a, b) => a + b, 0)
       fhirSource.recordCount = Object.values(fhirSource.categories).reduce((a, b) => a + b, 0)
+
+      // Populate patient identity on each source for the LandingPage preview
+      const samplePat = data.selectedPatient || data.patients?.[0]
+      if (samplePat) {
+        const patInfo = {
+          name: samplePat.name || `${samplePat.firstName || ''} ${samplePat.lastName || ''}`.trim(),
+          firstName: samplePat.firstName || '',
+          lastName: samplePat.lastName || '',
+          birthDate: samplePat.birthDate || '',
+          sex: samplePat.sex || '',
+          age: samplePat.age || '',
+        }
+        epicSource.patient = { ...patInfo }
+        fhirSource.patient = { ...patInfo }
+        epicSource.matchStatus = 'first'
+        fhirSource.matchStatus = 'match'
+        fhirSource.matchDetails = 'Same patient — demographic match'
+      }
 
       setDataSources([epicSource, fhirSource])
       setParsedData(data)

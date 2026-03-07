@@ -1,0 +1,5 @@
+ALLERGEN	PAT_ID	ALLERGY_TYPE_C_NAME	REACTIONS	SEVERITY_C_NAME	ALLERGY_STATUS_C_NAME	NOTED_DATE
+Penicillin	E-7742891	Drug	Anaphylaxis	Severe	Active	05/15/2010
+Sulfa Drugs	E-7742891	Drug	Rash, Hives	Moderate	Active	08/20/2015
+Iodine Contrast	E-7742891	Other	Nausea, Flushing	Moderate	Active	11/05/2019
+ACE Inhibitor Cough	E-7742891	Drug	Dry Cough	Mild	Active	02/01/2023

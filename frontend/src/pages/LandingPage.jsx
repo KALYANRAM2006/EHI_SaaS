@@ -16,6 +16,7 @@ import {
   FileText,
   GitBranch,
   AlertTriangle,
+  CheckCircle,
   User,
   Calendar,
 } from 'lucide-react'
@@ -117,12 +118,31 @@ export default function LandingPage() {
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-yellow-800">Different Patient Detected</p>
                     <p className="text-sm text-yellow-700 mt-1">{patientMismatch.message}</p>
+
+                    {/* Side-by-side comparison of the mismatch */}
+                    {patientMismatch.existingPatient && patientMismatch.newPatient && (
+                      <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
+                        <div className="bg-white rounded-lg p-3 border border-blue-200">
+                          <p className="text-xs font-bold text-blue-600 mb-1">Current Patient (Source 1)</p>
+                          <p className="font-medium">{patientMismatch.existingPatient.name || `${patientMismatch.existingPatient.firstName || ''} ${patientMismatch.existingPatient.lastName || ''}`.trim()}</p>
+                          <p className="text-gray-500">DOB: {patientMismatch.existingPatient.birthDate || '—'}</p>
+                          <p className="text-gray-500">Sex: {patientMismatch.existingPatient.sex || '—'}</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-amber-200">
+                          <p className="text-xs font-bold text-amber-600 mb-1">New File Patient</p>
+                          <p className="font-medium">{patientMismatch.newPatient.name || `${patientMismatch.newPatient.firstName || ''} ${patientMismatch.newPatient.lastName || ''}`.trim()}</p>
+                          <p className="text-gray-500">DOB: {patientMismatch.newPatient.birthDate || '—'}</p>
+                          <p className="text-gray-500">Sex: {patientMismatch.newPatient.sex || '—'}</p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex gap-3 mt-3">
                       <button onClick={confirmMismatch} className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 transition-colors">
-                        Add Anyway
+                        Add Anyway (Keep Both Patients)
                       </button>
                       <button onClick={dismissMismatch} className="px-4 py-1.5 text-xs font-semibold rounded-lg border border-yellow-300 text-yellow-700 hover:bg-yellow-100 transition-colors">
-                        Cancel
+                        Cancel — Discard New File
                       </button>
                     </div>
                   </div>
@@ -130,7 +150,7 @@ export default function LandingPage() {
               </div>
             )}
 
-            {/* Loaded Data Sources with Patient Identity Cards */}
+            {/* Loaded Data Sources with Patient Identity & Comparison */}
             {hasSources && !showUpload && (
               <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200/50 px-6 py-5">
                 <div className="flex items-center gap-2 mb-3">
@@ -139,23 +159,78 @@ export default function LandingPage() {
                   <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{dataSources.length}</span>
                 </div>
 
-                {/* Patient Match Summary */}
-                {dataSources.length >= 2 && (
-                  <div className={`mb-3 p-3 rounded-lg border flex items-center gap-2 ${
-                    dataSources.every(s => s.matchStatus === 'match' || s.matchStatus === 'first')
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-amber-50 border-amber-200'
-                  }`}>
-                    {dataSources.every(s => s.matchStatus === 'match' || s.matchStatus === 'first') ? (
-                      <><ShieldCheck className="w-4 h-4 text-green-600" /><span className="text-sm font-medium text-green-800">All sources verified — same patient</span></>
-                    ) : (
-                      <><ShieldAlert className="w-4 h-4 text-amber-600" /><span className="text-sm font-medium text-amber-800">Patient mismatch detected across sources</span></>
-                    )}
-                  </div>
-                )}
+                {/* ── Patient Comparison Panel (2+ sources) ─────────────────────── */}
+                {dataSources.length >= 2 && (() => {
+                  const allMatch = dataSources.every(s => s.matchStatus === 'match' || s.matchStatus === 'first')
+                  const primary = dataSources[0]?.patient
+                  const secondary = dataSources.find(s => s.matchStatus !== 'first')?.patient
+                  const nameA = (primary?.name || `${primary?.firstName || ''} ${primary?.lastName || ''}`.trim() || '').toLowerCase()
+                  const nameB = (secondary?.name || `${secondary?.firstName || ''} ${secondary?.lastName || ''}`.trim() || '').toLowerCase()
+                  const dobMatch = primary?.birthDate === secondary?.birthDate
+                  const nameMatch = nameA && nameB && nameA === nameB
+                  const sexMatch = primary?.sex && secondary?.sex && primary.sex.toLowerCase() === secondary.sex.toLowerCase()
 
+                  return (
+                    <div className={`mb-4 rounded-xl border-2 overflow-hidden ${allMatch ? 'border-green-300' : 'border-amber-300'}`}>
+                      {/* Header bar */}
+                      <div className={`px-4 py-2.5 flex items-center gap-2 ${allMatch ? 'bg-green-100' : 'bg-amber-100'}`}>
+                        {allMatch ? (
+                          <>
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                            <span className="text-sm font-bold text-green-800">Same Patient Verified — Records are merged into one unified view</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="w-5 h-5 text-amber-600" />
+                            <span className="text-sm font-bold text-amber-800">Different Patients — Records are kept separate</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Side-by-side field comparison */}
+                      {primary && secondary && (
+                        <div className="px-4 py-3 bg-white/60">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-xs text-gray-500">
+                                <th className="text-left font-medium pb-1 w-16">Field</th>
+                                <th className="text-left font-medium pb-1" style={{color: dataSources[0]?.color}}>
+                                  Source 1 — {dataSources[0]?.name?.slice(0, 25)}
+                                </th>
+                                <th className="text-center font-medium pb-1 w-10"></th>
+                                <th className="text-left font-medium pb-1" style={{color: dataSources[1]?.color}}>
+                                  Source 2 — {dataSources[1]?.name?.slice(0, 25)}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[
+                                { label: 'Name', a: primary.name || `${primary.firstName || ''} ${primary.lastName || ''}`.trim(), b: secondary.name || `${secondary.firstName || ''} ${secondary.lastName || ''}`.trim(), match: nameMatch },
+                                { label: 'DOB', a: primary.birthDate || '—', b: secondary.birthDate || '—', match: dobMatch },
+                                { label: 'Sex', a: primary.sex || '—', b: secondary.sex || '—', match: sexMatch },
+                              ].map((row) => (
+                                <tr key={row.label} className="border-t border-gray-100">
+                                  <td className="py-1.5 text-gray-500 font-medium">{row.label}</td>
+                                  <td className="py-1.5 font-medium text-gray-900">{row.a || '—'}</td>
+                                  <td className="py-1.5 text-center">
+                                    <span className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-xs font-bold ${row.match ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                      {row.match ? '✓' : '✗'}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 font-medium text-gray-900">{row.b || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* Source Cards */}
                 <div className="space-y-2">
-                  {dataSources.map((source, idx) => (
+                  {dataSources.map((source) => (
                     <div key={source.id} className="bg-white rounded-lg p-3 border border-gray-200">
                       <div className="flex items-center gap-3">
                         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: source.color }} />
@@ -163,20 +238,20 @@ export default function LandingPage() {
                           <p className="text-sm font-medium text-gray-900 truncate">{source.name}</p>
                           <p className="text-xs text-gray-500">{source.recordCount} records · {new Date(source.uploadDate).toLocaleDateString()}</p>
                         </div>
-                        {/* Match Badge */}
+                        {/* Match Badge — only first source gets "Primary", rest get contextual badge */}
+                        {source.matchStatus === 'first' && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                            <User className="w-3 h-3" /> Primary
+                          </span>
+                        )}
                         {source.matchStatus === 'match' && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
-                            <ShieldCheck className="w-3 h-3" /> Match
+                            <ShieldCheck className="w-3 h-3" /> Same Patient
                           </span>
                         )}
                         {(source.matchStatus === 'mismatch' || source.matchStatus === 'mismatch-confirmed') && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
-                            <ShieldAlert className="w-3 h-3" /> Mismatch
-                          </span>
-                        )}
-                        {(source.matchStatus === 'first' || idx === 0) && !source.matchStatus?.startsWith('mis') && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                            <User className="w-3 h-3" /> Primary
+                            <ShieldAlert className="w-3 h-3" /> Different Patient
                           </span>
                         )}
                         <button

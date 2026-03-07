@@ -1,0 +1,7 @@
+PAT_ENC_CSN_ID	PAT_ID	CONTACT_DATE	ENC_TYPE_C_NAME	VISIT_PROV_ID	APPT_STATUS_C_NAME	ADT_PATIENT_CLASS_C_NAME	CHIEF_COMPLAINT
+CSN-10001	E-7742891	03/10/2025	Office Visit	PROV-101	Completed	Outpatient	Annual Wellness Visit
+CSN-10002	E-7742891	06/15/2025	Office Visit	PROV-101	Completed	Outpatient	Follow-up Diabetes & HTN
+CSN-10003	E-7742891	08/22/2025	Lab Only	PROV-102	Completed	Outpatient	Routine Labs
+CSN-10004	E-7742891	11/05/2025	Office Visit	PROV-103	Completed	Outpatient	Cardiology Referral
+CSN-10005	E-7742891	01/10/2026	Emergency	PROV-104	Completed	Emergency	Chest Pain
+CSN-10006	E-7742891	02/15/2026	Office Visit	PROV-101	Completed	Outpatient	Post-ED Follow-up

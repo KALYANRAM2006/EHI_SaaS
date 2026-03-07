@@ -1,0 +1,15 @@
+MEDICATION_NAME	PAT_ID	DOSE	DOSE_UNIT	ROUTE	FREQUENCY	START_DATE	MED_CLASS	ORD_CREATR_USER_ID_NAME
+Lisinopril 20mg	E-7742891	20	mg	Oral	Daily	01/15/2023	ACE Inhibitor	Dr. Smith
+Metformin 1000mg	E-7742891	1000	mg	Oral	Twice Daily	02/20/2023	Biguanide	Dr. Smith
+Atorvastatin 40mg	E-7742891	40	mg	Oral	Daily at Bedtime	01/15/2023	Statin	Dr. Smith
+Aspirin 81mg	E-7742891	81	mg	Oral	Daily	06/01/2022	Antiplatelet	Dr. Jones
+Amlodipine 5mg	E-7742891	5	mg	Oral	Daily	06/10/2023	Calcium Channel Blocker	Dr. Smith
+Metoprolol Succinate 50mg	E-7742891	50	mg	Oral	Daily	06/15/2022	Beta Blocker	Dr. Jones
+Omeprazole 20mg	E-7742891	20	mg	Oral	Daily Before Breakfast	02/01/2020	Proton Pump Inhibitor	Dr. Smith
+Glipizide 5mg	E-7742891	5	mg	Oral	Daily Before Meals	03/15/2024	Sulfonylurea	Dr. Smith
+Gabapentin 300mg	E-7742891	300	mg	Oral	Three Times Daily	08/01/2024	Anticonvulsant	Dr. Davis
+Clopidogrel 75mg	E-7742891	75	mg	Oral	Daily	06/01/2022	Antiplatelet	Dr. Jones
+Furosemide 20mg	E-7742891	20	mg	Oral	Daily	01/10/2026	Loop Diuretic	Dr. Jones
+Potassium Chloride 20mEq	E-7742891	20	mEq	Oral	Daily	01/10/2026	Electrolyte Supplement	Dr. Jones
+Insulin Glargine 10 units	E-7742891	10	units	Subcutaneous	Daily at Bedtime	12/01/2025	Basal Insulin	Dr. Smith
+Nitroglycerin 0.4mg SL	E-7742891	0.4	mg	Sublingual	As Needed	06/01/2022	Nitrate	Dr. Jones
