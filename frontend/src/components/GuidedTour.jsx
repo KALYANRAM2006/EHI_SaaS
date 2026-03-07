@@ -58,11 +58,12 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
 
   useEffect(() => {
     if (!active) return
-    // Fire the step action (e.g. switch view) BEFORE positioning
+    // Fire the step action (e.g. navigate or switch view) BEFORE positioning
     if (currentStep?.action && onStepAction) {
       onStepAction(currentStep.action)
-      // Wait for view to render before positioning
-      setTimeout(positionTooltip, 400)
+      // If navigating to a different page, wait longer for render
+      const delay = currentStep.action.navigate ? 1200 : 400
+      setTimeout(positionTooltip, delay)
     } else {
       positionTooltip()
     }
