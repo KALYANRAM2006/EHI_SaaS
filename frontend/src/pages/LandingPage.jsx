@@ -160,7 +160,7 @@ export default function LandingPage({ onDemoReady }) {
 
             {/* Loaded Data Sources with Patient Identity & Comparison */}
             {hasSources && !showUpload && (
-              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200/50 px-6 py-5">
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200/50 px-6 py-5" data-tour="landing-sources">
                 <div className="flex items-center gap-2 mb-3">
                   <GitBranch className="w-4 h-4 text-emerald-600" />
                   <h3 className="text-sm font-semibold text-gray-900">Loaded Data Sources</h3>
@@ -169,7 +169,7 @@ export default function LandingPage({ onDemoReady }) {
 
                 {/* ── Patient Comparison Panel (2+ sources) ─────────────────────── */}
                 {dataSources.length >= 2 && (() => {
-                  const allMatch = dataSources.every(s => s.matchStatus === 'match' || s.matchStatus === 'first')
+                  /* Patient comparison panel */ const allMatch = dataSources.every(s => s.matchStatus === 'match' || s.matchStatus === 'first')
                   const primary = dataSources[0]?.patient
                   const secondary = dataSources.find(s => s.matchStatus !== 'first')?.patient
                   const nameA = (primary?.name || `${primary?.firstName || ''} ${primary?.lastName || ''}`.trim() || '').toLowerCase()
@@ -179,7 +179,7 @@ export default function LandingPage({ onDemoReady }) {
                   const sexMatch = primary?.sex && secondary?.sex && primary.sex.toLowerCase() === secondary.sex.toLowerCase()
 
                   return (
-                    <div className={`mb-4 rounded-xl border-2 overflow-hidden ${allMatch ? 'border-green-300' : 'border-amber-300'}`}>
+                    <div className={`mb-4 rounded-xl border-2 overflow-hidden ${allMatch ? 'border-green-300' : 'border-amber-300'}`} data-tour="landing-patient-match">
                       {/* Header bar */}
                       <div className={`px-4 py-2.5 flex items-center gap-2 ${allMatch ? 'bg-green-100' : 'bg-amber-100'}`}>
                         {allMatch ? (
@@ -333,7 +333,7 @@ export default function LandingPage({ onDemoReady }) {
                   <p className="text-gray-500 mb-8">or click to browse files</p>
 
                   {/* Supported Formats */}
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 mb-8 max-w-md mx-auto border border-blue-100">
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 mb-8 max-w-md mx-auto border border-blue-100" data-tour="landing-formats">
                     <p className="font-semibold text-gray-900 mb-3">Supported formats:</p>
                     <div className="grid grid-cols-3 gap-3 text-sm">
                       <div className="bg-white rounded-lg p-3 border border-gray-200">
@@ -355,6 +355,7 @@ export default function LandingPage({ onDemoReady }) {
                   <div className="flex gap-4 justify-center">
                     <button
                       onClick={() => setShowUpload(true)}
+                      data-tour="landing-browse-btn"
                       className="px-8 py-3 text-sm font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-lg cursor-pointer" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}
                     >
                       Browse Files
