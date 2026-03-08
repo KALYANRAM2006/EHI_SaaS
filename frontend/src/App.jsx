@@ -10,17 +10,19 @@ import { DemoExpiryBanner } from './components/DemoExpiredGate'
 
 function AppContent() {
   const [showTour, setShowTour] = useState(false)
+  const [tourDismissed, setTourDismissed] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const { loadSampleData } = useData()
   const demoMode = isDemo()
 
-  // Auto-start the tour after a short delay when the demo landing page loads
+  // Auto-start the tour once when the demo landing page first loads
+  // Never re-trigger after the user has dismissed/skipped
   const handleDemoTourStart = useCallback(() => {
-    if (demoMode && !showTour) {
+    if (demoMode && !showTour && !tourDismissed) {
       setTimeout(() => setShowTour(true), 600)
     }
-  }, [demoMode, showTour])
+  }, [demoMode, showTour, tourDismissed])
 
   // Handle tour step actions — supports page navigation + view switching
   const handleTourStepAction = useCallback((action) => {
@@ -51,7 +53,7 @@ function AppContent() {
         <>
           <GuidedTour
             active={showTour}
-            onEnd={() => setShowTour(false)}
+            onEnd={() => { setShowTour(false); setTourDismissed(true) }}
             onStepAction={handleTourStepAction}
           />
           {!showTour && <TourStartButton onClick={() => setShowTour(true)} />}
