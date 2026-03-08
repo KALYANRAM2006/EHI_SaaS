@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, ChevronRight, ChevronLeft, Play } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import { X, ChevronRight, ChevronLeft, Play, SkipForward } from 'lucide-react'
 import { TOUR_STEPS } from '../config/demo'
 
 /**
@@ -18,41 +18,51 @@ import { TOUR_STEPS } from '../config/demo'
 export default function GuidedTour({ active, onEnd, onStepAction }) {
   const [step, setStep] = useState(0)
   const [pos, setPos] = useState(null)
+  const [tooltipHeight, setTooltipHeight] = useState(0)
   const overlayRef = useRef(null)
   const tooltipRef = useRef(null)
+  const retryRef = useRef(null)
 
   const currentStep = TOUR_STEPS[step]
   const totalSteps = TOUR_STEPS.length
 
+  // Measure actual tooltip height after render for accurate positioning
+  useLayoutEffect(() => {
+    if (tooltipRef.current) {
+      setTooltipHeight(tooltipRef.current.offsetHeight)
+    }
+  })
+
   // Position the tooltip relative to the target element
   const positionTooltip = useCallback(() => {
     if (!currentStep) return
+    // Clear any pending retries
+    if (retryRef.current) clearTimeout(retryRef.current)
+
     const el = document.querySelector(currentStep.target)
     if (!el) {
-      // Target not in DOM yet (view might still be rendering) — retry
-      setTimeout(positionTooltip, 200)
+      // Target not in DOM yet (view might still be rendering) — retry up to 3s
+      retryRef.current = setTimeout(positionTooltip, 250)
       return
     }
-
-    const rect = el.getBoundingClientRect()
-    const scrollY = window.scrollY
-    const scrollX = window.scrollX
 
     // Scroll into view if needed
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 
-    // Recalculate after scroll
+    // Recalculate after scroll settles
     requestAnimationFrame(() => {
-      const updatedRect = el.getBoundingClientRect()
-      setPos({
-        target: {
-          top: updatedRect.top + window.scrollY,
-          left: updatedRect.left + window.scrollX,
-          width: updatedRect.width,
-          height: updatedRect.height,
-        },
-        placement: currentStep.placement || 'bottom',
-      })
+      setTimeout(() => {
+        const updatedRect = el.getBoundingClientRect()
+        setPos({
+          target: {
+            top: updatedRect.top + window.scrollY,
+            left: updatedRect.left + window.scrollX,
+            width: updatedRect.width,
+            height: updatedRect.height,
+          },
+          placement: currentStep.placement || 'bottom',
+        })
+      }, 100)
     })
   }, [currentStep])
 
@@ -62,17 +72,24 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
     if (currentStep?.action && onStepAction) {
       onStepAction(currentStep.action)
       // If navigating to a different page, wait longer for render
-      const delay = currentStep.action.navigate ? 1200 : 400
+      const delay = currentStep.action.navigate ? 1500 : 500
       setTimeout(positionTooltip, delay)
     } else {
       positionTooltip()
     }
+    return () => { if (retryRef.current) clearTimeout(retryRef.current) }
   }, [active, step, positionTooltip, currentStep, onStepAction])
 
   // Reposition on scroll/resize
   useEffect(() => {
     if (!active) return
-    const handler = () => positionTooltip()
+    let ticking = false
+    const handler = () => {
+      if (!ticking) {
+        ticking = true
+        requestAnimationFrame(() => { positionTooltip(); ticking = false })
+      }
+    }
     window.addEventListener('resize', handler)
     window.addEventListener('scroll', handler, true)
     return () => {
@@ -108,8 +125,10 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
 
   // Calculate tooltip position with viewport clamping
   const GAP = 16
-  const TOOLTIP_WIDTH = 320
-  const TOOLTIP_HEIGHT_ESTIMATE = 220 // approximate max height of tooltip
+  const TOOLTIP_WIDTH = 340
+  const TOOLTIP_MAX_HEIGHT = Math.min(400, window.innerHeight - 32)
+  // Use measured height if available, otherwise estimate
+  const estimatedH = tooltipHeight > 0 ? tooltipHeight : 260
   let tooltipStyle = {}
   const { target, placement } = pos
 
@@ -125,9 +144,10 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
 
   // Determine best placement (auto-flip if would overflow)
   let effectivePlacement = placement
-  if (placement === 'bottom' && targetViewBottom + GAP + TOOLTIP_HEIGHT_ESTIMATE > vh) {
+  if (placement === 'bottom' && targetViewBottom + GAP + estimatedH > vh) {
     effectivePlacement = 'top'
-  } else if (placement === 'top' && targetViewTop - GAP - TOOLTIP_HEIGHT_ESTIMATE < 0) {
+  }
+  if (effectivePlacement === 'top' && targetViewTop - GAP - estimatedH < 0) {
     effectivePlacement = 'bottom'
   }
 
@@ -137,32 +157,42 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
   const clampedLeft = Math.max(12, Math.min(centerX - halfTooltip, vw - TOOLTIP_WIDTH - 12))
 
   if (effectivePlacement === 'bottom') {
+    // Place below target, clamp so tooltip doesn't overflow bottom
+    const idealTop = targetViewBottom + GAP
     tooltipStyle = {
-      top: Math.min(targetViewBottom + GAP, vh - TOOLTIP_HEIGHT_ESTIMATE - 12),
+      top: Math.max(12, Math.min(idealTop, vh - estimatedH - 12)),
       left: clampedLeft,
     }
   } else if (effectivePlacement === 'top') {
+    // Place above target, clamp so tooltip doesn't overflow top
+    const idealTop = targetViewTop - GAP - estimatedH
     tooltipStyle = {
-      top: Math.max(12, targetViewTop - GAP - TOOLTIP_HEIGHT_ESTIMATE),
+      top: Math.max(12, idealTop),
       left: clampedLeft,
     }
   } else if (effectivePlacement === 'right') {
-    const topCenter = targetViewTop + target.height / 2 - TOOLTIP_HEIGHT_ESTIMATE / 2
+    const topCenter = targetViewTop + target.height / 2 - estimatedH / 2
     tooltipStyle = {
-      top: Math.max(12, Math.min(topCenter, vh - TOOLTIP_HEIGHT_ESTIMATE - 12)),
+      top: Math.max(12, Math.min(topCenter, vh - estimatedH - 12)),
       left: Math.min(targetViewRight + GAP, vw - TOOLTIP_WIDTH - 12),
     }
   } else {
-    // left
-    const topCenter = targetViewTop + target.height / 2 - TOOLTIP_HEIGHT_ESTIMATE / 2
+    const topCenter = targetViewTop + target.height / 2 - estimatedH / 2
     tooltipStyle = {
-      top: Math.max(12, Math.min(topCenter, vh - TOOLTIP_HEIGHT_ESTIMATE - 12)),
+      top: Math.max(12, Math.min(topCenter, vh - estimatedH - 12)),
       left: Math.max(12, targetViewLeft - GAP - TOOLTIP_WIDTH),
     }
   }
 
   return (
     <>
+      {/* Clickable overlay backdrop — clicking outside the target skips tour */}
+      <div
+        className="fixed inset-0 z-[9997]"
+        onClick={handleEnd}
+        style={{ cursor: 'pointer' }}
+      />
+
       {/* Semi-transparent overlay with cut-out for the target */}
       <div
         ref={overlayRef}
@@ -186,7 +216,7 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
           <rect
             width="100%"
             height="100%"
-            fill="rgba(0,0,0,0.5)"
+            fill="rgba(0,0,0,0.55)"
             mask="url(#tour-mask)"
           />
         </svg>
@@ -203,42 +233,53 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
         />
       </div>
 
-      {/* Tooltip */}
+      {/* Tooltip — uses flex column so header/footer always visible, content scrolls */}
       <div
         ref={tooltipRef}
-        className="fixed z-[9999] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
+        className="fixed z-[9999] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col"
         style={{
           top: tooltipStyle.top,
           left: tooltipStyle.left,
           width: TOOLTIP_WIDTH,
-          maxHeight: vh - 24,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+          maxHeight: TOOLTIP_MAX_HEIGHT,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
         }}
       >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 flex items-center justify-between">
+        {/* Header — always visible */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 flex items-center justify-between flex-shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-2">
             <Play className="w-4 h-4 text-white/80" />
             <span className="text-white text-xs font-medium">
               Step {step + 1} of {totalSteps}
             </span>
           </div>
-          <button
-            onClick={handleEnd}
-            className="text-white/60 hover:text-white transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleEnd}
+              className="text-white/70 hover:text-white text-xs font-medium transition-colors flex items-center gap-1"
+              title="Skip entire tour"
+            >
+              <SkipForward className="w-3.5 h-3.5" />
+              Skip
+            </button>
+            <button
+              onClick={handleEnd}
+              className="text-white/60 hover:text-white transition-colors ml-1"
+              title="Close tour"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="px-5 py-4 space-y-2">
+        {/* Content — scrollable if tall */}
+        <div className="px-5 py-4 space-y-2 overflow-y-auto flex-1 min-h-0">
           <h4 className="text-base font-bold text-gray-900">{currentStep.title}</h4>
           <p className="text-sm text-gray-600 leading-relaxed">{currentStep.content}</p>
         </div>
 
         {/* Progress bar */}
-        <div className="px-5">
+        <div className="px-5 flex-shrink-0">
           <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-300"
@@ -247,26 +288,21 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
           </div>
         </div>
 
-        {/* Navigation */}
-        <div className="px-5 py-3 flex items-center justify-between">
+        {/* Navigation — always visible */}
+        <div className="px-5 py-3 flex items-center justify-between flex-shrink-0 border-t border-gray-100">
           <button
             onClick={handlePrev}
             disabled={step === 0}
             className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
-            <ChevronLeft className="w-4 h-4" /> Previous
+            <ChevronLeft className="w-4 h-4" /> Back
           </button>
 
-          <button
-            onClick={handleEnd}
-            className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            Skip tour
-          </button>
+          <span className="text-xs text-gray-400">{step + 1}/{totalSteps}</span>
 
           <button
             onClick={handleNext}
-            className="flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+            className="flex items-center gap-1 px-4 py-1.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
           >
             {step === totalSteps - 1 ? 'Finish' : 'Next'}
             {step < totalSteps - 1 && <ChevronRight className="w-4 h-4" />}
