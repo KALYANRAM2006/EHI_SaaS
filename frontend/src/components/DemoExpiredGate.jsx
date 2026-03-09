@@ -33,22 +33,16 @@ export default function DemoExpiredGate() {
           </div>
 
           <p className="text-sm text-gray-500 leading-relaxed">
-            Thank you for evaluating HealthLens! To continue using the platform or request an extended demo, please contact us.
+            Thank you for evaluating HealthLens! To request an extended demo or provide feedback, please reach out.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <div className="flex justify-center">
             <a
-              href="mailto:healthlens@cshs.org?subject=HealthLens%20Demo%20Extension%20Request"
+              href="mailto:kalyanram2006@gmail.com?subject=HealthLens%20Demo%20Extension%20Request"
               className="px-6 py-3 text-sm font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg"
               style={{ boxShadow: '0 4px 14px rgba(59,130,246,0.3)' }}
             >
               Request Extension
-            </a>
-            <a
-              href="mailto:healthlens@cshs.org?subject=HealthLens%20Full%20License%20Inquiry"
-              className="px-6 py-3 text-sm font-semibold rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              License Inquiry
             </a>
           </div>
         </div>
@@ -85,8 +79,8 @@ export function DemoExpiryBanner() {
           : `Demo expires in ${days} days (${formatExpiryDate()})`
       }
       <span className="mx-2 text-gray-300">|</span>
-      <a href="mailto:healthlens@cshs.org?subject=HealthLens%20License%20Inquiry" className="underline hover:no-underline">
-        Contact for full license
+      <a href="mailto:kalyanram2006@gmail.com?subject=HealthLens%20Demo%20Feedback" className="underline hover:no-underline">
+        Contact: kalyanram2006@gmail.com
       </a>
     </div>
   )

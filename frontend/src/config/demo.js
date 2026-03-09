@@ -25,9 +25,9 @@ export function getDemoExpiryDate() {
   const envDate = import.meta.env.VITE_DEMO_EXPIRY
   if (envDate) return new Date(envDate)
 
-  // Default: 30 days from build time
+  // Default: 7 days from build time
   const buildDate = new Date(import.meta.env.VITE_BUILD_DATE || Date.now())
-  buildDate.setDate(buildDate.getDate() + 30)
+  buildDate.setDate(buildDate.getDate() + 7)
   return buildDate
 }
 
