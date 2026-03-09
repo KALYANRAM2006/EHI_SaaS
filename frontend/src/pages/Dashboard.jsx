@@ -41,6 +41,7 @@ import { PrivacyBadge, PrivacyPanel } from '../components/PrivacyBanner'
 import AISettingsPanel from '../components/AISettingsPanel'
 import AIChatView from '../components/AIChatView'
 import DataLineageView from '../components/DataLineageView'
+import DocumentIntelligence from '../components/DocumentIntelligence'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 import { getRuleIntegrity } from '../parsers/ruleEngine'
 import { isDemo } from '../config/demo'
@@ -218,6 +219,7 @@ export default function Dashboard() {
     { id: 'data-explorer', label: 'Data Explorer' },
     { id: 'ai-assistant', label: 'AI Assistant' },
     { id: 'data-lineage', label: 'Data Lineage' },
+    { id: 'documents', label: 'Documents' },
   ]
 
   // Generate AI-driven health insights from patient data
@@ -1559,6 +1561,11 @@ export default function Dashboard() {
         {/* ===== DATA LINEAGE VIEW ===== */}
         {activeView === 'data-lineage' && (
           <DataLineageView />
+        )}
+
+        {/* ===== DOCUMENT INTELLIGENCE VIEW ===== */}
+        {activeView === 'documents' && (
+          <DocumentIntelligence />
         )}
 
         {['labs', 'encounters', 'procedures', 'trends'].includes(activeView) && (

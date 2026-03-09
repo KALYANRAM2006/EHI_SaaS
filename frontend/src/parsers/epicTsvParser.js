@@ -873,6 +873,7 @@ export async function parseUploadedFiles(fileList, onProgress = () => {}) {
     selectedPatient: parsedData.selectedPatient,
     vendor,
     format: primaryFormat,
+    ocrDocuments: ocrResults,   // raw OCR results for Document Intelligence view
   }
 }
 

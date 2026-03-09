@@ -41,6 +41,9 @@ export function DataProvider({ children }) {
   const [dataSources, setDataSources] = useState([])        // Array of source descriptors
   const [patientMismatch, setPatientMismatch] = useState(null) // { message, newPatient, existingPatient }
 
+  // ─── Document Intelligence (OCR) State ─────────────────────────────────────
+  const [ocrDocuments, setOcrDocuments] = useState([])       // Array of { filename, result } from OCR
+
   // ─── Refs for race-condition-free file parsing ─────────────────────────────
   // React state updates are async — when files upload in quick succession,
   // the second file's closure would see stale state from before file 1 finished.
@@ -49,6 +52,7 @@ export function DataProvider({ children }) {
   const parsedDataRef = useRef(null)
   const selectedPatientRef = useRef(null)
   const parseQueueRef = useRef(Promise.resolve()) // sequential queue
+  const ocrDocumentsRef = useRef([])
 
   // ─── Privacy & Security State ──────────────────────────────────────────────
   const [persistEnabled, setPersistEnabled] = useState(isPersistenceEnabled())
@@ -64,6 +68,7 @@ export function DataProvider({ children }) {
   useEffect(() => { dataSourcesRef.current = dataSources }, [dataSources])
   useEffect(() => { parsedDataRef.current = parsedData }, [parsedData])
   useEffect(() => { selectedPatientRef.current = selectedPatient }, [selectedPatient])
+  useEffect(() => { ocrDocumentsRef.current = ocrDocuments }, [ocrDocuments])
 
   // Auto-clear data when browser tab closes or navigates away
   useEffect(() => {
@@ -148,10 +153,12 @@ export function DataProvider({ children }) {
     setDetectedFormat(null)
     setDataSources([])
     setPatientMismatch(null)
+    setOcrDocuments([])
     // Also reset refs to prevent stale data in queued parse operations
     dataSourcesRef.current = []
     parsedDataRef.current = null
     selectedPatientRef.current = null
+    ocrDocumentsRef.current = []
     parseQueueRef.current = Promise.resolve()
   }
 
@@ -366,6 +373,13 @@ export function DataProvider({ children }) {
         setDetectedVendor(result.vendor || detectedVendor)
         setDetectedFormat(result.format || detectedFormat)
         setIsSampleData(false)
+
+        // 9b. Store OCR document results for Document Intelligence view
+        if (result.ocrDocuments && result.ocrDocuments.length > 0) {
+          const newDocs = [...ocrDocumentsRef.current, ...result.ocrDocuments]
+          ocrDocumentsRef.current = newDocs
+          setOcrDocuments(newDocs)
+        }
 
         // 10. Rebuild selectedPatient with merged clinical data
         const currentPatId = currentPatient?.patId || finalData?.patients?.[0]?.patId
@@ -665,6 +679,9 @@ export function DataProvider({ children }) {
     aiLoading,
     aiError,
     testDeidentify,
+    // Document Intelligence
+    ocrDocuments,
+    setOcrDocuments,
     // Multi-Source Data Lineage
     dataSources,
     patientMismatch,
