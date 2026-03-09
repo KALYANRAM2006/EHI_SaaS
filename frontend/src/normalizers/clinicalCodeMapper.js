@@ -471,6 +471,7 @@ export function enrichWithCodes(clinicalEntities) {
         const snomed = mapToSNOMED(dx.name)
         return {
           ...dx,
+          icd10: dx.icd10 || dx.code,
           snomedCT: snomed.snomedCT,
           snomedDisplay: snomed.display,
         }
@@ -481,6 +482,7 @@ export function enrichWithCodes(clinicalEntities) {
       return {
         ...dx,
         code: icd.icd10 || dx.code || '',
+        icd10: icd.icd10 || dx.icd10 || null,
         codeSystem: icd.matched ? 'ICD-10-CM' : (dx.codeSystem || ''),
         icd10Display: icd.display,
         snomedCT: snomed.snomedCT,

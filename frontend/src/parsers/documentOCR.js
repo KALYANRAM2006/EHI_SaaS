@@ -316,19 +316,52 @@ function createEmptyClinicalEntities() {
 
 function extractDemographics(text) {
   const d = {}
-  const nameMatch = text.match(/(?:patient|name|pt)\s*[:\-]?\s*([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)/i)
-  if (nameMatch) d.name = nameMatch[1].trim()
+
+  // --- Name ---
+  // Require explicit "Patient Name:" or "Name:" to avoid matching section headers like "Patient Information"
+  const namePatterns = [
+    /patient\s+name\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)/i,
+    /^name\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)/im,
+    /(?:pt|resident|client)\s+name\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)/i,
+  ]
+  for (const pat of namePatterns) {
+    const m = text.match(pat)
+    if (m) {
+      const candidate = m[1].trim()
+      // Reject section-header words
+      if (!/^(information|demographics|data|details|history|record|report|summary)/i.test(candidate)) {
+        d.name = candidate
+        break
+      }
+    }
+  }
+  // Fallback: scan individual lines for "Patient: Firstname Lastname" (but NOT followed by section-header words)
+  if (!d.name) {
+    const lines = text.split(/\n/)
+    for (const line of lines) {
+      const m = line.match(/(?:patient|pt)\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)/i)
+      if (m) {
+        const candidate = m[1].trim()
+        if (!/^(information|demographics|data|details|history|record|report|summary)/i.test(candidate)) {
+          d.name = candidate
+          break
+        }
+      }
+    }
+  }
 
   const dobMatch = text.match(/(?:DOB|date\s*of\s*birth|birth\s*date)\s*[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i)
   if (dobMatch) d.dateOfBirth = dobMatch[1]
 
-  const mrnMatch = text.match(/(?:MRN|medical\s*record|chart|ID)\s*[#:\-]?\s*(\d{4,})/i)
+  // MRN — supports alphanumeric IDs like "CSM-2847561"
+  const mrnMatch = text.match(/(?:MRN|medical\s*record)\s*[#:\-]?\s*([A-Z]{0,5}[\-]?\d{4,})/i)
   if (mrnMatch) d.mrn = mrnMatch[1]
 
   const sexMatch = text.match(/(?:sex|gender)\s*[:\-]?\s*(male|female|M|F)/i)
   if (sexMatch) d.sex = sexMatch[1].length === 1 ? (sexMatch[1].toUpperCase() === 'M' ? 'Male' : 'Female') : sexMatch[1]
 
-  const ageMatch = text.match(/(?:age)\s*[:\-]?\s*(\d{1,3})\s*(?:y|yr|years?)?/i)
+  // Age — word boundary (\b) prevents false matches on "Page 1", "stage 3", "dosage 1"
+  const ageMatch = text.match(/\bage\s*[:\-]\s*(\d{1,3})\s*(?:y(?:ears?|rs?)?)?/i)
   if (ageMatch) d.age = parseInt(ageMatch[1])
 
   return Object.keys(d).length > 0 ? d : null
@@ -409,20 +442,55 @@ const COMMON_CONDITIONS = [
 
 function extractDiagnoses(text) {
   const diagnoses = []
+  const seenCodes = new Set()
+  const seenConditions = new Set()
+
   const secMatch = text.match(/(?:diagnos|assessment|impression|problem\s*list|conditions?)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*\n|medication|allerg|vital|lab|plan|procedure|$))/i)
   const searchText = secMatch ? secMatch[1] : text
 
-  for (const c of COMMON_CONDITIONS) {
-    if (searchText.toLowerCase().includes(c)) {
-      diagnoses.push({ name: c.charAt(0).toUpperCase() + c.slice(1), source: 'ocr', confidence: secMatch ? 'high' : 'low' })
+  // 1) Lines with "diagnosis text - ICD_CODE" or "diagnosis text (ICD-10: CODE)"
+  const linePatterns = [
+    /^[\-\s]*(.+?)\s*[\-\u2013\u2014]\s*([A-TV-Z]\d{2}(?:\.\d{1,4})?)\s*$/gm,
+    /^[\-\s]*(.+?)\s*\((?:ICD[\- ]?10\s*:\s*)?([A-TV-Z]\d{2}(?:\.\d{1,4})?)\)\s*$/gm,
+  ]
+  for (const pat of linePatterns) {
+    let m
+    while ((m = pat.exec(searchText))) {
+      const name = m[1].replace(/\s*[\-\u2013\u2014]\s*$/, '').trim()
+      const code = m[2]
+      if (name && !seenCodes.has(code)) {
+        diagnoses.push({ name, code, codeSystem: 'ICD-10', icd10: code, source: 'ocr', confidence: 'high' })
+        seenCodes.add(code)
+      }
+      // Track condition text so we don't re-add it from COMMON_CONDITIONS
+      for (const c of COMMON_CONDITIONS) {
+        if (name.toLowerCase().includes(c)) seenConditions.add(c)
+      }
     }
   }
 
+  // 2) COMMON_CONDITIONS not already captured via ICD-linked lines
+  for (const c of COMMON_CONDITIONS) {
+    if (seenConditions.has(c)) continue
+    if (searchText.toLowerCase().includes(c)) {
+      const alreadyLinked = diagnoses.some(d => d.name.toLowerCase().includes(c))
+      if (!alreadyLinked) {
+        diagnoses.push({ name: c.charAt(0).toUpperCase() + c.slice(1), source: 'ocr', confidence: secMatch ? 'high' : 'low' })
+        seenConditions.add(c)
+      }
+    }
+  }
+
+  // 3) Standalone ICD codes not already attached to a diagnosis
   const icdPat = /\b([A-TV-Z]\d{2}(?:\.\d{1,4})?)\b/g
   let m
   while ((m = icdPat.exec(searchText))) {
-    diagnoses.push({ name: m[1], code: m[1], codeSystem: 'ICD-10', source: 'ocr', confidence: 'high' })
+    if (!seenCodes.has(m[1])) {
+      diagnoses.push({ name: m[1], code: m[1], codeSystem: 'ICD-10', icd10: m[1], source: 'ocr', confidence: 'high' })
+      seenCodes.add(m[1])
+    }
   }
+
   return diagnoses
 }
 

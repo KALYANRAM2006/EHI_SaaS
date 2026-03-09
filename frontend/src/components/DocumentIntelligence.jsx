@@ -11,15 +11,20 @@
  * 100% client-side — all processing happens in-browser, zero PHI leaves the device.
  * Pure Tailwind CSS — no shadcn / Radix UI.
  */
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   FileText, Upload, Eye, EyeOff, ChevronDown, ChevronRight,
   Pill, Stethoscope, TestTube, Activity, AlertTriangle, Scissors,
   Shield, Sparkles, FileBarChart, Loader2, CheckCircle2, XCircle,
-  Brain, ScanLine, FileImage, Search, ClipboardList
+  Brain, ScanLine, FileImage, Search, ClipboardList, Settings, Zap,
+  CloudLightning, Lock, ExternalLink
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { processDocument } from '../parsers/documentOCR'
+import {
+  getAzureHealthConfig, saveAzureHealthConfig, isAzureHealthEnabled,
+  analyzeWithAzureHealth, testAzureHealthConnection
+} from '../services/azureHealthAI'
 
 // ─── Sample test PDFs bundled in public/sample-pdfs/ ─────────────────────────
 const SAMPLE_PDFS = [
@@ -49,6 +54,28 @@ export default function DocumentIntelligence() {
   const [loadingSamples, setLoadingSamples] = useState(false)
   const fileInputRef = useRef(null)
 
+  // ─── Azure AI Configuration ───────────────────────────────────────────────
+  const [showAISettings, setShowAISettings] = useState(false)
+  const [aiConfig, setAiConfig] = useState(() => getAzureHealthConfig())
+  const [testResult, setTestResult] = useState(null) // { ok, message }
+  const [testingConnection, setTestingConnection] = useState(false)
+
+  const aiEnabled = aiConfig.enabled && aiConfig.endpoint && aiConfig.apiKey
+
+  const handleSaveAIConfig = (updates) => {
+    const newConfig = { ...aiConfig, ...updates }
+    setAiConfig(newConfig)
+    saveAzureHealthConfig(newConfig)
+    setTestResult(null) // Reset test when config changes
+  }
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true)
+    const result = await testAzureHealthConnection()
+    setTestResult(result)
+    setTestingConnection(false)
+  }
+
   // ─── Upload & Process a document ──────────────────────────────────────────
   const handleFileSelect = useCallback(async (e) => {
     const files = Array.from(e.target.files || [])
@@ -60,7 +87,27 @@ export default function DocumentIntelligence() {
     for (const file of files) {
       setProgress({ phase: 'starting', progress: 0, message: `Processing ${file.name}...` })
       try {
+        // Step 1: Always extract text using local OCR/PDF.js pipeline
         const result = await processDocument(file, file.name, (p) => setProgress(p))
+
+        // Step 2: If Azure AI is enabled, enhance extraction with cloud AI
+        if (isAzureHealthEnabled() && result.text) {
+          try {
+            setProgress({ phase: 'ai-submit', progress: 0.7, message: 'Enhancing with Azure AI...' })
+            const aiEntities = await analyzeWithAzureHealth(result.text, (p) => setProgress(p))
+
+            // Merge AI entities with local extraction (AI takes priority)
+            result.clinicalEntities = mergeEntities(result.clinicalEntities, aiEntities)
+            result.extractionMethod = 'azure-ai'
+          } catch (aiErr) {
+            console.warn('[AI] Azure Health AI failed, using local extraction:', aiErr.message)
+            result.aiError = aiErr.message
+            result.extractionMethod = 'local-regex'
+          }
+        } else {
+          result.extractionMethod = 'local-regex'
+        }
+
         newDocs.push({ filename: file.name, result })
       } catch (err) {
         newDocs.push({
@@ -78,9 +125,7 @@ export default function DocumentIntelligence() {
     setOcrDocuments(prev => [...prev, ...newDocs])
     setProcessing(false)
     setProgress(null)
-    // Auto-expand the first new doc
     if (newDocs.length > 0) setExpandedDoc(ocrDocuments.length)
-    // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [ocrDocuments, setOcrDocuments])
 
@@ -99,6 +144,22 @@ export default function DocumentIntelligence() {
 
         setProgress({ phase: 'processing', progress: 0.1, message: `Processing ${sample.label}...` })
         const result = await processDocument(file, sample.name, (p) => setProgress(p))
+
+        // If Azure AI is enabled, enhance with AI
+        if (isAzureHealthEnabled() && result.text) {
+          try {
+            setProgress({ phase: 'ai-submit', progress: 0.7, message: `AI analyzing ${sample.label}...` })
+            const aiEntities = await analyzeWithAzureHealth(result.text, (p) => setProgress(p))
+            result.clinicalEntities = mergeEntities(result.clinicalEntities, aiEntities)
+            result.extractionMethod = 'azure-ai'
+          } catch (aiErr) {
+            console.warn('[AI] Azure fallback for sample:', aiErr.message)
+            result.extractionMethod = 'local-regex'
+          }
+        } else {
+          result.extractionMethod = 'local-regex'
+        }
+
         newDocs.push({ filename: sample.name, result })
       } catch (err) {
         newDocs.push({
@@ -159,6 +220,35 @@ export default function DocumentIntelligence() {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
+  // MERGE — Combine local regex entities with AI entities (AI takes priority)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const mergeEntities = (local, ai) => {
+    if (!ai) return local
+    const merged = { ...local }
+
+    // AI demographics override local (more accurate)
+    if (ai.demographics && Object.keys(ai.demographics).length > 0) {
+      merged.demographics = { ...(local.demographics || {}), ...ai.demographics }
+    }
+
+    // For list entities: use AI results if present, keep local as supplement
+    const listKeys = ['medications', 'diagnoses', 'labResults', 'vitals', 'allergies', 'procedures']
+    for (const key of listKeys) {
+      const aiItems = ai[key] || []
+      const localItems = local[key] || []
+      if (aiItems.length > 0) {
+        // Start with AI items, add any unique local items not already covered
+        const aiNames = new Set(aiItems.map(i => (i.name || '').toLowerCase()))
+        const unique = localItems.filter(li => !aiNames.has((li.name || '').toLowerCase()))
+        merged[key] = [...aiItems, ...unique]
+      }
+    }
+
+    return merged
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
   // RENDER
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -174,16 +264,134 @@ export default function DocumentIntelligence() {
           <p className="text-gray-500 mt-1">Upload PDFs, scanned documents, or images — OCR + NLP extracts clinical data instantly</p>
         </div>
         <div className="flex items-center gap-2 mt-3 md:mt-0">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-            <Shield className="w-3.5 h-3.5" />
-            100% Client-Side
-          </span>
+          {/* AI Mode Badge */}
+          {aiEnabled ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+              <CloudLightning className="w-3.5 h-3.5" />
+              Azure AI Enabled
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+              <Shield className="w-3.5 h-3.5" />
+              100% Client-Side
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
             <FileBarChart className="w-3.5 h-3.5" />
             {ocrDocuments.length} Document{ocrDocuments.length !== 1 ? 's' : ''} Processed
           </span>
+          {/* AI Settings Toggle */}
+          <button
+            onClick={() => setShowAISettings(!showAISettings)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              showAISettings
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Settings className="w-3.5 h-3.5" />
+            AI Settings
+          </button>
         </div>
       </div>
+
+      {/* Azure AI Settings Panel */}
+      {showAISettings && (
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+              <CloudLightning className="w-5 h-5 text-purple-600" />
+              Azure AI Extraction Settings
+            </h3>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-500">{aiEnabled ? 'AI Active' : 'Local Only'}</span>
+              <button
+                onClick={() => handleSaveAIConfig({ enabled: !aiConfig.enabled })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  aiConfig.enabled ? 'bg-purple-600' : 'bg-gray-300'
+                }`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  aiConfig.enabled ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Mode Comparison */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`p-4 rounded-xl border-2 transition-all ${!aiConfig.enabled ? 'border-green-400 bg-green-50/50' : 'border-gray-200 bg-gray-50/50'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-semibold text-gray-800">Local Extraction (Default)</span>
+              </div>
+              <ul className="text-xs text-gray-600 space-y-1">
+                <li className="flex items-center gap-1"><Lock className="w-3 h-3 text-green-500" /> 100% client-side — zero data leaves browser</li>
+                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-green-500" /> Regex + dictionary-based NLP</li>
+                <li className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> No API key or Azure subscription needed</li>
+              </ul>
+            </div>
+
+            <div className={`p-4 rounded-xl border-2 transition-all ${aiConfig.enabled ? 'border-purple-400 bg-purple-50/50' : 'border-gray-200 bg-gray-50/50'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <CloudLightning className="w-4 h-4 text-purple-600" />
+                <span className="text-sm font-semibold text-gray-800">Azure AI (Enhanced)</span>
+              </div>
+              <ul className="text-xs text-gray-600 space-y-1">
+                <li className="flex items-center gap-1"><Brain className="w-3 h-3 text-purple-500" /> AI-powered clinical entity recognition</li>
+                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-purple-500" /> Auto ICD-10, RxNorm, SNOMED CT, LOINC codes</li>
+                <li className="flex items-center gap-1"><Shield className="w-3 h-3 text-purple-500" /> Negation & certainty detection</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* API Configuration */}
+          {aiConfig.enabled && (
+            <div className="space-y-3 pt-2 border-t border-gray-100">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Azure Language Endpoint</label>
+                <input
+                  type="url"
+                  placeholder="https://your-resource.cognitiveservices.azure.com"
+                  value={aiConfig.endpoint || ''}
+                  onChange={(e) => handleSaveAIConfig({ endpoint: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">API Key</label>
+                <input
+                  type="password"
+                  placeholder="Enter your Azure API key"
+                  value={aiConfig.apiKey || ''}
+                  onChange={(e) => handleSaveAIConfig({ apiKey: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleTestConnection}
+                  disabled={testingConnection || !aiConfig.endpoint || !aiConfig.apiKey}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {testingConnection ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                  Test Connection
+                </button>
+                {testResult && (
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium ${testResult.ok ? 'text-green-600' : 'text-red-600'}`}>
+                    {testResult.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                    {testResult.message}
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                Credentials stored in browser localStorage only. Azure Health API is HIPAA-compliant with BAA.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Upload Area */}
       <div
@@ -291,6 +499,12 @@ export default function DocumentIntelligence() {
                       )}
                       {r.clinicalEntities?.documentType && r.clinicalEntities.documentType !== 'Unknown' && (
                         <span className="text-xs text-gray-500">{r.clinicalEntities.documentType}</span>
+                      )}
+                      {r.extractionMethod === 'azure-ai' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                          <CloudLightning className="w-3 h-3" />
+                          AI Enhanced
+                        </span>
                       )}
                     </div>
                   </div>
@@ -404,14 +618,19 @@ export default function DocumentIntelligence() {
                                 {item.drugClass && (
                                   <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-500">{item.drugClass}</span>
                                 )}
-                                {item.icd10 && (
-                                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono bg-red-100 text-red-600">ICD-10:{item.icd10}</span>
+                                {(item.icd10 || (item.code && item.codeSystem?.includes('ICD'))) && (
+                                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono bg-red-100 text-red-600">ICD-10:{item.icd10 || item.code}</span>
                                 )}
-                                {item.snomed && (
-                                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono bg-orange-100 text-orange-600">SNOMED:{item.snomed}</span>
+                                {(item.snomed || item.snomedCT) && (
+                                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono bg-orange-100 text-orange-600">SNOMED:{item.snomed || item.snomedCT}</span>
                                 )}
                                 {item.loinc && (
                                   <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono bg-green-100 text-green-600">LOINC:{item.loinc}</span>
+                                )}
+                                {item.aiConfidence != null && (
+                                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-50 text-purple-500">
+                                    AI:{Math.round(item.aiConfidence * 100)}%
+                                  </span>
                                 )}
                               </div>
                             ))}
@@ -496,8 +715,8 @@ export default function DocumentIntelligence() {
           {[
             { step: '1', title: 'Upload', desc: 'Drop a PDF, scanned doc, or photo of a clinical document', icon: Upload, color: 'from-blue-500 to-blue-600' },
             { step: '2', title: 'Extract', desc: 'PDF.js reads text layers; Tesseract.js OCRs scanned pages', icon: ScanLine, color: 'from-purple-500 to-purple-600' },
-            { step: '3', title: 'Normalize', desc: 'Medical NLP expands abbreviations, corrects OCR errors, maps drugs to RxNorm', icon: Sparkles, color: 'from-indigo-500 to-indigo-600' },
-            { step: '4', title: 'Classify', desc: 'Detects meds, diagnoses, labs, vitals — adds ICD-10, LOINC, SNOMED codes', icon: Brain, color: 'from-green-500 to-green-600' },
+            { step: '3', title: 'Analyze', desc: aiEnabled ? 'Azure AI detects entities with negation & certainty' : 'Regex + dictionary NLP extracts clinical entities', icon: aiEnabled ? CloudLightning : Sparkles, color: aiEnabled ? 'from-purple-500 to-pink-600' : 'from-indigo-500 to-indigo-600' },
+            { step: '4', title: 'Classify', desc: 'Maps to ICD-10, LOINC, SNOMED CT, RxNorm standard codes', icon: Brain, color: 'from-green-500 to-green-600' },
           ].map(({ step, title, desc, icon: StepIcon, color }) => (
             <div key={step} className="flex flex-col items-center text-center p-4 rounded-xl bg-gray-50 border border-gray-100">
               <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center mb-3`}>
