@@ -44,12 +44,13 @@ let _ocrWorker = null
 async function getPdfjs() {
   if (!_pdfjsLib) {
     _pdfjsLib = await import(/* @vite-ignore */ 'pdfjs-dist')
-    // Configure worker — runs in a separate thread, keeps UI responsive
-    _pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      /* @vite-ignore */ 'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url
-    ).toString()
-    console.log('[OCR] PDF.js loaded (lazy)')
+    // Configure worker — runs in a separate thread, keeps UI responsive.
+    // The worker file is copied to public/ at build time so it is always
+    // available as a static asset, regardless of how Vite chunks the build.
+    // Using import.meta.env.BASE_URL ensures it works under any base path.
+    const workerUrl = `${import.meta.env.BASE_URL}pdf.worker.min.mjs`
+    _pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
+    console.log('[OCR] PDF.js loaded (lazy), worker:', workerUrl)
   }
   return _pdfjsLib
 }
