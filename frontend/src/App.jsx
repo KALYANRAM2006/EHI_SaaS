@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import LandingPage from './pages/LandingPage'
 import Dashboard from './pages/Dashboard'
@@ -10,19 +10,20 @@ import { DemoExpiryBanner } from './components/DemoExpiredGate'
 
 function AppContent() {
   const [showTour, setShowTour] = useState(false)
-  const [tourDismissed, setTourDismissed] = useState(false)
+  const tourAutoStartedRef = useRef(false)
   const navigate = useNavigate()
   const location = useLocation()
   const { loadSampleData } = useData()
   const demoMode = isDemo()
 
-  // Auto-start the tour once when the demo landing page first loads
-  // Never re-trigger after the user has dismissed/skipped
+  // Auto-start the tour ONCE when demo landing page first loads.
+  // Uses a ref so the callback reference is stable — prevents re-triggering.
   const handleDemoTourStart = useCallback(() => {
-    if (demoMode && !showTour && !tourDismissed) {
+    if (demoMode && !tourAutoStartedRef.current) {
+      tourAutoStartedRef.current = true
       setTimeout(() => setShowTour(true), 600)
     }
-  }, [demoMode, showTour, tourDismissed])
+  }, [demoMode])
 
   // Handle tour step actions — supports page navigation + view switching
   const handleTourStepAction = useCallback((action) => {
@@ -53,7 +54,7 @@ function AppContent() {
         <>
           <GuidedTour
             active={showTour}
-            onEnd={() => { setShowTour(false); setTourDismissed(true) }}
+            onEnd={() => setShowTour(false)}
             onStepAction={handleTourStepAction}
           />
           {!showTour && <TourStartButton onClick={() => setShowTour(true)} />}
