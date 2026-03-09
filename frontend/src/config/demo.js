@@ -109,9 +109,8 @@ export const TOUR_STEPS = [
   {
     target: '[data-tour="landing-sample-btn"]',
     title: 'Try It Now — Loading Demo Data',
-    content: 'Let us load sample patient data with multiple sources so you can see multi-file merging, patient identity matching, and all dashboard features in action. Click Next to continue.',
+    content: 'Click Next and we will load sample patient data with multiple sources so you can see multi-file merging, patient identity matching, and all dashboard features in action.',
     placement: 'top',
-    action: { navigate: '/dashboard' },
   },
 
   // ─── Dashboard: Feature Walkthrough ────────────────────────────────────────
@@ -121,7 +120,7 @@ export const TOUR_STEPS = [
     title: 'Dashboard Navigation',
     content: 'The dashboard has 7 views: Overview, AI Summary, Timeline, Insights, Data Explorer, AI Assistant, and Data Lineage. Use these tabs to explore different perspectives on the patient data.',
     placement: 'bottom',
-    action: { view: 'overview' },
+    action: { navigate: '/dashboard' },
   },
   {
     target: '[data-tour="patient-header"]',
