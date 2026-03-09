@@ -285,7 +285,7 @@ export function DataProvider({ children }) {
   // Uses refs + promise queue to prevent race conditions when multiple files
   // upload in quick succession. Each file parse waits for the previous to finish.
 
-  const addFileAndParse = useCallback((file) => {
+  const addFileAndParse = useCallback((file, onProgress) => {
     const task = parseQueueRef.current.then(async () => {
       setLoading(true)
       setError(null)
@@ -295,8 +295,8 @@ export function DataProvider({ children }) {
         const currentParsed = parsedDataRef.current
         const currentPatient = selectedPatientRef.current
 
-        // 1. Parse just this one file
-        const result = await parseUploadedFiles([file])
+        // 1. Parse just this one file (pass onProgress for OCR feedback)
+        const result = await parseUploadedFiles([file], onProgress)
 
         // 2. Create a data source for this file
         const newSource = createDataSource(file.name, currentSources.length)

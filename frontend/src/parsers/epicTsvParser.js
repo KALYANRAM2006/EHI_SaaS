@@ -5,7 +5,7 @@
  *   1. Delimited (TSV/CSV) — Epic, Greenway, MEDITECH, eCW, NextGen
  *   2. NDJSON / FHIR JSON   — Athena, Cerner
  *   3. XML / C-CDA           — Allscripts, eCW, Practice Fusion, MEDITECH
- *   4. Document Bundles      — All vendors (PDF, RTF, images) — indexed only
+ *   4. Document OCR           — Scanned/handwritten docs, PDFs, images (Tesseract.js + PDF.js)
  *
  * Architecture:
  *   Files → extractAllFiles() → format detection → vendor detection
@@ -26,6 +26,7 @@ import {
   parseFHIRJSON,
   parseCCDA,
 } from './formatParsers'
+import { processDocument, documentResultToAppRows, terminateOCR } from './documentOCR'
 
 // ─── Provider Lookup ────────────────────────────────────────────────────────
 
@@ -611,21 +612,38 @@ function assembleFromCCDA(xmlFiles) {
 
 // ─── Final Assembly ─────────────────────────────────────────────────────────
 
-function assembleParsedData(assembled, documentIndexes, vendor, rules) {
+function assembleParsedData(assembled, documentIndexes, vendor, rules, ocrResults = []) {
   let { patientRows, encounterRows, orderRows, resultRows, problemRows,
         medRows, allergyRows, immuneRows, vitalRows, docRows, fhirResources } = assembled
 
-  // Add indexed documents
+  // Add indexed documents (metadata-only for non-OCR docs)
   if (documentIndexes.length > 0) {
-    docRows = [...docRows, ...documentIndexes.map(d => ({
-      docId: d.metadata.fileName,
-      type: d.metadata.category,
-      status: 'Available',
-      author: '',
-      date: d.metadata.lastModified || '',
-      specialty: '',
-      csnId: '',
-    }))]
+    const ocrFileNames = new Set(ocrResults.map(r => r.filename))
+    docRows = [...docRows, ...documentIndexes
+      .filter(d => !ocrFileNames.has(d.metadata?.fileName || d.filename))
+      .map(d => ({
+        docId: d.metadata?.fileName || d.filename,
+        type: d.metadata?.category || 'Document',
+        status: 'Available',
+        author: '',
+        date: d.metadata?.lastModified || '',
+        specialty: '',
+        csnId: '',
+      }))]
+  }
+
+  // Merge OCR-extracted clinical data into the assembled rows
+  if (ocrResults.length > 0) {
+    for (const { filename, result } of ocrResults) {
+      const rows = documentResultToAppRows(result, filename)
+      if (rows.medications.length)  medRows = [...medRows, ...rows.medications]
+      if (rows.conditions.length)   problemRows = [...problemRows, ...rows.conditions]
+      if (rows.allergies.length)    allergyRows = [...allergyRows, ...rows.allergies]
+      if (rows.vitals.length)       vitalRows = [...vitalRows, ...rows.vitals]
+      if (rows.results.length)      resultRows = [...resultRows, ...rows.results]
+      if (rows.documentRow)         docRows = [...docRows, rows.documentRow]
+    }
+    console.log(`[Parser] Merged OCR data from ${ocrResults.length} document(s)`)
   }
 
   // If no patient rows, infer from encounters
@@ -706,7 +724,7 @@ function assembleParsedData(assembled, documentIndexes, vendor, rules) {
  * @param {File[]} fileList - Array of uploaded File objects
  * @returns {{ parsedData, aiSummary, selectedPatient, vendor, format }}
  */
-export async function parseUploadedFiles(fileList) {
+export async function parseUploadedFiles(fileList, onProgress = () => {}) {
   // 1. Extract & categorize all files
   const extracted = await extractAllFiles(fileList)
 
@@ -773,7 +791,7 @@ export async function parseUploadedFiles(fileList) {
       assembled = assembleFromCCDA(extracted.xml)
       break
     case 'documents':
-      // Documents only — create minimal structure
+      // Documents only — OCR will extract clinical data below
       assembled = {
         patientRows: [], encounterRows: [], orderRows: [], resultRows: [],
         problemRows: [], medRows: [], allergyRows: [], immuneRows: [],
@@ -793,8 +811,54 @@ export async function parseUploadedFiles(fileList) {
       }
   }
 
+  // 5b. Process documents with OCR (PDFs, scanned images, handwritten docs)
+  let ocrResults = []
+  if (extracted.documents.length > 0) {
+    onProgress({ phase: 'ocr-start', total: extracted.documents.length, message: 'Processing documents with OCR...' })
+    console.log(`[Parser] Processing ${extracted.documents.length} document(s) with OCR...`)
+
+    for (let i = 0; i < extracted.documents.length; i++) {
+      const doc = extracted.documents[i]
+      const fileOrBlob = doc.file || doc.blob
+      if (!fileOrBlob) continue
+
+      try {
+        onProgress({
+          phase: 'ocr-processing',
+          current: i + 1,
+          total: extracted.documents.length,
+          filename: doc.filename,
+          message: `OCR: ${doc.filename} (${i + 1}/${extracted.documents.length})`,
+        })
+
+        const result = await processDocument(fileOrBlob, doc.filename, (p) => {
+          onProgress({
+            phase: 'ocr-page',
+            current: i + 1,
+            total: extracted.documents.length,
+            filename: doc.filename,
+            ...p,
+          })
+        })
+
+        if (result.text && result.text.length > 0) {
+          ocrResults.push({ filename: doc.filename, result })
+          console.log(`[OCR] ${doc.filename}: ${result.method}, ${result.text.length} chars, ${Math.round(result.confidence)}% confidence`)
+        } else {
+          console.log(`[OCR] ${doc.filename}: no text extracted`)
+        }
+      } catch (err) {
+        console.warn(`[OCR] Failed to process ${doc.filename}:`, err.message)
+      }
+    }
+
+    // Terminate OCR worker after batch processing
+    try { await terminateOCR() } catch { /* ignore */ }
+    onProgress({ phase: 'ocr-complete', message: `OCR complete: processed ${ocrResults.length} document(s)` })
+  }
+
   // 6. Assemble final data
-  const parsedData = assembleParsedData(assembled, extracted.documents, vendor, rules)
+  const parsedData = assembleParsedData(assembled, extracted.documents, vendor, rules, ocrResults)
 
   // 7. Generate AI summary
   const aiSummary = parsedData.selectedPatient

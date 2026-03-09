@@ -1,11 +1,14 @@
 import { useState, useRef } from 'react'
 import { Upload, File, X, CheckCircle2, AlertCircle, Loader2, User, Calendar, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { useData } from '../context/DataContext'
+import OCRProgress from './OCRProgress'
+
+const OCR_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'bmp', 'gif', 'dcm'])
 
 export default function FileUpload({ onComplete }) {
   const [dragOver, setDragOver] = useState(false)
   const [parseError, setParseError] = useState(null)
-  const [files, setFiles] = useState([])       // { file, status, progress, patient, matchStatus, matchDetails }
+  const [files, setFiles] = useState([])       // { file, status, progress, patient, matchStatus, matchDetails, ocrProgress }
   const fileInputRef = useRef(null)
   const { addFileAndParse, dataSources } = useData()
 
@@ -89,7 +92,18 @@ export default function FileUpload({ onComplete }) {
 
   const parseFileAndUpdate = async (file, fileIndex) => {
     try {
-      const result = await addFileAndParse(file)
+      // Determine if this file needs OCR (PDF/image)
+      const ext = file.name.split('.').pop().toLowerCase()
+      const needsOCR = OCR_EXTENSIONS.has(ext)
+
+      // Progress callback for OCR-capable files
+      const onProgress = needsOCR ? (progressInfo) => {
+        setFiles(prev => prev.map((f, i) =>
+          i === fileIndex ? { ...f, ocrProgress: progressInfo } : f
+        ))
+      } : undefined
+
+      const result = await addFileAndParse(file, onProgress)
 
       if (result.status === 'mismatch') {
         setFiles(prev => prev.map((f, i) =>
@@ -274,8 +288,17 @@ export default function FileUpload({ onComplete }) {
                       {item.status === 'parsing' && (
                         <div className="mt-2 flex items-center gap-2 text-sm text-indigo-600">
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Analyzing patient data…</span>
+                          <span>
+                            {item.ocrProgress ? 'Processing document…' : 'Analyzing patient data…'}
+                          </span>
                         </div>
+                      )}
+                      {/* OCR progress indicator for PDF/image files */}
+                      {item.ocrProgress && item.status === 'parsing' && (
+                        <OCRProgress
+                          progress={item.ocrProgress}
+                          isActive={item.status === 'parsing'}
+                        />
                       )}
                     </div>
                   </div>
