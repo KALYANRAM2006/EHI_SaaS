@@ -45,11 +45,10 @@ async function getPdfjs() {
   if (!_pdfjsLib) {
     _pdfjsLib = await import(/* @vite-ignore */ 'pdfjs-dist')
     // Configure worker — runs in a separate thread, keeps UI responsive.
-    // Use cdnjs with the exact version detected from the imported module
-    // so the worker always matches the API, regardless of npm install version.
+    // Use jsdelivr CDN which mirrors every npm version immediately.
     // No PHI is sent — the CDN only serves a static JS file.
     const version = _pdfjsLib.version
-    const workerUrl = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.mjs`
+    const workerUrl = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.mjs`
     _pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
     console.log(`[OCR] PDF.js ${version} loaded (lazy), worker: ${workerUrl}`)
   }
