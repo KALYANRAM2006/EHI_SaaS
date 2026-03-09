@@ -642,6 +642,24 @@ function assembleParsedData(assembled, documentIndexes, vendor, rules, ocrResult
       if (rows.vitals.length)       vitalRows = [...vitalRows, ...rows.vitals]
       if (rows.results.length)      resultRows = [...resultRows, ...rows.results]
       if (rows.documentRow)         docRows = [...docRows, rows.documentRow]
+
+      // Build patient row from OCR demographics (if available)
+      const demo = result.clinicalEntities?.demographics
+      if (demo && patientRows.length === 0) {
+        const nameParts = (demo.name || '').split(/\s+/)
+        patientRows.push({
+          patId: demo.mrn || `OCR-${Date.now()}`,
+          name: demo.name || 'Unknown Patient',
+          firstName: nameParts[0] || 'Unknown',
+          lastName: nameParts.length > 1 ? nameParts[nameParts.length - 1] : 'Patient',
+          age: demo.age || 0,
+          city: '', state: '', zip: '',
+          birthDate: demo.dateOfBirth || '',
+          sex: demo.sex || 'Unknown',
+          ethnicGroup: '', language: '', maritalStatus: '',
+          _source: 'ocr',
+        })
+      }
     }
     console.log(`[Parser] Merged OCR data from ${ocrResults.length} document(s)`)
   }

@@ -122,7 +122,11 @@ export default function DocumentIntelligence() {
       }
     }
 
-    setOcrDocuments(prev => [...prev, ...newDocs])
+    setOcrDocuments(prev => {
+      const existing = new Set(prev.map(d => d.filename))
+      const unique = newDocs.filter(d => !existing.has(d.filename))
+      return unique.length > 0 ? [...prev, ...unique] : prev
+    })
     setProcessing(false)
     setProgress(null)
     if (newDocs.length > 0) setExpandedDoc(ocrDocuments.length)
@@ -174,7 +178,11 @@ export default function DocumentIntelligence() {
       }
     }
 
-    setOcrDocuments(prev => [...prev, ...newDocs])
+    setOcrDocuments(prev => {
+      const existing = new Set(prev.map(d => d.filename))
+      const unique = newDocs.filter(d => !existing.has(d.filename))
+      return unique.length > 0 ? [...prev, ...unique] : prev
+    })
     setLoadingSamples(false)
     setProgress(null)
     if (newDocs.length > 0) setExpandedDoc(ocrDocuments.length)

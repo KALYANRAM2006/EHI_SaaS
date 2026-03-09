@@ -538,10 +538,10 @@ function generateConditionsResponse(patient) {
     active.forEach(c => {
       const relatedMeds = meds.filter(m => {
         const purpose = (m.purpose || '').toLowerCase()
-        const condName = c.name.toLowerCase()
+        const condName = (c.name || '').toLowerCase()
         return purpose.includes(condName.split(' ')[0]) || purpose.includes(condName)
       })
-      text += `• **${c.name}** — ${c.severity || 'Unknown'} severity (since ${c.onset || 'unknown'})\n`
+      text += `• **${c.name || 'Unknown Condition'}** — ${c.severity || 'Unknown'} severity (since ${c.onset || 'unknown'})\n`
       text += `  ↳ Treatment: ${relatedMeds.length > 0 ? relatedMeds.map(m => `**${m.name}** (${m.dosage || ''})`).join(', ') : '❓ No linked medication found'}\n\n`
     })
   }
@@ -552,7 +552,7 @@ function generateConditionsResponse(patient) {
 
   const coveredCount = active.filter(c => meds.some(m => {
     const purpose = (m.purpose || '').toLowerCase()
-    return purpose.includes(c.name.toLowerCase().split(' ')[0])
+    return purpose.includes((c.name || '').toLowerCase().split(' ')[0])
   })).length
   const coverage = active.length > 0 ? (coveredCount / active.length * 100).toFixed(0) : 100
 

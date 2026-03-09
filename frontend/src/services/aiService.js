@@ -282,7 +282,7 @@ async function generateLocalSummary(patient) {
             activeConditions.map(c => {
               const relatedMeds = meds.filter(m => {
                 const purpose = (m.purpose || '').toLowerCase()
-                const condName = c.name.toLowerCase()
+                const condName = (c.name || '').toLowerCase()
                 return purpose.includes(condName.split(' ')[0]) || purpose.includes(condName)
               })
               return `• **${c.name}** — ${c.severity || 'Unknown'} severity (since ${c.onset || 'unknown date'})\n  ↳ ${relatedMeds.length > 0 ? `Managed with: ${relatedMeds.map(m => m.name).join(', ')}` : 'No specific medication linked'}`

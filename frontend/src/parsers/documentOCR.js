@@ -646,9 +646,10 @@ export function documentResultToAppRows(docResult, filename) {
   rows.conditions = clinicalEntities.diagnoses.map((dx, i) => ({
     patId: '', problemId: `OCR-DX-${Date.now()}-${i}`,
     name: dx.name, code: dx.code || '', codeSystem: dx.codeSystem || '',
+    icd10: dx.icd10 || dx.code || '',
     icd10Display: dx.icd10Display || '',
     snomedCT: dx.snomedCT || '', snomedDisplay: dx.snomedDisplay || '',
-    status: 'Active', onsetDate: clinicalEntities.dates[0] || now,
+    severity: 'Moderate', status: 'Active', onsetDate: clinicalEntities.dates[0] || now,
     _source: 'ocr', _ocrConfidence: dx.confidence, _sourceFile: filename,
   }))
 
