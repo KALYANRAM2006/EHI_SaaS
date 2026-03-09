@@ -33,15 +33,6 @@ jobs:
           submodules: true
           lfs: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
-
       - name: Determine expiry date
         id: expiry
         run: |
@@ -57,14 +48,6 @@ jobs:
             echo "Using default expiry (${{ env.DEMO_EXPIRY_DAYS }} days): $EXPIRY"
           fi
 
-      - name: Build demo
-        working-directory: frontend
-        env:
-          VITE_DEMO: 'true'
-          VITE_DEMO_EXPIRY: ${{ steps.expiry.outputs.date }}
-          VITE_BUILD_DATE: ${{ github.event.head_commit.timestamp }}
-        run: npx vite build
-
       - name: Deploy to Azure Static Web Apps (Demo)
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -72,10 +55,16 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DEMO }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "frontend/dist"
+          app_location: "frontend"
           api_location: ""
-          output_location: ""
-          skip_app_build: true  # We already built above with demo env vars
+          output_location: "dist"
+          skip_app_build: false
+          production_branch: "demo"
+          app_build_command: "npx vite build"
+        env:
+          VITE_DEMO: 'true'
+          VITE_DEMO_EXPIRY: ${{ steps.expiry.outputs.date }}
+          VITE_BUILD_DATE: ${{ github.event.head_commit.timestamp }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
