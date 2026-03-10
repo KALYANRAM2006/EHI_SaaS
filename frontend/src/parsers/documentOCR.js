@@ -616,17 +616,67 @@ function extractAllergies(text, upper) {
 
 // ─── Procedures ─────────────────────────────────────────────────────────────
 
+// Common CPT code lookup for procedures found via OCR
+const PROCEDURE_CPT_MAP = {
+  'colonoscopy':       { cpt: '45378', desc: 'Colonoscopy, diagnostic' },
+  'endoscopy':         { cpt: '43239', desc: 'Upper GI endoscopy with biopsy' },
+  'mri':               { cpt: '70553', desc: 'MRI brain w/wo contrast' },
+  'ct scan':           { cpt: '74177', desc: 'CT abdomen/pelvis w/contrast' },
+  'x-ray':             { cpt: '71046', desc: 'Chest X-ray, 2 views' },
+  'ultrasound':        { cpt: '76700', desc: 'Ultrasound, abdominal complete' },
+  'echocardiogram':    { cpt: '93306', desc: 'Echocardiography, complete' },
+  'ekg':               { cpt: '93000', desc: '12-lead electrocardiogram' },
+  'ecg':               { cpt: '93000', desc: '12-lead electrocardiogram' },
+  'stress test':       { cpt: '93015', desc: 'Cardiovascular stress test' },
+  'catheterization':   { cpt: '93452', desc: 'Left heart catheterization' },
+  'angioplasty':       { cpt: '92920', desc: 'Percutaneous coronary angioplasty' },
+  'stent':             { cpt: '92928', desc: 'Percutaneous coronary stent' },
+  'cabg':              { cpt: '33533', desc: 'CABG, single arterial graft' },
+  'biopsy':            { cpt: '11102', desc: 'Tangential biopsy of skin' },
+  'mammogram':         { cpt: '77067', desc: 'Screening mammography, bilateral' },
+  'bone density':      { cpt: '77080', desc: 'DXA bone density study' },
+  'dialysis':          { cpt: '90935', desc: 'Hemodialysis, single evaluation' },
+  'chemotherapy':      { cpt: '96413', desc: 'Chemotherapy IV infusion, first hour' },
+  'radiation therapy': { cpt: '77385', desc: 'Radiation treatment delivery, IMRT' },
+  'surgery':           { cpt: '99999', desc: 'Surgical procedure (unspecified)' },
+  'laparoscopy':       { cpt: '49320', desc: 'Diagnostic laparoscopy' },
+  'blood transfusion': { cpt: '36430', desc: 'Transfusion of blood' },
+  'lumbar puncture':   { cpt: '62270', desc: 'Lumbar puncture (spinal tap)' },
+  'bronchoscopy':      { cpt: '31622', desc: 'Bronchoscopy, diagnostic' },
+  'cystoscopy':        { cpt: '52000', desc: 'Cystourethroscopy' },
+  'arthroscopy':       { cpt: '29881', desc: 'Arthroscopy, knee, surgical' },
+  'tonsillectomy':     { cpt: '42826', desc: 'Tonsillectomy' },
+  'appendectomy':      { cpt: '44970', desc: 'Laparoscopic appendectomy' },
+  'cholecystectomy':   { cpt: '47562', desc: 'Laparoscopic cholecystectomy' },
+  'hysterectomy':      { cpt: '58571', desc: 'Laparoscopic hysterectomy' },
+  'cesarean':          { cpt: '59510', desc: 'Cesarean delivery' },
+  'c-section':         { cpt: '59510', desc: 'Cesarean delivery' },
+  'intubation':        { cpt: '31500', desc: 'Intubation, endotracheal' },
+  'ventilator':        { cpt: '94002', desc: 'Ventilation management, initial' },
+  'pacemaker':         { cpt: '33208', desc: 'Pacemaker insertion' },
+  'defibrillator':     { cpt: '33249', desc: 'ICD insertion/replacement' },
+}
+
 function extractProcedures(text) {
   const procs = []
-  const known = [
-    'colonoscopy','endoscopy','mri','ct scan','x-ray','ultrasound',
-    'echocardiogram','ekg','ecg','stress test','catheterization',
-    'angioplasty','stent','cabg','biopsy','mammogram','bone density',
-    'dialysis','chemotherapy','radiation therapy','surgery','laparoscopy',
-  ]
+  const known = Object.keys(PROCEDURE_CPT_MAP)
   for (const p of known) {
     if (text.toLowerCase().includes(p)) {
-      procs.push({ name: p.charAt(0).toUpperCase() + p.slice(1), source: 'ocr' })
+      const cptInfo = PROCEDURE_CPT_MAP[p]
+      procs.push({
+        name: p.charAt(0).toUpperCase() + p.slice(1),
+        cptCode: cptInfo.cpt,
+        cptDescription: cptInfo.desc,
+        source: 'ocr',
+      })
+    }
+  }
+  // Also try to find CPT codes directly in the text (e.g. "CPT 99213")
+  const cptMatches = text.matchAll(/\bCPT\s*[:#]?\s*(\d{5})\b/gi)
+  for (const m of cptMatches) {
+    const code = m[1]
+    if (!procs.some(p => p.cptCode === code)) {
+      procs.push({ name: `CPT ${code}`, cptCode: code, cptDescription: '', source: 'ocr' })
     }
   }
   return procs
@@ -670,7 +720,7 @@ export function documentResultToAppRows(docResult, filename) {
   const { clinicalEntities, text, method, confidence, metadata } = docResult
   const now = new Date().toISOString()
 
-  const rows = { medications: [], conditions: [], allergies: [], vitals: [], results: [], documentRow: null }
+  const rows = { medications: [], conditions: [], allergies: [], vitals: [], results: [], orders: [], documentRow: null }
 
   if (!clinicalEntities) return rows
 
@@ -682,6 +732,7 @@ export function documentResultToAppRows(docResult, filename) {
     rxcui: med.rxcui || '', drugClass: med.drugClass || '', brand: med.brand || '',
     startDate: now, endDate: '', status: 'Active',
     _source: 'ocr', _ocrConfidence: med.confidence, _sourceFile: filename,
+    _extractionSource: med.source || 'local-regex',
   }))
 
   rows.conditions = clinicalEntities.diagnoses.map((dx, i) => ({
@@ -692,6 +743,7 @@ export function documentResultToAppRows(docResult, filename) {
     snomedCT: dx.snomedCT || '', snomedDisplay: dx.snomedDisplay || '',
     severity: 'Moderate', status: 'Active', onsetDate: clinicalEntities.dates[0] || now,
     _source: 'ocr', _ocrConfidence: dx.confidence, _sourceFile: filename,
+    _extractionSource: dx.source || 'local-regex',
   }))
 
   rows.allergies = clinicalEntities.allergies.map((alg, i) => ({
@@ -699,6 +751,7 @@ export function documentResultToAppRows(docResult, filename) {
     name: alg.name, reaction: alg.reaction || '', severity: '', status: 'Active',
     snomedCT: alg.snomedCT || '',
     _source: 'ocr', _sourceFile: filename,
+    _extractionSource: alg.source || 'local-regex',
   }))
 
   rows.vitals = clinicalEntities.vitals.map((v, i) => ({
@@ -710,10 +763,27 @@ export function documentResultToAppRows(docResult, filename) {
   rows.results = clinicalEntities.labResults.map((lab, i) => ({
     patId: '', orderId: `OCR-LAB-${Date.now()}-${i}`, resultId: `OCR-RES-${Date.now()}-${i}`,
     name: lab.name, originalName: lab.originalName || lab.name,
-    value: lab.value, unit: lab.unit, referenceRange: '',
+    value: lab.value, unit: lab.unit, referenceRange: lab.referenceRange || '',
     loinc: lab.loinc || '', loincDisplay: lab.loincDisplay || '',
     date: clinicalEntities.dates[0] || now, status: 'Final',
     _source: 'ocr', _sourceFile: filename,
+    _extractionSource: lab.source || 'local-regex',
+  }))
+
+  rows.orders = (clinicalEntities.procedures || []).map((proc, i) => ({
+    orderId: `OCR-PROC-${Date.now()}-${i}`,
+    orderType: 'Procedure',
+    patId: '',
+    csnId: '',
+    orderDate: clinicalEntities.dates[0] || now,
+    status: 'Completed',
+    procName: proc.name,
+    procCode: proc.cptCode || '',
+    cptDescription: proc.cptDescription || '',
+    specimen: '',
+    priority: '',
+    _source: 'ocr', _sourceFile: filename,
+    _extractionSource: proc.source || 'local-regex',
   }))
 
   rows.documentRow = {
@@ -732,6 +802,7 @@ export function documentResultToAppRows(docResult, filename) {
       allergies: clinicalEntities.allergies.length,
       vitals: clinicalEntities.vitals.length,
       labResults: clinicalEntities.labResults.length,
+      procedures: (clinicalEntities.procedures || []).length,
     },
     _source: 'ocr', _sourceFile: filename,
   }

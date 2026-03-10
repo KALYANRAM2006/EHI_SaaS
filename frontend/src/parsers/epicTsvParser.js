@@ -641,6 +641,7 @@ function assembleParsedData(assembled, documentIndexes, vendor, rules, ocrResult
       if (rows.allergies.length)    allergyRows = [...allergyRows, ...rows.allergies]
       if (rows.vitals.length)       vitalRows = [...vitalRows, ...rows.vitals]
       if (rows.results.length)      resultRows = [...resultRows, ...rows.results]
+      if (rows.orders && rows.orders.length) orderRows = [...orderRows, ...rows.orders]
       if (rows.documentRow)         docRows = [...docRows, rows.documentRow]
 
       // Build patient row from OCR demographics (if available)

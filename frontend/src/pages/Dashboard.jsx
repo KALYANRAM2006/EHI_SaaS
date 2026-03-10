@@ -1049,7 +1049,8 @@ export default function Dashboard() {
                       <th className="pb-3 pr-4">Unit</th>
                       <th className="pb-3 pr-4">Reference</th>
                       <th className="pb-3 pr-4">Flag</th>
-                      <th className="pb-3">Date</th>
+                      <th className="pb-3 pr-4">Date</th>
+                      <th className="pb-3">Source</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1057,8 +1058,11 @@ export default function Dashboard() {
                       const compName = result.name || result.component || 'Lab Result'
                       const refRange = result.referenceRange || (result.refLow != null && result.refHigh != null ? `${result.refLow}-${result.refHigh}` : '—')
                       const resultDate = result.date || result.resultTime
-                      const dateStr = resultDate ? (() => { try { return new Date(resultDate).toLocaleDateString() } catch { return resultDate } })() : '—'
+                      const dateStr = resultDate ? (() => { try { const d = new Date(resultDate); return isNaN(d.getTime()) ? resultDate : d.toLocaleDateString() } catch { return resultDate } })() : '—'
                       const flagVal = result.flag || ''
+                      const src = result._extractionSource || (result._source === 'ocr' ? 'local-regex' : result._source ? 'tsv' : 'unknown')
+                      const srcLabel = { 'openai': 'OpenAI GPT', 'azure-ai': 'Azure AI', 'local-regex': 'OCR Regex', 'tsv': 'TSV Parser' }[src] || src
+                      const srcColor = { 'openai': 'bg-emerald-100 text-emerald-700', 'azure-ai': 'bg-purple-100 text-purple-700', 'local-regex': 'bg-blue-100 text-blue-700', 'tsv': 'bg-gray-100 text-gray-600' }[src] || 'bg-gray-100 text-gray-600'
                       return (
                       <tr key={i} className={`border-b border-gray-100 ${flagVal && flagVal !== 'Normal' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
                         <td className="py-3 pr-4 font-medium">{compName}</td>
@@ -1072,12 +1076,13 @@ export default function Dashboard() {
                           </span>
                           ) : <span className="text-gray-300">—</span>}
                         </td>
-                        <td className="py-3 text-gray-500">{dateStr}</td>
-                        {result._mergedCount > 1 && (
-                          <td className="py-3 pl-2">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-600">Merged {result._mergedCount}</span>
-                          </td>
-                        )}
+                        <td className="py-3 pr-4 text-gray-500">{dateStr}</td>
+                        <td className="py-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${srcColor}`}>{srcLabel}</span>
+                          {result._mergedCount > 1 && (
+                            <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-600">Merged {result._mergedCount}</span>
+                          )}
+                        </td>
                       </tr>
                       )
                     })}
@@ -1617,24 +1622,40 @@ export default function Dashboard() {
                           <th className="pb-3 pr-4">Unit</th>
                           <th className="pb-3 pr-4">Reference Range</th>
                           <th className="pb-3 pr-4">Flag</th>
-                          <th className="pb-3">Date</th>
+                          <th className="pb-3 pr-4">Date</th>
+                          <th className="pb-3">Source</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {stats.results.map((result, i) => (
-                          <tr key={i} className={`border-b border-gray-100 ${result.flag !== 'Normal' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                            <td className="py-3 pr-4 font-medium">{result.component}</td>
-                            <td className="py-3 pr-4 font-semibold">{result.value}</td>
-                            <td className="py-3 pr-4 text-gray-500">{result.unit}</td>
-                            <td className="py-3 pr-4 text-gray-500">{result.refLow}-{result.refHigh}</td>
+                        {stats.results.map((result, i) => {
+                          const compName = result.name || result.component || 'Lab Result'
+                          const refRange = result.referenceRange || (result.refLow != null && result.refHigh != null ? `${result.refLow}-${result.refHigh}` : '—')
+                          const resultDate = result.date || result.resultTime
+                          const dateStr = resultDate ? (() => { try { const d = new Date(resultDate); return isNaN(d.getTime()) ? resultDate : d.toLocaleDateString() } catch { return resultDate } })() : '—'
+                          const flagVal = result.flag || ''
+                          const src = result._extractionSource || (result._source === 'ocr' ? 'local-regex' : result._source ? 'tsv' : 'unknown')
+                          const srcLabel = { 'openai': 'OpenAI GPT', 'azure-ai': 'Azure AI', 'local-regex': 'OCR Regex', 'tsv': 'TSV Parser' }[src] || src
+                          const srcColor = { 'openai': 'bg-emerald-100 text-emerald-700', 'azure-ai': 'bg-purple-100 text-purple-700', 'local-regex': 'bg-blue-100 text-blue-700', 'tsv': 'bg-gray-100 text-gray-600' }[src] || 'bg-gray-100 text-gray-600'
+                          return (
+                          <tr key={i} className={`border-b border-gray-100 ${flagVal && flagVal !== 'Normal' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                            <td className="py-3 pr-4 font-medium">{compName}</td>
+                            <td className="py-3 pr-4 font-semibold">{result.value || '—'}</td>
+                            <td className="py-3 pr-4 text-gray-500">{result.unit || result.units || ''}</td>
+                            <td className="py-3 pr-4 text-gray-500">{refRange}</td>
                             <td className="py-3 pr-4">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${result.flag === 'Normal' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                {result.flag}
+                              {flagVal ? (
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${flagVal === 'Normal' ? 'bg-green-100 text-green-700' : flagVal === 'High' || flagVal === 'CRITICAL' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {flagVal}
                               </span>
+                              ) : <span className="text-gray-300">—</span>}
                             </td>
-                            <td className="py-3 text-gray-500">{new Date(result.resultTime).toLocaleDateString()}</td>
+                            <td className="py-3 pr-4 text-gray-500">{dateStr}</td>
+                            <td className="py-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${srcColor}`}>{srcLabel}</span>
+                            </td>
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

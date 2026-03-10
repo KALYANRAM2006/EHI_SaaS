@@ -11,7 +11,7 @@
  * Pure Tailwind CSS — no shadcn / Radix UI.
  */
 import { useState, useMemo } from 'react'
-import { GitBranch, FileText, Pill, Building2, AlertTriangle, Shield, Activity, FlaskConical, Syringe, Database, Filter, Eye, EyeOff } from 'lucide-react'
+import { GitBranch, FileText, Pill, Building2, AlertTriangle, Shield, Activity, FlaskConical, Syringe, Database, Filter, Eye, EyeOff, Scissors } from 'lucide-react'
 import { useData } from '../context/DataContext'
 
 // ─── Category configuration ──────────────────────────────────────────────────
@@ -22,6 +22,7 @@ const CATEGORY_TABS = [
   { key: 'allergies',     label: 'Allergies',      icon: AlertTriangle, colorClass: 'border-red-500'    },
   { key: 'conditions',    label: 'Conditions',     icon: Activity,      colorClass: 'border-amber-500'  },
   { key: 'results',       label: 'Lab Results',    icon: FlaskConical,  colorClass: 'border-green-500'  },
+  { key: 'procedures',    label: 'Procedures',     icon: Scissors,      colorClass: 'border-indigo-500' },
 ]
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ export default function DataLineageView() {
   // Flatten patient-level clinical data for the selected patient
   // Use _all* arrays (which include duplicates) for lineage view when available
   const patientData = useMemo(() => {
-    if (!parsedData || !selectedPatient) return { medications: [], encounters: [], allergies: [], conditions: [], results: [] }
+    if (!parsedData || !selectedPatient) return { medications: [], encounters: [], allergies: [], conditions: [], results: [], procedures: [] }
     const pid = selectedPatient.patId
     return {
       medications: (selectedPatient._allMedications || parsedData.medications || selectedPatient.medications || []).filter(r => !r.patId || r.patId === pid),
@@ -42,10 +43,14 @@ export default function DataLineageView() {
       allergies: (selectedPatient._allAllergies || parsedData.allergies || selectedPatient.allergies || []).filter(r => !r.patId || r.patId === pid),
       conditions: (selectedPatient._allConditions || parsedData.conditions || selectedPatient.conditions || []).filter(r => !r.patId || r.patId === pid),
       results: (selectedPatient._allResults || parsedData.results || selectedPatient.results || []).filter(r => {
-        if (!r.patId) return true  // OCR-extracted results have no patId — include them for single-patient
+        if (!r.patId) return true
         if (r.patId === pid) return true
         const patientOrders = (parsedData.orders || []).filter(o => o.patId === pid).map(o => o.orderId)
         return patientOrders.includes(r.orderId)
+      }),
+      procedures: (parsedData.orders || selectedPatient.orders || []).filter(r => {
+        if (!r.patId) return true
+        return r.patId === pid
       }),
     }
   }, [parsedData, selectedPatient])
@@ -260,6 +265,13 @@ function RecordRow({ record, category }) {
           {record._sourceName.length > 20 ? record._sourceName.slice(0, 18) + '…' : record._sourceName}
         </span>
       )}
+      {(() => {
+        const src = record._extractionSource || (record._source === 'ocr' ? 'local-regex' : record._source ? 'tsv' : null)
+        if (!src) return null
+        const srcLabel = { 'openai': 'OpenAI GPT', 'azure-ai': 'Azure AI', 'local-regex': 'OCR Regex', 'tsv': 'TSV Parser' }[src] || src
+        const srcColor = { 'openai': 'bg-emerald-100 text-emerald-700', 'azure-ai': 'bg-purple-100 text-purple-700', 'local-regex': 'bg-blue-100 text-blue-700', 'tsv': 'bg-gray-100 text-gray-600' }[src] || 'bg-gray-100 text-gray-600'
+        return <span className={`flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full ${srcColor}`}>{srcLabel}</span>
+      })()}
       {record._mergedCount > 1 && !record._duplicate && (
         <span className="flex-shrink-0 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700" title={`Merged from: ${(record._mergedSources || []).join(', ')}`}>
           Merged ({record._mergedCount})
@@ -288,6 +300,8 @@ function getRecordTitle(record, category) {
       return record.name || record.condition || 'Unknown Condition'
     case 'results':
       return `${record.component || record.name || 'Lab Result'}: ${record.value || ''} ${record.unit || ''}`
+    case 'procedures':
+      return record.procName || record.name || 'Procedure'
     default:
       return record.name || record.title || 'Record'
   }
@@ -309,6 +323,13 @@ function getRecordSubtitle(record, category) {
         record.referenceRange ? `Ref: ${record.referenceRange}` :
           (record.refLow != null && record.refHigh != null ? `Ref: ${record.refLow}–${record.refHigh}` : null),
         record.resultTime || record.date,
+      ].filter(Boolean).join(' · ')
+    case 'procedures':
+      return [
+        record.procCode ? `CPT: ${record.procCode}` : null,
+        record.cptDescription || null,
+        record.orderDate || null,
+        record.status || null,
       ].filter(Boolean).join(' · ')
     default:
       return ''
