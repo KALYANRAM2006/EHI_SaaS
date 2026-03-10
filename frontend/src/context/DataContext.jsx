@@ -25,6 +25,9 @@ import {
 
 const DataContext = createContext()
 
+// All clinical data categories that records can belong to
+const ALL_CATEGORIES = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations', 'vitals', 'documents']
+
 export function DataProvider({ children }) {
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [rawFiles, setRawFiles] = useState([])  // Store actual File objects for parsing
@@ -191,8 +194,7 @@ export function DataProvider({ children }) {
   function tagSourceOnParsed(pd, source) {
     if (!pd) return pd
     const tagged = { ...pd }
-    const cats = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations']
-    cats.forEach(cat => {
+    ALL_CATEGORIES.forEach(cat => {
       if (Array.isArray(tagged[cat])) {
         tagged[cat] = tagRecordsWithSource(tagged[cat], source)
       }
@@ -207,14 +209,12 @@ export function DataProvider({ children }) {
 
   function countRecords(pd) {
     if (!pd) return 0
-    const cats = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations']
-    return cats.reduce((sum, cat) => sum + (Array.isArray(pd[cat]) ? pd[cat].length : 0), 0)
+    return ALL_CATEGORIES.reduce((sum, cat) => sum + (Array.isArray(pd[cat]) ? pd[cat].length : 0), 0)
   }
 
   function mergeIntoExisting(existing, incoming) {
     let merged = { ...existing }
-    const cats = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations']
-    cats.forEach(cat => {
+    ALL_CATEGORIES.forEach(cat => {
       const a = Array.isArray(merged[cat]) ? merged[cat] : []
       const b = Array.isArray(incoming[cat]) ? incoming[cat] : []
       merged[cat] = [...a, ...b]
@@ -517,20 +517,58 @@ export function DataProvider({ children }) {
     setPatientMismatch(null)
   }, [])
 
-  // Remove a data source
+  // Remove a data source — cleans up ALL categories, ocrDocuments, and rebuilds selectedPatient
   const removeDataSource = useCallback((sourceId) => {
-    setDataSources(prev => prev.filter(s => s.id !== sourceId))
+    const newSources = (dataSourcesRef.current || []).filter(s => s.id !== sourceId)
+    dataSourcesRef.current = newSources
+    setDataSources(newSources)
+
     if (parsedData) {
       const filtered = { ...parsedData }
-      const categories = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations']
-      categories.forEach(cat => {
+      ALL_CATEGORIES.forEach(cat => {
         if (Array.isArray(filtered[cat])) {
           filtered[cat] = filtered[cat].filter(r => r._source !== sourceId)
         }
       })
+      // Also filter patients tagged with this source (if only source)
+      if (filtered.patients) {
+        filtered.patients = filtered.patients.filter(p => !p._source || p._source !== sourceId || newSources.some(s => s.id === p._source))
+      }
+      filtered.totalRecords = countRecords(filtered)
+      filtered.totalPatients = (filtered.patients || []).length
+
+      // Update stats on remaining sources
+      newSources.forEach(s => { s.categories = computeSourceStats(s, filtered) })
+
+      parsedDataRef.current = filtered
       setParsedData(filtered)
+
+      // Rebuild selectedPatient so dashboard views refresh
+      const currentPatId = selectedPatientRef.current?.patId || filtered.patients?.[0]?.patId
+      if (currentPatId && filtered.patients?.length > 0) {
+        const rebuilt = rebuildSelectedPatient(filtered, currentPatId)
+        if (rebuilt) {
+          selectedPatientRef.current = rebuilt
+          setSelectedPatient(rebuilt)
+        }
+      } else {
+        // No data left
+        selectedPatientRef.current = null
+        setSelectedPatient(null)
+      }
     }
-  }, [parsedData])
+
+    // Clean up ocrDocuments tied to files from this source
+    const removedSource = (dataSources || []).find(s => s.id === sourceId)
+    if (removedSource) {
+      const srcName = removedSource.name
+      setOcrDocuments(prev => {
+        const cleaned = prev.filter(d => !d.filename?.includes(srcName))
+        ocrDocumentsRef.current = cleaned
+        return cleaned
+      })
+    }
+  }, [parsedData, dataSources])
 
   const loadSampleData = useCallback(async () => {
     setLoading(true)
@@ -542,8 +580,7 @@ export function DataProvider({ children }) {
       const fhirSource = createDataSource('FHIR R4 Bundle (JSON)', 1)
 
       // Tag records with sample sources — split roughly by patient
-      const categories = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations']
-      categories.forEach(cat => {
+      ALL_CATEGORIES.forEach(cat => {
         if (Array.isArray(data[cat])) {
           data[cat] = data[cat].map((r, i) =>
             i % 3 === 0
