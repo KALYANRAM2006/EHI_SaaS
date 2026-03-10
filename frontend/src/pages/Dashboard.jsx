@@ -110,7 +110,12 @@ export default function Dashboard() {
         bgColor: 'bg-purple-50',
         shadowColor: 'rgba(168,85,247,0.2)',
         borderColor: 'border-purple-200',
-        items: stats.medications.slice(0, 2).map(m => `${m.name} - ${m.dose || m.frequency || ''}`),
+        items: stats.medications.slice(0, 2).map(m => {
+          const dose = m.dose || m.frequency || ''
+          // Avoid showing duplicate dose when it's already in the name
+          const nameHasDose = dose && m.name && m.name.toLowerCase().includes(dose.toLowerCase().split(' ')[0])
+          return nameHasDose ? m.name : `${m.name}${dose ? ' - ' + dose : ''}`
+        }),
         total: stats.medications.length,
         link: 'medications',
       },
@@ -122,7 +127,7 @@ export default function Dashboard() {
         bgColor: 'bg-green-50',
         shadowColor: 'rgba(34,197,94,0.2)',
         borderColor: 'border-green-200',
-        items: stats.results.slice(0, 2).map(r => `${r.component || 'Result'} - ${r.value || ''} ${r.units || ''}`),
+        items: stats.results.slice(0, 2).map(r => `${r.name || r.component || 'Result'} - ${r.value || ''} ${r.units || r.unit || ''}`),  
         total: stats.results.length,
         link: 'labs',
       },
@@ -148,6 +153,18 @@ export default function Dashboard() {
         borderColor: 'border-red-200',
         items: activeConditions.slice(0, 2).map(c => c.name),
         total: activeConditions.length,
+        link: 'conditions',
+      },
+      {
+        icon: AlertTriangle, label: 'Allergies',
+        count: stats.allergies.length,
+        countLabel: 'Known',
+        gradient: 'from-amber-500 to-amber-600',
+        bgColor: 'bg-amber-50',
+        shadowColor: 'rgba(245,158,11,0.2)',
+        borderColor: 'border-amber-200',
+        items: stats.allergies.slice(0, 2).map(a => `${a.name || a.allergen || 'Unknown'} ${a.reaction ? '- ' + a.reaction : ''}`),
+        total: stats.allergies.length,
         link: 'conditions',
       },
       {
@@ -437,7 +454,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-3 mt-3 md:mt-0">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
                   <Activity className="w-3.5 h-3.5" />
-                  {stats.encounters.length + stats.orders.length + stats.results.length} Total Records
+                  {stats.encounters.length + stats.orders.length + stats.results.length + stats.medications.length + stats.conditions.length + stats.allergies.length} Total Records
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
                   <Calendar className="w-3.5 h-3.5" />
