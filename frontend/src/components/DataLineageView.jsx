@@ -11,7 +11,7 @@
  * Pure Tailwind CSS — no shadcn / Radix UI.
  */
 import { useState, useMemo } from 'react'
-import { GitBranch, FileText, Pill, Building2, AlertTriangle, Shield, Activity, FlaskConical, Syringe, Database } from 'lucide-react'
+import { GitBranch, FileText, Pill, Building2, AlertTriangle, Shield, Activity, FlaskConical, Syringe, Database, Filter, Eye, EyeOff } from 'lucide-react'
 import { useData } from '../context/DataContext'
 
 // ─── Category configuration ──────────────────────────────────────────────────
@@ -29,6 +29,7 @@ const CATEGORY_TABS = [
 export default function DataLineageView() {
   const { parsedData, dataSources, selectedPatient } = useData()
   const [activeTab, setActiveTab] = useState('medications')
+  const [showDuplicates, setShowDuplicates] = useState(false)
 
   // Flatten patient-level clinical data for the selected patient
   const patientData = useMemo(() => {
@@ -54,10 +55,21 @@ export default function DataLineageView() {
     Object.values(patientData).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0)
   , [patientData])
 
-  // Active category records
-  const activeRecords = useMemo(() =>
-    patientData[activeTab] || []
-  , [patientData, activeTab])
+  // Count duplicates per category
+  const dupCounts = useMemo(() => {
+    const counts = {}
+    for (const tab of CATEGORY_TABS) {
+      counts[tab.key] = (patientData[tab.key] || []).filter(r => r._duplicate).length
+    }
+    counts.total = Object.values(counts).reduce((a, b) => a + b, 0)
+    return counts
+  }, [patientData])
+
+  // Active category records (filtered by duplicate toggle)
+  const activeRecords = useMemo(() => {
+    const records = patientData[activeTab] || []
+    return showDuplicates ? records : records.filter(r => !r._duplicate)
+  }, [patientData, activeTab, showDuplicates])
 
   if (!parsedData || !selectedPatient) {
     return (
@@ -145,30 +157,53 @@ export default function DataLineageView() {
 
       {/* ─── Category Tabs ────────────────────────────────────────────────── */}
       <div>
-        <div className="flex gap-1 border-b border-gray-200 mb-4 overflow-x-auto">
-          {CATEGORY_TABS.map(tab => {
-            const Icon = tab.icon
-            const count = (patientData[tab.key] || []).length
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === tab.key
-                    ? 'border-blue-600 text-blue-700'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-                <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
-                  activeTab === tab.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {count}
-                </span>
-              </button>
-            )
-          })}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex gap-1 border-b border-gray-200 overflow-x-auto flex-1">
+            {CATEGORY_TABS.map(tab => {
+              const Icon = tab.icon
+              const all = (patientData[tab.key] || [])
+              const count = showDuplicates ? all.length : all.filter(r => !r._duplicate).length
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === tab.key
+                      ? 'border-blue-600 text-blue-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                  <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
+                    activeTab === tab.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {dupCounts.total > 0 && (
+            <button
+              onClick={() => setShowDuplicates(prev => !prev)}
+              className={`flex items-center gap-1.5 ml-3 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors flex-shrink-0 ${
+                showDuplicates
+                  ? 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
+                  : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+              }`}
+              title={showDuplicates ? 'Hide duplicate records' : 'Show duplicate records'}
+            >
+              {showDuplicates ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              <Filter className="w-3.5 h-3.5" />
+              {showDuplicates ? 'Hide' : 'Show'} Duplicates
+              <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs ${
+                showDuplicates ? 'bg-yellow-200 text-yellow-800' : 'bg-gray-200 text-gray-600'
+              }`}>
+                {dupCounts.total}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* ─── Records List ─────────────────────────────────────────────── */}

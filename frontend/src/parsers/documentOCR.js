@@ -519,30 +519,71 @@ function extractVitals(text) {
 
 function extractLabResults(text) {
   const results = []
+  const seen = new Set()
+
+  // Named patterns — match "TestName : value unit" or "TestName value unit"
   const patterns = [
-    { name: 'Glucose',      regex: /(?:glucose|blood\s*sugar|FBG)\s*[:\-]?\s*(\d{2,4})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
-    { name: 'HbA1c',        regex: /(?:HbA1c|A1c|hemoglobin\s*a1c)\s*[:\-]?\s*(\d{1,2}(?:\.\d)?)\s*%?/i, unit: '%' },
-    { name: 'Creatinine',   regex: /(?:creatinine|creat)\s*[:\-]?\s*(\d{1}(?:\.\d{1,2})?)\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
-    { name: 'BUN',          regex: /(?:BUN|blood\s*urea)\s*[:\-]?\s*(\d{1,3})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
-    { name: 'eGFR',         regex: /(?:eGFR|GFR)\s*[:\-]?\s*(\d{1,3})\s*(?:mL\/min)?/i, unit: 'mL/min' },
-    { name: 'WBC',          regex: /(?:WBC|white\s*(?:blood\s*)?count)\s*[:\-]?\s*(\d{1,3}(?:\.\d)?)\s*(?:K\/uL)?/i, unit: 'K/uL' },
-    { name: 'Hemoglobin',   regex: /(?:hemoglobin|hgb|hb)\s*[:\-]?\s*(\d{1,2}(?:\.\d)?)\s*(?:g\/dL)?/i, unit: 'g/dL' },
-    { name: 'Hematocrit',   regex: /(?:hematocrit|hct)\s*[:\-]?\s*(\d{2,3}(?:\.\d)?)\s*%?/i, unit: '%' },
-    { name: 'Platelets',    regex: /(?:platelets?|plt)\s*[:\-]?\s*(\d{2,4})\s*(?:K\/uL)?/i, unit: 'K/uL' },
-    { name: 'Sodium',       regex: /(?:sodium|na)\s*[:\-]?\s*(\d{3})\s*(?:mEq\/L)?/i, unit: 'mEq/L' },
-    { name: 'Potassium',    regex: /(?:potassium|k)\s*[:\-]?\s*(\d{1}(?:\.\d)?)\s*(?:mEq\/L)?/i, unit: 'mEq/L' },
-    { name: 'Cholesterol',  regex: /(?:total\s*cholesterol|cholesterol)\s*[:\-]?\s*(\d{2,3})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
-    { name: 'LDL',          regex: /(?:LDL)\s*[:\-]?\s*(\d{2,3})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
-    { name: 'HDL',          regex: /(?:HDL)\s*[:\-]?\s*(\d{2,3})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
-    { name: 'Triglycerides',regex: /(?:triglycerides?|TG)\s*[:\-]?\s*(\d{2,4})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
-    { name: 'TSH',          regex: /(?:TSH)\s*[:\-]?\s*(\d{1,2}(?:\.\d{1,3})?)\s*(?:mIU\/L)?/i, unit: 'mIU/L' },
-    { name: 'ALT',          regex: /(?:ALT|SGPT|alanine)\s*[:\-]?\s*(\d{1,4})\s*(?:U\/L)?/i, unit: 'U/L' },
-    { name: 'AST',          regex: /(?:AST|SGOT|aspartate)\s*[:\-]?\s*(\d{1,4})\s*(?:U\/L)?/i, unit: 'U/L' },
+    { name: 'Glucose',         regex: /(?:glucose|blood\s*sugar|FBG)[\s:,\-]*?(\d{2,4})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
+    { name: 'HbA1c',           regex: /(?:HbA1c|A1c|hemoglobin\s*a1c)[\s:,\-]*?(\d{1,2}(?:\.\d{1,2})?)\s*%?/i, unit: '%' },
+    { name: 'Creatinine',      regex: /(?:creatinine|creat)[\s:,\-]*?(\d{1,2}(?:\.\d{1,2})?)\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
+    { name: 'BUN',             regex: /(?:BUN|blood\s*urea)[\s:,\-]*?(\d{1,3})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
+    { name: 'eGFR',            regex: /(?:eGFR|GFR)[\s:,\-]*?(\d{1,3})\s*(?:mL\/min)?/i, unit: 'mL/min' },
+    { name: 'WBC',             regex: /(?:WBC|white\s*(?:blood\s*)?(?:cell\s*)?count)[\s:,\-]*?(\d{1,3}(?:\.\d)?)\s*(?:K\/uL)?/i, unit: 'K/uL' },
+    { name: 'Hemoglobin',      regex: /(?<!hemoglobin\s*a1c.{0,20})(?:hemoglobin|hgb|hb)(?!\s*a1c)[\s:,\-]*?(\d{1,2}(?:\.\d)?)\s*(?:g\/dL)?/i, unit: 'g/dL' },
+    { name: 'Hematocrit',      regex: /(?:hematocrit|hct)[\s:,\-]*?(\d{2,3}(?:\.\d)?)\s*%?/i, unit: '%' },
+    { name: 'Platelets',       regex: /(?:platelets?|plt)[\s:,\-]*?(\d{2,4})\s*(?:K\/uL)?/i, unit: 'K/uL' },
+    { name: 'Sodium',          regex: /(?:sodium)[\s:,\-]*?(\d{3})\s*(?:mEq\/L)?/i, unit: 'mEq/L' },
+    { name: 'Potassium',       regex: /(?:potassium)[\s:,\-]*?(\d{1}(?:\.\d)?)\s*(?:mEq\/L)?/i, unit: 'mEq/L' },
+    { name: 'Cholesterol',     regex: /(?:total\s*cholesterol|^cholesterol)[\s:,\-]*?(\d{2,3})\s*(?:mg\/dL)?/im, unit: 'mg/dL' },
+    { name: 'LDL',             regex: /(?:LDL(?:\s*cholesterol)?)[\s:,\-]*?(\d{2,3})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
+    { name: 'HDL',             regex: /(?:HDL(?:\s*cholesterol)?)[\s:,\-]*?(\d{2,3})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
+    { name: 'Triglycerides',   regex: /(?:triglycerides?|TG)[\s:,\-]*?(\d{2,4})\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
+    { name: 'TSH',             regex: /(?:TSH)[\s:,\-]*?(\d{1,2}(?:\.\d{1,3})?)\s*(?:mIU\/L)?/i, unit: 'mIU/L' },
+    { name: 'ALT',             regex: /(?:ALT|SGPT)[\s:,\-]*?(\d{1,4})\s*(?:U\/L)?/i, unit: 'U/L' },
+    { name: 'AST',             regex: /(?:AST|SGOT)[\s:,\-]*?(\d{1,4})\s*(?:U\/L)?/i, unit: 'U/L' },
+    { name: 'ALP',             regex: /(?:ALP|alkaline\s*phosphatase)[\s:,\-]*?(\d{1,4})\s*(?:U\/L)?/i, unit: 'U/L' },
+    { name: 'Chloride',        regex: /(?:chloride)[\s:,\-]*?(\d{2,3})\s*(?:mEq\/L)?/i, unit: 'mEq/L' },
+    { name: 'CO2',             regex: /(?:CO2|bicarbonate)[\s:,\-]*?(\d{2,3})\s*(?:mEq\/L)?/i, unit: 'mEq/L' },
+    { name: 'Calcium',         regex: /(?:calcium)[\s:,\-]*?(\d{1,2}(?:\.\d)?)\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
+    { name: 'Albumin',         regex: /(?:albumin)[\s:,\-]*?(\d{1}(?:\.\d)?)\s*(?:g\/dL)?/i, unit: 'g/dL' },
+    { name: 'Total Protein',   regex: /(?:total\s*protein)[\s:,\-]*?(\d{1,2}(?:\.\d)?)\s*(?:g\/dL)?/i, unit: 'g/dL' },
+    { name: 'Bilirubin',       regex: /(?:bilirubin(?:\s*total)?)[\s:,\-]*?(\d{1}(?:\.\d{1,2})?)\s*(?:mg\/dL)?/i, unit: 'mg/dL' },
+    { name: 'INR',             regex: /(?:INR)[\s:,\-]*?(\d{1}(?:\.\d{1,2})?)/i, unit: '' },
+    { name: 'BNP',             regex: /(?:BNP|B-natriuretic)[\s:,\-]*?(\d{1,5})\s*(?:pg\/mL)?/i, unit: 'pg/mL' },
+    { name: 'Troponin I',      regex: /(?:troponin\s*I?)[\s:,\-]*?(\d{1}(?:\.\d{1,3})?)\s*(?:ng\/mL)?/i, unit: 'ng/mL' },
+    { name: 'CK-MB',           regex: /(?:CK[\-\s]?MB)[\s:,\-]*?(\d{1,2}(?:\.\d)?)\s*(?:ng\/mL)?/i, unit: 'ng/mL' },
+    { name: 'RBC',             regex: /(?:RBC|red\s*blood\s*(?:cell\s*)?count)[\s:,\-]*?(\d{1}(?:\.\d)?)\s*(?:M\/uL)?/i, unit: 'M/uL' },
+    { name: 'MCV',             regex: /(?:MCV|mean\s*corp)[\s:,\-]*?(\d{2,3}(?:\.\d)?)\s*(?:fL)?/i, unit: 'fL' },
   ]
+
   for (const { name, regex, unit } of patterns) {
     const m = text.match(regex)
-    if (m) results.push({ name, value: m[1], unit, source: 'ocr' })
+    if (m) {
+      const key = name.toLowerCase()
+      if (!seen.has(key)) {
+        results.push({ name, value: m[1], unit, source: 'ocr' })
+        seen.add(key)
+      }
+    }
   }
+
+  // Generic table-row parser: lines like "TestName  123  mg/dL  70-100  HIGH"
+  // Catches labs not in the named patterns above
+  const tableLineRegex = /^[\s\|]*([A-Z][A-Za-z\s\-\/]{2,30}?)\s{1,}(\d{1,5}(?:\.\d{1,3})?)\s{1,}([A-Za-z\/%]{1,15})\s{1,}[\d<>\.\-]/gm
+  let tm
+  while ((tm = tableLineRegex.exec(text))) {
+    const name = tm[1].trim()
+    const value = tm[2]
+    const unit = tm[3].trim()
+    const key = name.toLowerCase()
+    // Skip table headers and already-captured results
+    if (/^(test|result|unit|reference|flag|normal|specimen|date|time|panel|section)/i.test(name)) continue
+    if (!seen.has(key)) {
+      results.push({ name, value, unit, source: 'ocr' })
+      seen.add(key)
+    }
+  }
+
   return results
 }
 

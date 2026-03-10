@@ -305,9 +305,9 @@ export function reconcileData(sourcesWithData) {
   })
   // Lab Results: dedup by component name + date (same lab, same day = duplicate)
   merged.results = deduplicateByKey(merged.results, r => {
-    const comp = (r.component || '').toLowerCase().trim()
-    const date = (r.resultTime || '').split(' ')[0] || (r.resultTime || '').split('T')[0] || ''
-    return `${comp}|${date}`
+    const comp = (r.name || r.component || '').toLowerCase().trim()
+    const date = (r.date || r.resultTime || '').split(' ')[0] || (r.date || r.resultTime || '').split('T')[0] || ''
+    return comp ? `${comp}|${date}` : ''
   })
   // Conditions: dedup by name
   merged.conditions = deduplicateByKey(merged.conditions, c => (c.name || '').toLowerCase().trim())
