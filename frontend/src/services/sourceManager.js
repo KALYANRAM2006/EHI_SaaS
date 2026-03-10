@@ -8,9 +8,13 @@
  *      — NOT MRN, since MRNs differ across EMR systems
  *   4. Data reconciliation / merge into unified patient view
  *   5. Patient ID remapping when same patient has different IDs across sources
+ *   6. Standard code enrichment (LOINC, ICD-10, SNOMED CT, RxNorm, NDC, CPT, CVX)
+ *      applied to ALL records before deduplication
  *
  * All processing is 100% client-side. No data leaves the browser.
  */
+
+import { enrichAllRecords } from './standardCodeEnricher'
 
 // ─── Source Colors (rotating palette) ────────────────────────────────────────
 
@@ -297,24 +301,39 @@ export function reconcileData(sourcesWithData) {
     }
   }
 
-  // ─── Comprehensive Deduplication ────────────────────────────────────────
-  // Medications: dedup by normalized name (removing strength/dose from comparison)
+  // ─── Enrich ALL records with standard codes BEFORE dedup ──────────────
+  const enrichedMerged = enrichAllRecords(merged)
+  Object.assign(merged, enrichedMerged)
+
+  // ─── Comprehensive Deduplication (code-based when available) ─────────
+  // Medications: prefer RxCUI match, fall back to normalized name
   merged.medications = deduplicateByKey(merged.medications, m => {
+    if (m.rxcui) return `rxcui:${m.rxcui}`
     const name = (m.name || '').toLowerCase().replace(/\d+\s*(mg|mcg|ml|units?|meq)\b/gi, '').trim()
     return name
   })
-  // Lab Results: dedup by component name + date (same lab, same day = duplicate)
+  // Lab Results: prefer LOINC + date, fall back to component name + date
   merged.results = deduplicateByKey(merged.results, r => {
+    const dateRaw = r.date || r.resultTime || ''
+    const date = dateRaw.split(' ')[0] || dateRaw.split('T')[0] || ''
+    if (r.loinc) return `loinc:${r.loinc}|${date}`
     const comp = (r.name || r.component || '').toLowerCase().trim()
-    const date = (r.date || r.resultTime || '').split(' ')[0] || (r.date || r.resultTime || '').split('T')[0] || ''
     return comp ? `${comp}|${date}` : ''
   })
-  // Conditions: dedup by name
-  merged.conditions = deduplicateByKey(merged.conditions, c => (c.name || '').toLowerCase().trim())
-  // Allergies: dedup by allergen name
-  merged.allergies = deduplicateByKey(merged.allergies, a => (a.allergen || a.name || '').toLowerCase().trim())
-  // Orders/Procedures: dedup by procedure name (normalized)
+  // Conditions: prefer ICD-10, then SNOMED CT, then name
+  merged.conditions = deduplicateByKey(merged.conditions, c => {
+    if (c.icd10) return `icd10:${c.icd10}`
+    if (c.snomedCT) return `snomed:${c.snomedCT}`
+    return (c.name || '').toLowerCase().trim()
+  })
+  // Allergies: prefer SNOMED CT, then allergen name
+  merged.allergies = deduplicateByKey(merged.allergies, a => {
+    if (a.snomedCT) return `snomed:${a.snomedCT}`
+    return (a.allergen || a.name || '').toLowerCase().trim()
+  })
+  // Orders/Procedures: prefer CPT code, fall back to name
   merged.orders = deduplicateByKey(merged.orders || [], o => {
+    if (o.procCode) return `cpt:${o.procCode}`
     const name = (o.procName || o.name || '').toLowerCase().trim()
     return name || ''
   })
@@ -325,10 +344,11 @@ export function reconcileData(sourcesWithData) {
     const date = (e.contactDate || '').split('T')[0] || ''
     return type && date ? `${type}|${date}` : ''
   })
-  // Immunizations: dedup by vaccine name + date
+  // Immunizations: prefer CVX + date, fall back to name + date
   merged.immunizations = deduplicateByKey(merged.immunizations || [], i => {
-    const name = (i.name || '').toLowerCase().trim()
     const date = (i.date || '').split('T')[0] || ''
+    if (i.cvx) return `cvx:${i.cvx}|${date}`
+    const name = (i.name || '').toLowerCase().trim()
     return name ? `${name}|${date}` : ''
   })
 
@@ -371,10 +391,11 @@ function smartMergeRecord(keeper, dup) {
   const merged = { ...keeper }
   // Fill empty string fields from duplicate
   for (const field of ['value', 'unit', 'units', 'flag', 'referenceRange', 'dose', 'route',
-                        'frequency', 'indication', 'reaction', 'severity', 'icd10', 'code',
-                        'codeSystem', 'snomed', 'snomedCT', 'loinc', 'rxcui', 'drugClass',
-                        'procName', 'procCode', 'cptDescription', 'orderDate', 'specimen',
-                        'priority', 'diagnosis', 'chiefComplaint', 'manufacturer']) {
+                        'frequency', 'indication', 'reaction', 'severity', 'icd10', 'icd10Display',
+                        'code', 'codeSystem', 'snomed', 'snomedCT', 'snomedDisplay',
+                        'loinc', 'loincDisplay', 'rxcui', 'ndc', 'drugClass', 'genericName', 'brandName',
+                        'procName', 'procCode', 'cptDescription', 'cvx', 'cvxDisplay',
+                        'orderDate', 'specimen', 'priority', 'diagnosis', 'chiefComplaint', 'manufacturer']) {
     if ((!merged[field] || merged[field] === '') && dup[field] && dup[field] !== '') {
       merged[field] = dup[field]
     }
@@ -398,29 +419,39 @@ function smartMergeRecord(keeper, dup) {
  */
 export function deduplicateMergedData(data) {
   if (!data) return data
-  const deduped = { ...data }
+
+  // ─── Enrich ALL records with standard codes BEFORE dedup ────────────
+  const enriched = enrichAllRecords(data)
+  const deduped = { ...enriched }
+
+  // Medications: prefer RxCUI match, fall back to normalized name
   deduped.medications = deduplicateByKey(deduped.medications || [], m => {
+    if (m.rxcui) return `rxcui:${m.rxcui}`
     const name = (m.name || '').toLowerCase().replace(/\d+\s*(mg|mcg|ml|units?|meq)\b/gi, '').trim()
     return name || ''
   })
-  // Lab results: use name OR component (OCR uses name, Epic TSV uses component)
-  // and date OR resultTime (OCR uses date, Epic TSV uses resultTime)
+  // Lab results: prefer LOINC + date, fall back to name + date
   deduped.results = deduplicateByKey(deduped.results || [], r => {
-    const comp = (r.name || r.component || '').toLowerCase().trim()
     const dateRaw = r.date || r.resultTime || ''
     const date = dateRaw.split(' ')[0] || dateRaw.split('T')[0] || ''
+    if (r.loinc) return `loinc:${r.loinc}|${date}`
+    const comp = (r.name || r.component || '').toLowerCase().trim()
     return comp ? `${comp}|${date}` : ''
   })
+  // Conditions: prefer ICD-10, then SNOMED CT, then name
   deduped.conditions = deduplicateByKey(deduped.conditions || [], c => {
-    const name = (c.name || '').toLowerCase().trim()
-    return name || ''
+    if (c.icd10) return `icd10:${c.icd10}`
+    if (c.snomedCT) return `snomed:${c.snomedCT}`
+    return (c.name || '').toLowerCase().trim() || ''
   })
+  // Allergies: prefer SNOMED CT, then allergen name
   deduped.allergies = deduplicateByKey(deduped.allergies || [], a => {
-    const name = (a.allergen || a.name || '').toLowerCase().trim()
-    return name || ''
+    if (a.snomedCT) return `snomed:${a.snomedCT}`
+    return (a.allergen || a.name || '').toLowerCase().trim() || ''
   })
-  // Orders/Procedures: dedup by procedure name (normalized)
+  // Orders/Procedures: prefer CPT code, fall back to name
   deduped.orders = deduplicateByKey(deduped.orders || [], o => {
+    if (o.procCode) return `cpt:${o.procCode}`
     const name = (o.procName || o.name || '').toLowerCase().trim()
     return name || ''
   })
@@ -431,10 +462,11 @@ export function deduplicateMergedData(data) {
     const date = (e.contactDate || '').split('T')[0] || ''
     return type && date ? `${type}|${date}` : ''
   })
-  // Immunizations: dedup by vaccine name + date
+  // Immunizations: prefer CVX + date, fall back to name + date
   deduped.immunizations = deduplicateByKey(deduped.immunizations || [], i => {
-    const name = (i.name || '').toLowerCase().trim()
     const date = (i.date || '').split('T')[0] || ''
+    if (i.cvx) return `cvx:${i.cvx}|${date}`
+    const name = (i.name || '').toLowerCase().trim()
     return name ? `${name}|${date}` : ''
   })
   return deduped

@@ -1045,6 +1045,7 @@ export default function Dashboard() {
                   <thead>
                     <tr className="border-b border-gray-200 text-left text-gray-500">
                       <th className="pb-3 pr-4">Component</th>
+                      <th className="pb-3 pr-4">LOINC</th>
                       <th className="pb-3 pr-4">Value</th>
                       <th className="pb-3 pr-4">Unit</th>
                       <th className="pb-3 pr-4">Reference</th>
@@ -1066,6 +1067,7 @@ export default function Dashboard() {
                       return (
                       <tr key={i} className={`border-b border-gray-100 ${flagVal && flagVal !== 'Normal' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
                         <td className="py-3 pr-4 font-medium">{compName}</td>
+                        <td className="py-3 pr-4">{result.loinc ? <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700" title={result.loincDisplay || ''}>{result.loinc}</span> : <span className="text-gray-300">—</span>}</td>
                         <td className="py-3 pr-4 font-semibold">{result.value || '—'}</td>
                         <td className="py-3 pr-4 text-gray-500">{result.unit || result.units || ''}</td>
                         <td className="py-3 pr-4 text-gray-500">{refRange}</td>
@@ -1108,7 +1110,13 @@ export default function Dashboard() {
                             <Pill className="w-5 h-5 text-blue-600" />
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-900">{med.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-gray-900">{med.name}</p>
+                              {med.rxcui && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700" title={`RxNorm CUI: ${med.rxcui}`}>RxCUI:{med.rxcui}</span>}
+                              {med.ndc && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-100 text-cyan-700" title={`NDC: ${med.ndc}`}>NDC</span>}
+                              {med.drugClass && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">{med.drugClass}</span>}
+                            </div>
+                            {med.genericName && med.genericName !== med.name?.toLowerCase() && <p className="text-xs text-indigo-500 mt-0.5">Generic: {med.genericName}</p>}
                             <p className="text-sm text-gray-600 mt-1">{med.dosage}</p>
                             <p className="text-sm text-gray-500 mt-1">{med.purpose}</p>
                             <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
@@ -1140,7 +1148,11 @@ export default function Dashboard() {
                     <div key={index} className="p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold text-gray-900">{condition.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-gray-900">{condition.name}</p>
+                            {condition.icd10 && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-100 text-rose-700" title={condition.icd10Display || ''}>ICD-10: {condition.icd10}</span>}
+                            {condition.snomedCT && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700" title={condition.snomedDisplay || ''}>SNOMED</span>}
+                          </div>
                           <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
                             <span>Onset: {new Date(condition.onset).toLocaleDateString()}</span>
                             <span>•</span>
@@ -1618,6 +1630,7 @@ export default function Dashboard() {
                       <thead>
                         <tr className="border-b border-gray-200 text-left text-gray-500">
                           <th className="pb-3 pr-4">Component</th>
+                          <th className="pb-3 pr-4">LOINC</th>
                           <th className="pb-3 pr-4">Value</th>
                           <th className="pb-3 pr-4">Unit</th>
                           <th className="pb-3 pr-4">Reference Range</th>
@@ -1639,6 +1652,7 @@ export default function Dashboard() {
                           return (
                           <tr key={i} className={`border-b border-gray-100 ${flagVal && flagVal !== 'Normal' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
                             <td className="py-3 pr-4 font-medium">{compName}</td>
+                            <td className="py-3 pr-4">{result.loinc ? <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700" title={result.loincDisplay || ''}>{result.loinc}</span> : <span className="text-gray-300">—</span>}</td>
                             <td className="py-3 pr-4 font-semibold">{result.value || '—'}</td>
                             <td className="py-3 pr-4 text-gray-500">{result.unit || result.units || ''}</td>
                             <td className="py-3 pr-4 text-gray-500">{refRange}</td>

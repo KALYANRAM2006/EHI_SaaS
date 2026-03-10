@@ -395,15 +395,29 @@ function getRecordTitle(record, category) {
 function getRecordSubtitle(record, category) {
   switch (category) {
     case 'medications':
-      return [record.dosage, record.dose, record.frequency, record.prescriber, record.purpose].filter(Boolean).join(' · ')
+      return [
+        record.rxcui ? `RxCUI:${record.rxcui}` : null,
+        record.ndc ? `NDC:${record.ndc}` : null,
+        record.drugClass || null,
+        record.genericName && record.genericName !== (record.name||'').toLowerCase() ? `(${record.genericName})` : null,
+        record.dosage, record.dose, record.frequency, record.prescriber, record.purpose,
+      ].filter(Boolean).join(' · ')
     case 'encounters':
       return [record.contactDate, record.visitProvider, record.patientClass].filter(Boolean).join(' · ')
     case 'allergies':
-      return [record.severity, record.reaction, record.type].filter(Boolean).join(' · ')
+      return [
+        record.snomedCT ? `SNOMED:${record.snomedCT}` : null,
+        record.severity, record.reaction, record.type,
+      ].filter(Boolean).join(' · ')
     case 'conditions':
-      return [record.status, record.onset, record.severity, record.icd10 ? `ICD-10: ${record.icd10}` : null].filter(Boolean).join(' · ')
+      return [
+        record.icd10 ? `ICD-10:${record.icd10}` : null,
+        record.snomedCT ? `SNOMED:${record.snomedCT}` : null,
+        record.status, record.onset, record.severity,
+      ].filter(Boolean).join(' · ')
     case 'results':
       return [
+        record.loinc ? `LOINC:${record.loinc}` : null,
         record.flag && record.flag !== 'Normal' ? `⚠️ ${record.flag}` : record.flag,
         record.referenceRange ? `Ref: ${record.referenceRange}` :
           (record.refLow != null && record.refHigh != null ? `Ref: ${record.refLow}–${record.refHigh}` : null),
@@ -412,15 +426,22 @@ function getRecordSubtitle(record, category) {
     case 'procedures':
     case 'orders':
       return [
-        record.procCode ? `CPT: ${record.procCode}` : null,
+        record.procCode ? `CPT:${record.procCode}` : null,
         record.cptDescription || null,
         record.orderDate || null,
         record.status || null,
       ].filter(Boolean).join(' · ')
     case 'immunizations':
-      return [record.date, record.route, record.site, record.manufacturer, record.status].filter(Boolean).join(' · ')
+      return [
+        record.cvx ? `CVX:${record.cvx}` : null,
+        record.cvxDisplay || null,
+        record.date, record.route, record.site, record.manufacturer, record.status,
+      ].filter(Boolean).join(' · ')
     case 'vitals':
-      return [record.date, record.unit].filter(Boolean).join(' · ')
+      return [
+        record.loinc ? `LOINC:${record.loinc}` : null,
+        record.date, record.unit,
+      ].filter(Boolean).join(' · ')
     case 'documents':
       return [record.type, record.status, record.date, record.author].filter(Boolean).join(' · ')
     default:
