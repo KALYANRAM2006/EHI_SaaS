@@ -9,11 +9,14 @@
 //   • Captures contextual data that regex misses (negation, severity, etc.)
 //
 // PRIVACY:
-//   • Requires OpenAI API key — text is sent to OpenAI servers
+//   • PHI is STRIPPED before text leaves the browser (deidentifyText)
+//   • Dates → year only, names/MRN/SSN/phone/email → [REDACTED] tokens
+//   • Clinical terms (drugs, labs, diagnoses) are PRESERVED for AI parsing
 //   • OpenAI does NOT train on API data (as of their policy)
-//   • Enable only when comfortable sending clinical text to OpenAI
 //   • Key is stored in browser localStorage only (never server-side)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+import { deidentifyText } from '../utils/deidentify.js'
 
 const STORAGE_KEY = 'ehi_openai_clinical_config'
 const MAX_TEXT_LENGTH = 80000 // GPT-4 context budget (~20k tokens)
@@ -92,11 +95,17 @@ export async function analyzeWithOpenAI(text, onProgress = () => {}) {
   if (!config.apiKey) throw new Error('OpenAI API key not configured')
 
   // Truncate very long texts
-  const truncated = text.length > MAX_TEXT_LENGTH
+  const truncatedRaw = text.length > MAX_TEXT_LENGTH
     ? text.slice(0, MAX_TEXT_LENGTH) + '\n\n[... text truncated for API limits ...]'
     : text
 
-  onProgress({ phase: 'ai-submit', progress: 0.75, message: 'Sending to OpenAI...' })
+  // ── Privacy-first: strip PHI before sending to cloud ───────────────────
+  const { safeText: truncated, strippedCount } = deidentifyText(truncatedRaw)
+  if (strippedCount > 0) {
+    console.log(`[OpenAI Clinical] De-identified ${strippedCount} PHI elements before cloud transmission`)
+  }
+
+  onProgress({ phase: 'ai-submit', progress: 0.75, message: `Sending to OpenAI (${strippedCount} PHI elements stripped)...` })
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',

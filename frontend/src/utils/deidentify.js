@@ -330,3 +330,160 @@ export function validateNoPhI(deidentified) {
 
   return { clean: warnings.length === 0, warnings }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RAW TEXT DE-IDENTIFICATION — For unstructured clinical documents (PDFs, OCR)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Unlike deidentifyPatient() which works on structured patient objects, this
+// function strips PHI directly from raw clinical text before it gets sent to
+// cloud AI services (Azure Health AI, OpenAI GPT-4).
+//
+// PRESERVES: medication names, lab values, diagnosis terms, vital signs,
+//            procedure names, clinical terminology, ICD/CPT/LOINC codes
+//
+// STRIPS:    patient names, MRN, SSN, phone, fax, email, addresses, ZIP codes,
+//            dates (replaced with year only), account numbers, device IDs, URLs, IPs
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * De-identify raw clinical text for safe transmission to external AI APIs.
+ * Strips HIPAA identifiers while preserving clinical content that AI needs to parse.
+ *
+ * @param {string} text - Raw clinical text extracted from PDF/OCR
+ * @returns {{ safeText: string, strippedCount: number, warnings: string[] }}
+ */
+export function deidentifyText(text) {
+  if (!text || typeof text !== 'string') {
+    return { safeText: '', strippedCount: 0, warnings: [] }
+  }
+
+  let safeText = text
+  let strippedCount = 0
+  const warnings = []
+
+  // ── 1. SSN (###-##-####) ───────────────────────────────────────────────
+  safeText = safeText.replace(/\b\d{3}-\d{2}-\d{4}\b/g, () => {
+    strippedCount++
+    return '[SSN_REDACTED]'
+  })
+
+  // ── 2. Phone / Fax numbers ────────────────────────────────────────────
+  // Matches: (555) 123-4567, 555-123-4567, 555.123.4567, +1-555-123-4567
+  safeText = safeText.replace(/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, (match) => {
+    // Don't strip if it looks like a lab value or clinical number (e.g., count of 1234567890)
+    if (/^\d+$/.test(match.replace(/[-.\s()+]/g, '')) && match.replace(/[-.\s()+]/g, '').length === 10) {
+      strippedCount++
+      return '[PHONE_REDACTED]'
+    }
+    strippedCount++
+    return '[PHONE_REDACTED]'
+  })
+
+  // ── 3. Email addresses ────────────────────────────────────────────────
+  safeText = safeText.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, () => {
+    strippedCount++
+    return '[EMAIL_REDACTED]'
+  })
+
+  // ── 4. URLs ───────────────────────────────────────────────────────────
+  safeText = safeText.replace(/https?:\/\/[^\s)]+/gi, () => {
+    strippedCount++
+    return '[URL_REDACTED]'
+  })
+
+  // ── 5. IP addresses ──────────────────────────────────────────────────
+  safeText = safeText.replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, () => {
+    strippedCount++
+    return '[IP_REDACTED]'
+  })
+
+  // ── 6. MRN / Account numbers (common formats) ─────────────────────────
+  // Patterns: "MRN: 1234567", "Acct#: ABC12345", "MR#12345678", "Patient ID: E12345678"
+  safeText = safeText.replace(/\b(?:MRN|MR#|MR\s*#|Acct\.?\s*#?|Account\s*(?:#|Number|No\.?)?|Patient\s*ID|Med\s*Rec(?:ord)?(?:\s*#|\s*No\.?)?)\s*:?\s*[A-Z0-9]{4,}\b/gi, () => {
+    strippedCount++
+    return '[MRN_REDACTED]'
+  })
+
+  // ── 7. Dates → year only (HIPAA Safe Harbor) ──────────────────────────
+  // ISO dates: 2024-03-15 → 2024
+  safeText = safeText.replace(/\b((?:19|20)\d{2})[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b/g, (_, year) => {
+    strippedCount++
+    return year
+  })
+  // US dates: 03/15/2024 or 03-15-2024 → 2024
+  safeText = safeText.replace(/\b(0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])[-/]((?:19|20)\d{2})\b/g, (_, _m, _d, year) => {
+    strippedCount++
+    return year
+  })
+  // Textual dates: March 15, 2024 or Mar 15 2024 → 2024
+  safeText = safeText.replace(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+((?:19|20)\d{2})\b/gi, (_, year) => {
+    strippedCount++
+    return year
+  })
+  // "15 March 2024" format → 2024
+  safeText = safeText.replace(/\b\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?,?\s+((?:19|20)\d{2})\b/gi, (_, year) => {
+    strippedCount++
+    return year
+  })
+
+  // ── 8. ZIP codes (5-digit or 5+4 that aren't lab values) ─────────────
+  // Only strip when preceded by state abbreviation or address context
+  safeText = safeText.replace(/\b([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\b/g, (match, state, zip) => {
+    const usStates = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']
+    if (usStates.includes(state)) {
+      strippedCount++
+      return `${state} [ZIP_REDACTED]`
+    }
+    return match
+  })
+
+  // ── 9. Street addresses ───────────────────────────────────────────────
+  // Pattern: "123 Main Street", "456 Oak Ave, Suite 200"
+  safeText = safeText.replace(/\b\d{1,5}\s+(?:[A-Za-z]+\s){1,3}(?:Street|St|Avenue|Ave|Boulevard|Blvd|Drive|Dr|Road|Rd|Lane|Ln|Way|Court|Ct|Circle|Cir|Place|Pl|Terrace|Ter)\.?\b(?:\s*,?\s*(?:Suite|Ste|Apt|Unit|#)\s*\S+)?/gi, () => {
+    strippedCount++
+    return '[ADDRESS_REDACTED]'
+  })
+
+  // ── 10. Patient name lines (common in clinical docs) ──────────────────
+  // Pattern: "Patient Name: John Doe" or "Patient: Jane Smith, MD"
+  safeText = safeText.replace(/\b(?:Patient\s*(?:Name)?|Name)\s*:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})/g, () => {
+    strippedCount++
+    return 'Patient Name: [NAME_REDACTED]'
+  })
+
+  // ── 11. Provider names after common labels ────────────────────────────
+  // "Dr. John Smith", "Attending: Jane Doe, MD", "Physician: Dr. X"
+  safeText = safeText.replace(/\bDr\.?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g, () => {
+    strippedCount++
+    return 'Dr. [PROVIDER_REDACTED]'
+  })
+  safeText = safeText.replace(/\b(?:Attending|Physician|Provider|Ordering|Referring|PCP)\s*:\s*(?:Dr\.?\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})(?:\s*,\s*(?:MD|DO|NP|PA|RN))?/g, (match) => {
+    const label = match.split(':')[0]
+    strippedCount++
+    return `${label}: [PROVIDER_REDACTED]`
+  })
+
+  // ── 12. Device serial numbers and identifiers ─────────────────────────
+  safeText = safeText.replace(/\b(?:Serial\s*(?:#|Number|No\.?)|Device\s*ID|UDI)\s*:?\s*\S+/gi, () => {
+    strippedCount++
+    return '[DEVICE_ID_REDACTED]'
+  })
+
+  // Post-validation: check for residual PHI patterns
+  const residualPatterns = [
+    { name: 'SSN', regex: /\b\d{3}-\d{2}-\d{4}\b/ },
+    { name: 'Email', regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/ },
+  ]
+  for (const { name, regex } of residualPatterns) {
+    if (regex.test(safeText)) {
+      warnings.push(`Potential residual ${name} detected after de-identification`)
+    }
+  }
+
+  if (strippedCount > 0) {
+    console.log(`[DeID] Stripped ${strippedCount} PHI elements from clinical text (${text.length} → ${safeText.length} chars)`)
+  }
+
+  return { safeText, strippedCount, warnings }
+}

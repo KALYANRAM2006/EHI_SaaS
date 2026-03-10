@@ -1061,7 +1061,7 @@ export default function Dashboard() {
                       const resultDate = result.date || result.resultTime
                       const dateStr = resultDate ? (() => { try { const d = new Date(resultDate); return isNaN(d.getTime()) ? resultDate : d.toLocaleDateString() } catch { return resultDate } })() : '—'
                       const flagVal = result.flag || ''
-                      const src = result._extractionSource || (result._source === 'ocr' ? 'local-regex' : result._source ? 'tsv' : 'unknown')
+                      const src = result._extractionSource || (result._sourceFile ? 'local-regex' : result._source ? 'tsv' : 'unknown')
                       const srcLabel = { 'openai': 'OpenAI GPT', 'azure-ai': 'Azure AI', 'local-regex': 'OCR Regex', 'tsv': 'TSV Parser' }[src] || src
                       const srcColor = { 'openai': 'bg-emerald-100 text-emerald-700', 'azure-ai': 'bg-purple-100 text-purple-700', 'local-regex': 'bg-blue-100 text-blue-700', 'tsv': 'bg-gray-100 text-gray-600' }[src] || 'bg-gray-100 text-gray-600'
                       return (
@@ -1646,7 +1646,7 @@ export default function Dashboard() {
                           const resultDate = result.date || result.resultTime
                           const dateStr = resultDate ? (() => { try { const d = new Date(resultDate); return isNaN(d.getTime()) ? resultDate : d.toLocaleDateString() } catch { return resultDate } })() : '—'
                           const flagVal = result.flag || ''
-                          const src = result._extractionSource || (result._source === 'ocr' ? 'local-regex' : result._source ? 'tsv' : 'unknown')
+                          const src = result._extractionSource || (result._sourceFile ? 'local-regex' : result._source ? 'tsv' : 'unknown')
                           const srcLabel = { 'openai': 'OpenAI GPT', 'azure-ai': 'Azure AI', 'local-regex': 'OCR Regex', 'tsv': 'TSV Parser' }[src] || src
                           const srcColor = { 'openai': 'bg-emerald-100 text-emerald-700', 'azure-ai': 'bg-purple-100 text-purple-700', 'local-regex': 'bg-blue-100 text-blue-700', 'tsv': 'bg-gray-100 text-gray-600' }[src] || 'bg-gray-100 text-gray-600'
                           return (

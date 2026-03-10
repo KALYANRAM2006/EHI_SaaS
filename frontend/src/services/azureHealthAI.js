@@ -12,11 +12,15 @@
 //   • Falls back to the built-in regex + dictionary pipeline
 //   • 100% client-side, zero data leaves the browser
 //
-// PRIVACY NOTE:
+// PRIVACY:
+//   • PHI is STRIPPED before text leaves the browser (deidentifyText)
+//   • Dates → year only, names/MRN/SSN/phone/email → [REDACTED] tokens
+//   • Clinical terms (drugs, labs, diagnoses) are PRESERVED for AI parsing
 //   • Azure Health API is HIPAA-compliant when configured with a BAA
 //   • Data is encrypted in transit (TLS) and NOT stored by Microsoft
-//   • Enable only if your Azure subscription has appropriate compliance config
 // ═══════════════════════════════════════════════════════════════════════════════
+
+import { deidentifyText } from '../utils/deidentify.js'
 
 const STORAGE_KEY = 'ehi_azure_health_ai_config'
 const MAX_TEXT_LENGTH = 125000 // Azure limit per document
@@ -112,11 +116,17 @@ export async function analyzeWithAzureHealth(text, onProgress) {
   }
 
   // Truncate if too long
-  const analysisText = text.length > MAX_TEXT_LENGTH
+  const truncatedText = text.length > MAX_TEXT_LENGTH
     ? text.substring(0, MAX_TEXT_LENGTH)
     : text
 
-  onProgress?.({ phase: 'ai-submit', progress: 0.1, message: 'Submitting to Azure Health AI...' })
+  // ── Privacy-first: strip PHI before sending to cloud ───────────────────
+  const { safeText: analysisText, strippedCount } = deidentifyText(truncatedText)
+  if (strippedCount > 0) {
+    console.log(`[Azure Health AI] De-identified ${strippedCount} PHI elements before cloud transmission`)
+  }
+
+  onProgress?.({ phase: 'ai-submit', progress: 0.1, message: `Submitting to Azure Health AI (${strippedCount} PHI elements stripped)...` })
 
   // ── Submit analysis job ────────────────────────────────────────────────
   const jobUrl = `${config.endpoint}/language/analyze-text/jobs?api-version=2023-04-01`

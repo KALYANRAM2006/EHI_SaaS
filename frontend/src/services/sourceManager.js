@@ -68,6 +68,7 @@ export function tagRecordsWithSource(records, source) {
   if (!Array.isArray(records)) return []
   return records.map(r => ({
     ...r,
+    _originalSource: r._source || r._originalSource,  // preserve OCR/tsv origin
     _source: source.id,
     _sourceName: source.name,
     _sourceColor: source.color,

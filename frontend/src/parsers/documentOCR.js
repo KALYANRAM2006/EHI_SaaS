@@ -758,6 +758,7 @@ export function documentResultToAppRows(docResult, filename) {
     patId: '', vitalId: `OCR-VIT-${Date.now()}-${i}`,
     name: v.name, value: v.value, date: clinicalEntities.dates[0] || now,
     _source: 'ocr', _sourceFile: filename,
+    _extractionSource: v.source || 'local-regex',
   }))
 
   rows.results = clinicalEntities.labResults.map((lab, i) => ({

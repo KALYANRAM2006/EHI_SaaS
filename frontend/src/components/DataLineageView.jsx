@@ -343,7 +343,7 @@ function RecordRow({ record, category }) {
         </span>
       )}
       {(() => {
-        const src = record._extractionSource || (record._source === 'ocr' ? 'local-regex' : record._source ? 'tsv' : null)
+        const src = record._extractionSource || (record._sourceFile ? 'local-regex' : record._source ? 'tsv' : null)
         if (!src) return null
         const srcLabel = { 'openai': 'OpenAI GPT', 'azure-ai': 'Azure AI', 'local-regex': 'OCR Regex', 'tsv': 'TSV Parser' }[src] || src
         const srcColor = { 'openai': 'bg-emerald-100 text-emerald-700', 'azure-ai': 'bg-purple-100 text-purple-700', 'local-regex': 'bg-blue-100 text-blue-700', 'tsv': 'bg-gray-100 text-gray-600' }[src] || 'bg-gray-100 text-gray-600'
