@@ -27,6 +27,60 @@ import {
   parseCCDA,
 } from './formatParsers'
 import { processDocument, documentResultToAppRows, terminateOCR } from './documentOCR'
+import { isOpenAIEnabled, analyzeWithOpenAI } from '../services/openAIClinicalParser'
+import { isAzureHealthEnabled, analyzeWithAzureHealth } from '../services/azureHealthAI'
+
+// ─── AI Enhancement for Document OCR (same pipeline as Document Intelligence) ─
+
+/**
+ * Try to enhance extracted text with AI (OpenAI GPT or Azure Health AI).
+ * Priority: OpenAI > Azure > null (local-only).
+ */
+async function enhanceDocumentWithAI(text, label, onProgress) {
+  try {
+    if (isOpenAIEnabled() && text) {
+      onProgress({ phase: 'ai-submit', progress: 0.7, message: `OpenAI analyzing ${label}...` })
+      const aiEntities = await analyzeWithOpenAI(text, onProgress)
+      return { entities: aiEntities, method: 'openai-gpt' }
+    }
+    if (isAzureHealthEnabled() && text) {
+      onProgress({ phase: 'ai-submit', progress: 0.7, message: `Azure AI analyzing ${label}...` })
+      const aiEntities = await analyzeWithAzureHealth(text, onProgress)
+      return { entities: aiEntities, method: 'azure-ai' }
+    }
+  } catch (err) {
+    console.warn(`[AI] Enhancement error for ${label}:`, err.message)
+  }
+  return null
+}
+
+/**
+ * Merge local regex entities with AI entities (AI takes priority).
+ * Same logic as DocumentIntelligence.jsx's mergeEntities.
+ */
+function mergeClinicalEntities(local, ai) {
+  if (!ai) return local
+  const merged = { ...local }
+
+  // AI demographics override local (more accurate)
+  if (ai.demographics && Object.keys(ai.demographics).length > 0) {
+    merged.demographics = { ...(local.demographics || {}), ...ai.demographics }
+  }
+
+  // For list entities: use AI results if present, keep local as supplement
+  const listKeys = ['medications', 'diagnoses', 'labResults', 'vitals', 'allergies', 'procedures']
+  for (const key of listKeys) {
+    const aiItems = ai[key] || []
+    const localItems = local[key] || []
+    if (aiItems.length > 0) {
+      const aiNames = new Set(aiItems.map(i => (i.name || '').toLowerCase()))
+      const unique = localItems.filter(li => !aiNames.has((li.name || '').toLowerCase()))
+      merged[key] = [...aiItems, ...unique]
+    }
+  }
+
+  return merged
+}
 
 // ─── Provider Lookup ────────────────────────────────────────────────────────
 
@@ -868,6 +922,29 @@ export async function parseUploadedFiles(fileList, onProgress = () => {}) {
         })
 
         if (result.text && result.text.length > 0) {
+          // ─── AI Enhancement: same pipeline as Document Intelligence ───
+          try {
+            const aiResult = await enhanceDocumentWithAI(result.text, doc.filename, (p) => {
+              onProgress({
+                phase: 'ai-enhance',
+                current: i + 1,
+                total: extracted.documents.length,
+                filename: doc.filename,
+                ...p,
+              })
+            })
+            if (aiResult) {
+              result.clinicalEntities = mergeClinicalEntities(result.clinicalEntities, aiResult.entities)
+              result.extractionMethod = aiResult.method
+              console.log(`[AI] ${doc.filename}: enhanced with ${aiResult.method}`)
+            } else {
+              result.extractionMethod = 'local-regex'
+            }
+          } catch (aiErr) {
+            console.warn(`[AI] Enhancement failed for ${doc.filename}:`, aiErr.message)
+            result.extractionMethod = 'local-regex'
+          }
+
           ocrResults.push({ filename: doc.filename, result })
           console.log(`[OCR] ${doc.filename}: ${result.method}, ${result.text.length} chars, ${Math.round(result.confidence)}% confidence`)
         } else {
