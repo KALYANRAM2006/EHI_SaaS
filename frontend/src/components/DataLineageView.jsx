@@ -35,12 +35,13 @@ export default function DataLineageView() {
     if (!parsedData || !selectedPatient) return { medications: [], encounters: [], allergies: [], conditions: [], results: [] }
     const pid = selectedPatient.patId
     return {
-      medications: (parsedData.medications || []).filter(r => !r.patId || r.patId === pid),
+      medications: (parsedData.medications || selectedPatient.medications || []).filter(r => !r.patId || r.patId === pid),
       encounters: (parsedData.encounters || []).filter(r => !r.patId || r.patId === pid),
-      allergies: (parsedData.allergies || selectedPatient.allergies || []),
-      conditions: (parsedData.conditions || selectedPatient.conditions || []),
-      results: (parsedData.results || []).filter(r => {
-        if (r.patId) return r.patId === pid
+      allergies: (parsedData.allergies || selectedPatient.allergies || []).filter(r => !r.patId || r.patId === pid),
+      conditions: (parsedData.conditions || selectedPatient.conditions || []).filter(r => !r.patId || r.patId === pid),
+      results: (parsedData.results || selectedPatient.results || []).filter(r => {
+        if (!r.patId) return true  // OCR-extracted results have no patId — include them for single-patient
+        if (r.patId === pid) return true
         // Results may be linked via orders
         const patientOrders = (parsedData.orders || []).filter(o => o.patId === pid).map(o => o.orderId)
         return patientOrders.includes(r.orderId)

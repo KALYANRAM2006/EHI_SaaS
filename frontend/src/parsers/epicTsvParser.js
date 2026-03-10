@@ -703,7 +703,8 @@ function assembleParsedData(assembled, documentIndexes, vendor, rules, ocrResult
     return buildPatientSummary(patient, enc, ord, res, prob, meds, alrg, immn, vitl, docs)
   })
 
-  const totalRecords = encounterRows.length + orderRows.length + resultRows.length
+  const totalRecords = encounterRows.length + orderRows.length + resultRows.length +
+    medRows.length + problemRows.length + allergyRows.length + immuneRows.length + vitalRows.length
   const selectedPatient = patientSummaries[0] || null
 
   return {
@@ -712,6 +713,12 @@ function assembleParsedData(assembled, documentIndexes, vendor, rules, ocrResult
     encounters: encounterRows,
     orders: orderRows,
     results: resultRows,
+    medications: medRows,
+    conditions: problemRows,
+    allergies: allergyRows,
+    immunizations: immuneRows,
+    vitals: vitalRows,
+    documents: docRows,
     providers: defaultProviders,
     totalRecords,
     totalPatients: patientSummaries.length,
