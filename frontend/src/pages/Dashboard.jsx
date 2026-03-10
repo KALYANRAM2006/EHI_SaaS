@@ -245,11 +245,10 @@ export default function Dashboard() {
     const insights = []
 
     // Blood pressure trend
-    const bpResults = stats.results.filter(r =>
-      r.component?.toLowerCase().includes('systolic') ||
-      r.component?.toLowerCase().includes('blood pressure') ||
-      r.component?.toLowerCase().includes('intravascular systolic')
-    )
+    const bpResults = stats.results.filter(r => {
+      const comp = (r.name || r.component || '').toLowerCase()
+      return comp.includes('systolic') || comp.includes('blood pressure') || comp.includes('intravascular systolic')
+    })
     if (bpResults.length > 0) {
       const vals = bpResults.map(r => parseFloat(r.value)).filter(v => !isNaN(v))
       if (vals.length >= 2 && vals[vals.length - 1] > vals[0]) {
@@ -784,13 +783,15 @@ export default function Dashboard() {
             })
           })
           stats.results.forEach(result => {
+            const compName = result.name || result.component || 'Lab Result'
+            const refRange = result.referenceRange || (result.refLow != null && result.refHigh != null ? `${result.refLow}-${result.refHigh}` : '')
             timelineEvents.push({
-              date: result.resultTime,
+              date: result.date || result.resultTime,
               type: 'lab',
               category: 'Labs',
               title: 'Lab Result',
-              subtitle: result.component,
-              notes: `${result.value} ${result.unit || ''} (Ref: ${result.refLow}-${result.refHigh}) — ${result.flag}`,
+              subtitle: compName,
+              notes: `${result.value || ''} ${result.unit || result.units || ''} ${refRange ? `(Ref: ${refRange})` : ''} ${result.flag ? `— ${result.flag}` : ''}`.trim(),
               data: result,
             })
           })
@@ -1052,20 +1053,34 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {stats.results.map((result, i) => (
-                      <tr key={i} className={`border-b border-gray-100 ${result.flag !== 'Normal' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                        <td className="py-3 pr-4 font-medium">{result.component}</td>
-                        <td className="py-3 pr-4 font-semibold">{result.value}</td>
-                        <td className="py-3 pr-4 text-gray-500">{result.unit}</td>
-                        <td className="py-3 pr-4 text-gray-500">{result.refLow}-{result.refHigh}</td>
+                    {stats.results.map((result, i) => {
+                      const compName = result.name || result.component || 'Lab Result'
+                      const refRange = result.referenceRange || (result.refLow != null && result.refHigh != null ? `${result.refLow}-${result.refHigh}` : '—')
+                      const resultDate = result.date || result.resultTime
+                      const dateStr = resultDate ? (() => { try { return new Date(resultDate).toLocaleDateString() } catch { return resultDate } })() : '—'
+                      const flagVal = result.flag || ''
+                      return (
+                      <tr key={i} className={`border-b border-gray-100 ${flagVal && flagVal !== 'Normal' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                        <td className="py-3 pr-4 font-medium">{compName}</td>
+                        <td className="py-3 pr-4 font-semibold">{result.value || '—'}</td>
+                        <td className="py-3 pr-4 text-gray-500">{result.unit || result.units || ''}</td>
+                        <td className="py-3 pr-4 text-gray-500">{refRange}</td>
                         <td className="py-3 pr-4">
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${result.flag === 'Normal' ? 'bg-green-100 text-green-700' : result.flag === 'High' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                            {result.flag}
+                          {flagVal ? (
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${flagVal === 'Normal' ? 'bg-green-100 text-green-700' : flagVal === 'High' || flagVal === 'CRITICAL' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {flagVal}
                           </span>
+                          ) : <span className="text-gray-300">—</span>}
                         </td>
-                        <td className="py-3 text-gray-500">{new Date(result.resultTime).toLocaleDateString()}</td>
+                        <td className="py-3 text-gray-500">{dateStr}</td>
+                        {result._mergedCount > 1 && (
+                          <td className="py-3 pl-2">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-600">Merged {result._mergedCount}</span>
+                          </td>
+                        )}
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1179,13 +1194,12 @@ export default function Dashboard() {
               onset: c.onset,
             })),
             labResults: stats.results.map(r => ({
-              component: r.component,
+              component: r.name || r.component,
               value: r.value,
-              unit: r.unit,
+              unit: r.unit || r.units,
               flag: r.flag,
-              refLow: r.refLow,
-              refHigh: r.refHigh,
-              resultTime: r.resultTime,
+              referenceRange: r.referenceRange || (r.refLow != null && r.refHigh != null ? `${r.refLow}-${r.refHigh}` : ''),
+              date: r.date || r.resultTime,
             })),
             allergies: stats.allergies || [],
           } : {}

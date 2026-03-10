@@ -318,20 +318,58 @@ export function reconcileData(sourcesWithData) {
 }
 
 /**
- * Deduplicate records by key. Keeps the first occurrence (preserves source lineage).
- * Marks duplicates with _duplicate = true instead of removing, so we can show them in lineage.
+ * Smart-merge deduplication.
+ * When duplicates are found: merge the best fields from both into the keeper,
+ * mark the duplicate, and track how many sources contributed.
  */
 function deduplicateByKey(records, keyFn) {
-  const seen = new Map()
-  return records.map(r => {
+  const seen = new Map()   // key → index in output
+  const output = []
+
+  for (const r of records) {
     const key = keyFn(r)
-    if (!key) return r // Cannot compute key — keep as-is
+    if (!key) { output.push(r); continue } // Cannot compute key — keep as-is
+
     if (seen.has(key)) {
-      return { ...r, _duplicate: true, _duplicateOf: seen.get(key) }
+      const keeperIdx = seen.get(key)
+      const keeper = output[keeperIdx]
+      // Smart merge: fill in any missing fields on the keeper from the duplicate
+      output[keeperIdx] = smartMergeRecord(keeper, r)
+      // Mark this record as duplicate
+      output.push({ ...r, _duplicate: true, _duplicateOf: keeper._source || keeper._sourceName })
+    } else {
+      seen.set(key, output.length)
+      output.push({ ...r, _mergedCount: 1, _mergedSources: [r._sourceName || r._source || 'unknown'] })
     }
-    seen.set(key, r._source)
-    return r
-  })
+  }
+  return output
+}
+
+/**
+ * Merge best fields from a duplicate record into the keeper.
+ * Fills in blanks, prefers higher-confidence / non-empty values.
+ */
+function smartMergeRecord(keeper, dup) {
+  const merged = { ...keeper }
+  // Fill empty string fields from duplicate
+  for (const field of ['value', 'unit', 'units', 'flag', 'referenceRange', 'dose', 'route',
+                        'frequency', 'indication', 'reaction', 'severity', 'icd10', 'code',
+                        'codeSystem', 'snomed', 'snomedCT', 'loinc', 'rxcui', 'drugClass']) {
+    if ((!merged[field] || merged[field] === '') && dup[field] && dup[field] !== '') {
+      merged[field] = dup[field]
+    }
+  }
+  // Prefer HIGH/LOW/CRITICAL flags over Normal or empty
+  if (dup.flag && dup.flag !== 'Normal' && (!merged.flag || merged.flag === 'Normal' || merged.flag === '')) {
+    merged.flag = dup.flag
+  }
+  // Track merged source count
+  const sources = merged._mergedSources || [merged._sourceName || merged._source || 'unknown']
+  const dupSrc = dup._sourceName || dup._source || 'unknown'
+  if (!sources.includes(dupSrc)) sources.push(dupSrc)
+  merged._mergedSources = sources
+  merged._mergedCount = sources.length
+  return merged
 }
 
 /**
@@ -343,15 +381,24 @@ export function deduplicateMergedData(data) {
   const deduped = { ...data }
   deduped.medications = deduplicateByKey(deduped.medications || [], m => {
     const name = (m.name || '').toLowerCase().replace(/\d+\s*(mg|mcg|ml|units?|meq)\b/gi, '').trim()
-    return name
+    return name || ''
   })
+  // Lab results: use name OR component (OCR uses name, Epic TSV uses component)
+  // and date OR resultTime (OCR uses date, Epic TSV uses resultTime)
   deduped.results = deduplicateByKey(deduped.results || [], r => {
-    const comp = (r.component || '').toLowerCase().trim()
-    const date = (r.resultTime || '').split(' ')[0] || (r.resultTime || '').split('T')[0] || ''
-    return `${comp}|${date}`
+    const comp = (r.name || r.component || '').toLowerCase().trim()
+    const dateRaw = r.date || r.resultTime || ''
+    const date = dateRaw.split(' ')[0] || dateRaw.split('T')[0] || ''
+    return comp ? `${comp}|${date}` : ''
   })
-  deduped.conditions = deduplicateByKey(deduped.conditions || [], c => (c.name || '').toLowerCase().trim())
-  deduped.allergies = deduplicateByKey(deduped.allergies || [], a => (a.allergen || a.name || '').toLowerCase().trim())
+  deduped.conditions = deduplicateByKey(deduped.conditions || [], c => {
+    const name = (c.name || '').toLowerCase().trim()
+    return name || ''
+  })
+  deduped.allergies = deduplicateByKey(deduped.allergies || [], a => {
+    const name = (a.allergen || a.name || '').toLowerCase().trim()
+    return name || ''
+  })
   return deduped
 }
 

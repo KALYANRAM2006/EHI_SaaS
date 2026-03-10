@@ -267,21 +267,33 @@ export function DataProvider({ children }) {
     const alrg = isSingle ? (data.allergies || []) : (data.allergies || []).filter(a => a.patId === pid)
     const immn = isSingle ? (data.immunizations || []) : (data.immunizations || []).filter(i => i.patId === pid)
 
-    // Filter out duplicates (dedup marks them with _duplicate: true but keeps them for lineage)
+    // Separate unique records (shown everywhere) from duplicates (shown in lineage only)
     const filteredMeds = meds.filter(m => !m._duplicate)
     const filteredRes  = res.filter(r => !r._duplicate)
     const filteredCond = cond.filter(c => !c._duplicate)
     const filteredAlrg = alrg.filter(a => !a._duplicate)
     const abnormal = filteredRes.filter(r => r.flag && r.flag !== 'Normal')
 
+    // Keep ALL records (including duplicates) for lineage view
+    const allMeds = meds
+    const allRes  = res
+    const allCond = cond
+    const allAlrg = alrg
+
     return {
       ...patient,
-      encounters: enc, orders: ord, results: filteredRes,
-      conditions: filteredCond, medications: filteredMeds, allergies: filteredAlrg,
+      encounters: enc, orders: ord,
+      // Primary views get deduplicated (smart-merged) records
+      results: filteredRes, conditions: filteredCond,
+      medications: filteredMeds, allergies: filteredAlrg,
       immunizations: immn, abnormalResults: abnormal,
-      encounterCount: enc.length, orderCount: ord.length, resultCount: filteredRes.length,
-      conditionCount: filteredCond.length, medicationCount: filteredMeds.length,
-      // Also keep the raw (with-duplicates) counts for lineage display
+      encounterCount: enc.length, orderCount: ord.length,
+      resultCount: filteredRes.length, conditionCount: filteredCond.length,
+      medicationCount: filteredMeds.length,
+      // Lineage view gets ALL records (including duplicates) for full traceability
+      _allMedications: allMeds, _allResults: allRes,
+      _allConditions: allCond, _allAllergies: allAlrg,
+      // Dedup stats
       _rawMedCount: meds.length, _rawResCount: res.length,
       _dedupedMeds: meds.filter(m => m._duplicate).length,
       _dedupedResults: res.filter(r => r._duplicate).length,

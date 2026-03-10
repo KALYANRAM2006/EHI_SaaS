@@ -151,8 +151,10 @@ async function generateLocalSummary(patient) {
   const labTrends = []
   const resultsByComponent = {}
   results.forEach(r => {
-    if (!resultsByComponent[r.component]) resultsByComponent[r.component] = []
-    resultsByComponent[r.component].push(r)
+    const comp = r.name || r.component
+    if (!comp) return
+    if (!resultsByComponent[comp]) resultsByComponent[comp] = []
+    resultsByComponent[comp].push(r)
   })
   Object.entries(resultsByComponent).forEach(([comp, vals]) => {
     if (vals.length >= 2) {
@@ -214,7 +216,7 @@ async function generateLocalSummary(patient) {
         ? `Your records contain **${results.length} lab result${results.length !== 1 ? 's' : ''}** across **${orders.filter(o => o.orderType === 'Lab').length || 'multiple'}** orders.\n\n` +
           (abnormal.length > 0
             ? `**⚠️ ${abnormal.length} Abnormal Result${abnormal.length !== 1 ? 's' : ''} Requiring Attention:**\n` +
-              abnormal.map(r => `• **${r.component}**: ${r.value} ${r.unit || ''} (Reference: ${r.refLow}–${r.refHigh}) — **${r.flag}**`).join('\n') +
+              abnormal.map(r => `• **${r.name || r.component}**: ${r.value} ${r.unit || ''} (Reference: ${r.referenceRange || `${r.refLow}–${r.refHigh}`}) — **${r.flag}**`).join('\n') +
               '\n\n'
             : '✅ **All results within normal reference ranges** — excellent!\n\n') +
           (labTrends.length > 0
@@ -222,7 +224,7 @@ async function generateLocalSummary(patient) {
               labTrends.map(t => `• **${t.component}** has ${t.direction} by **${t.pct}%** — ${t.latest.flag !== 'Normal' ? '⚠️ requires monitoring' : 'within acceptable variance'}`).join('\n') + '\n\n'
             : '') +
           `**Key Values Summary:**\n` +
-          results.slice(0, 6).map(r => `• ${r.component}: **${r.value}** ${r.unit || ''} ${r.flag === 'Normal' ? '✓' : `⚠️ ${r.flag}`}`).join('\n') +
+          results.slice(0, 6).map(r => `• ${r.name || r.component}: **${r.value}** ${r.unit || ''} ${r.flag === 'Normal' ? '✓' : `⚠️ ${r.flag}`}`).join('\n') +
           (results.length > 6 ? `\n• ...and ${results.length - 6} more results` : '') +
           `\n\n💡 **Recommendation**: ${abnormal.length > 0 ? 'Discuss abnormal values with your provider. Some may require follow-up testing or treatment adjustments.' : 'Continue regular lab monitoring as part of your preventive care plan.'}`
         : 'No recent lab results found in your records. Regular lab work helps detect potential issues early.',

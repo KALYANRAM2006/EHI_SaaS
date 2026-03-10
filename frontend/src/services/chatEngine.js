@@ -219,7 +219,7 @@ function classifyMedication(medName) {
 }
 
 function interpretLabResult(result) {
-  const comp = (result.component || '').toLowerCase()
+  const comp = (result.name || result.component || '').toLowerCase()
   for (const [key, interp] of Object.entries(LAB_INTERPRETATIONS)) {
     if (comp.includes(key)) {
       if (result.flag === 'High' || result.flag === 'Critical High') return { ...interp, interpretation: interp.high, status: 'high' }
@@ -270,7 +270,8 @@ function computeRiskScore(patient) {
 function analyzeLabTrends(results) {
   const byComponent = {}
   results.forEach(r => {
-    const key = r.component
+    const key = r.name || r.component
+    if (!key) return
     if (!byComponent[key]) byComponent[key] = []
     byComponent[key].push(r)
   })
@@ -318,7 +319,7 @@ function generateMedicationsResponse(patient, query) {
     const classification = classifyMedication(specificMed.name)
     const relatedResults = (patient.results || []).filter(r => {
       if (!classification) return false
-      return classification.monitor.some(m => (r.component || '').toLowerCase().includes(m))
+      return classification.monitor.some(m => (r.name || r.component || '').toLowerCase().includes(m))
     })
 
     return {
@@ -328,7 +329,7 @@ function generateMedicationsResponse(patient, query) {
         `• **Prescriber**: ${specificMed.prescriber || 'Not specified'}\n` +
         `• **Started**: ${specificMed.startDate ? new Date(specificMed.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'}\n` +
         (classification ? `\n**🔬 Drug Classification**: ${classification.class}\n**Treats**: ${classification.treats.join(', ')}\n**Key Labs to Monitor**: ${classification.monitor.join(', ')}` : '') +
-        (relatedResults.length > 0 ? `\n\n**📊 Related Lab Results** (${relatedResults.length} found):\n${relatedResults.slice(0, 4).map(r => `• ${r.component}: **${r.value}** ${r.unit || ''} — ${r.flag === 'Normal' ? '✓ Normal' : `⚠️ ${r.flag}`}`).join('\n')}` : '') +
+        (relatedResults.length > 0 ? `\n\n**📊 Related Lab Results** (${relatedResults.length} found):\n${relatedResults.slice(0, 4).map(r => `• ${r.name || r.component}: **${r.value}** ${r.unit || ''} — ${r.flag === 'Normal' ? '✓ Normal' : `⚠️ ${r.flag}`}`).join('\n')}` : '') +
         `\n\n💡 **AI Note**: ${classification ? `As a ${classification.class}, continue as prescribed and report any unusual side effects to your provider.` : 'Continue as directed by your prescriber.'}`,
       data: [specificMed], dataType: 'medications',
       followUp: ['Are there any drug interactions?', 'Show me related lab results', 'What conditions is this treating?'],
@@ -398,7 +399,7 @@ function generateLabsResponse(patient, query) {
       text: `**⚠️ ${abnormal.length} Abnormal Result${abnormal.length !== 1 ? 's' : ''} Found:**\n\n` +
         abnormal.map(r => {
           const interp = interpretLabResult(r)
-          return `• **${r.component}**: **${r.value}** ${r.unit || ''} (Range: ${r.refLow}–${r.refHigh}) — **${r.flag}**${interp ? `\n  🔬 ${interp.interpretation}` : ''}`
+          return `• **${r.name || r.component}**: **${r.value}** ${r.unit || ''} (Range: ${r.referenceRange || `${r.refLow}–${r.refHigh}`}) — **${r.flag}**${interp ? `\n  🔬 ${interp.interpretation}` : ''}`
         }).join('\n\n') +
         `\n\n**🤖 AI Clinical Analysis**: ${abnormal.length > 2 ? 'Multiple abnormal values suggest scheduling a follow-up.' : 'These should be discussed at your next visit.'}`,
       data: abnormal, dataType: 'labs',
@@ -410,13 +411,13 @@ function generateLabsResponse(patient, query) {
   const specificTests = Object.keys(LAB_INTERPRETATIONS)
   const matchedTest = specificTests.find(t => q.includes(t))
   if (matchedTest) {
-    const filtered = results.filter(r => (r.component || '').toLowerCase().includes(matchedTest))
+    const filtered = results.filter(r => (r.name || r.component || '').toLowerCase().includes(matchedTest))
     if (filtered.length > 0) {
       return {
         text: `**${matchedTest.charAt(0).toUpperCase() + matchedTest.slice(1)} Results** (${filtered.length}):\n\n` +
           filtered.map(r => {
             const interp = interpretLabResult(r)
-            return `• **${r.component}**: **${r.value}** ${r.unit || ''} (Range: ${r.refLow}–${r.refHigh}) — ${r.flag === 'Normal' ? '✓ Normal' : `⚠️ ${r.flag}`}${interp ? `\n  🔬 ${interp.interpretation}` : ''}`
+            return `• **${r.name || r.component}**: **${r.value}** ${r.unit || ''} (Range: ${r.referenceRange || `${r.refLow}–${r.refHigh}`}) — ${r.flag === 'Normal' ? '✓ Normal' : `⚠️ ${r.flag}`}${interp ? `\n  🔬 ${interp.interpretation}` : ''}`
           }).join('\n\n'),
         data: filtered, dataType: 'labs', followUp: ['Are there related medications?', 'Show all lab results'],
       }
@@ -429,7 +430,7 @@ function generateLabsResponse(patient, query) {
       `**Key Values with AI Interpretation:**\n\n` +
       results.slice(0, 8).map(r => {
         const interp = interpretLabResult(r)
-        return `• **${r.component}**: ${r.value} ${r.unit || ''} ${r.flag === 'Normal' ? '✓' : `⚠️ ${r.flag}`}${interp && r.flag !== 'Normal' ? `\n  🔬 ${interp.interpretation}` : ''}`
+        return `• **${r.name || r.component}**: ${r.value} ${r.unit || ''} ${r.flag === 'Normal' ? '✓' : `⚠️ ${r.flag}`}${interp && r.flag !== 'Normal' ? `\n  🔬 ${interp.interpretation}` : ''}`
       }).join('\n') +
       (results.length > 8 ? `\n\n...and ${results.length - 8} more results.` : '') +
       (trends.length > 0 ? `\n\n**📈 Notable Trends**: ${trends.slice(0, 3).map(t => `${t.component} ${t.direction} ${t.pct}%`).join(', ')}` : '') +

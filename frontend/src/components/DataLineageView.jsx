@@ -32,18 +32,18 @@ export default function DataLineageView() {
   const [showDuplicates, setShowDuplicates] = useState(false)
 
   // Flatten patient-level clinical data for the selected patient
+  // Use _all* arrays (which include duplicates) for lineage view when available
   const patientData = useMemo(() => {
     if (!parsedData || !selectedPatient) return { medications: [], encounters: [], allergies: [], conditions: [], results: [] }
     const pid = selectedPatient.patId
     return {
-      medications: (parsedData.medications || selectedPatient.medications || []).filter(r => !r.patId || r.patId === pid),
+      medications: (selectedPatient._allMedications || parsedData.medications || selectedPatient.medications || []).filter(r => !r.patId || r.patId === pid),
       encounters: (parsedData.encounters || []).filter(r => !r.patId || r.patId === pid),
-      allergies: (parsedData.allergies || selectedPatient.allergies || []).filter(r => !r.patId || r.patId === pid),
-      conditions: (parsedData.conditions || selectedPatient.conditions || []).filter(r => !r.patId || r.patId === pid),
-      results: (parsedData.results || selectedPatient.results || []).filter(r => {
+      allergies: (selectedPatient._allAllergies || parsedData.allergies || selectedPatient.allergies || []).filter(r => !r.patId || r.patId === pid),
+      conditions: (selectedPatient._allConditions || parsedData.conditions || selectedPatient.conditions || []).filter(r => !r.patId || r.patId === pid),
+      results: (selectedPatient._allResults || parsedData.results || selectedPatient.results || []).filter(r => {
         if (!r.patId) return true  // OCR-extracted results have no patId — include them for single-patient
         if (r.patId === pid) return true
-        // Results may be linked via orders
         const patientOrders = (parsedData.orders || []).filter(o => o.patId === pid).map(o => o.orderId)
         return patientOrders.includes(r.orderId)
       }),
@@ -260,6 +260,11 @@ function RecordRow({ record, category }) {
           {record._sourceName.length > 20 ? record._sourceName.slice(0, 18) + '…' : record._sourceName}
         </span>
       )}
+      {record._mergedCount > 1 && !record._duplicate && (
+        <span className="flex-shrink-0 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700" title={`Merged from: ${(record._mergedSources || []).join(', ')}`}>
+          Merged ({record._mergedCount})
+        </span>
+      )}
       {record._duplicate && (
         <span className="flex-shrink-0 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
           Duplicate
@@ -301,8 +306,9 @@ function getRecordSubtitle(record, category) {
     case 'results':
       return [
         record.flag && record.flag !== 'Normal' ? `⚠️ ${record.flag}` : record.flag,
-        record.refLow != null && record.refHigh != null ? `Ref: ${record.refLow}–${record.refHigh}` : null,
-        record.resultTime,
+        record.referenceRange ? `Ref: ${record.referenceRange}` :
+          (record.refLow != null && record.refHigh != null ? `Ref: ${record.refLow}–${record.refHigh}` : null),
+        record.resultTime || record.date,
       ].filter(Boolean).join(' · ')
     default:
       return ''

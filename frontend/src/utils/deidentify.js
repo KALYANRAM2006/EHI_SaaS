@@ -167,13 +167,14 @@ export function deidentifyPatient(patient, options = { mode: 'tokenized' }) {
 
     // Lab Results (values are clinical, not identifying)
     results: (patient.results || []).map(r => ({
-      component: r.component,
+      component: r.name || r.component,
       value: r.value,
       unit: r.unit || r.units,
       refLow: r.refLow,
       refHigh: r.refHigh,
+      referenceRange: r.referenceRange,
       flag: r.flag,
-      year: generalizeDate(r.resultTime || r.orderDate),
+      year: generalizeDate(r.date || r.resultTime || r.orderDate),
     })),
 
     // Allergies
@@ -202,11 +203,12 @@ export function deidentifyPatient(patient, options = { mode: 'tokenized' }) {
 
     // Abnormal results for clinical alerts
     abnormalResults: (patient.abnormalResults || []).map(r => ({
-      component: r.component,
+      component: r.name || r.component,
       value: r.value,
       unit: r.unit || r.units,
       refLow: r.refLow,
       refHigh: r.refHigh,
+      referenceRange: r.referenceRange,
       flag: r.flag,
     })),
   }
@@ -258,7 +260,7 @@ export function buildSafePrompt(deidentified) {
   if (d.results.length > 0) {
     lines.push(`### Lab Results (${d.results.length} results, ${d.abnormalResultCount} abnormal)`)
     d.results.forEach(r => {
-      lines.push(`- ${r.component}: ${r.value} ${r.unit || ''} (ref: ${r.refLow || '?'}-${r.refHigh || '?'}) [${r.flag || 'Normal'}] (${r.year || 'unknown year'})`)
+      lines.push(`- ${r.component}: ${r.value} ${r.unit || ''} (ref: ${r.referenceRange || `${r.refLow || '?'}-${r.refHigh || '?'}`}) [${r.flag || 'Normal'}] (${r.year || 'unknown year'})`)
     })
     lines.push(``)
   }
