@@ -1,6 +1,9 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { generateSampleParsedData, generateAISummary } from '../data/sampleData'
 import { parseUploadedFiles } from '../parsers/epicTsvParser'
+import { processDocument, documentResultToAppRows, terminateOCR, PDFPasswordError } from '../parsers/documentOCR'
+import { isOpenAIEnabled, analyzeWithOpenAI } from '../services/openAIClinicalParser'
+import { isAzureHealthEnabled, analyzeWithAzureHealth } from '../services/azureHealthAI'
 import {
   secureMemoryWipe,
   encryptAndStore,
@@ -27,6 +30,172 @@ const DataContext = createContext()
 
 // All clinical data categories that records can belong to
 const ALL_CATEGORIES = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations', 'vitals', 'documents']
+
+// File extensions that should route directly to OCR (bypass TSV parser)
+const DIRECT_OCR_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'bmp', 'gif', 'dcm', 'rtf', 'doc', 'docx'])
+
+/**
+ * Merge local regex entities with AI entities (AI takes priority).
+ */
+function mergeClinicalEntities(local, ai) {
+  if (!ai) return local
+  const merged = { ...local }
+  if (ai.demographics && Object.keys(ai.demographics).length > 0) {
+    merged.demographics = { ...(local.demographics || {}), ...ai.demographics }
+  }
+  const listKeys = ['medications', 'diagnoses', 'labResults', 'vitals', 'allergies', 'procedures']
+  for (const key of listKeys) {
+    const aiItems = ai[key] || []
+    const localItems = local[key] || []
+    if (aiItems.length > 0) {
+      const aiNames = new Set(aiItems.map(i => (i.name || '').toLowerCase()))
+      const unique = localItems.filter(li => !aiNames.has((li.name || '').toLowerCase()))
+      merged[key] = [...aiItems, ...unique]
+    }
+  }
+  return merged
+}
+
+/**
+ * Process a document (PDF/image) directly — bypasses epicTsvParser entirely.
+ * Calls documentOCR → AI enhancement → builds parsedData in app shape.
+ */
+async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) {
+  const filename = file.name
+  console.log(`[Direct-OCR] Processing ${filename} directly (not via TSV parser)`)
+
+  // 1. Run OCR / PDF text extraction
+  const result = await processDocument(file, filename, (p) => {
+    onProgress({ phase: p.phase || 'ocr-page', ...p })
+  }, { password: options.password || null })
+
+  if (!result.text || result.text.length === 0) {
+    console.warn(`[Direct-OCR] No text extracted from ${filename}`)
+  } else {
+    console.log(`[Direct-OCR] ${filename}: ${result.method}, ${result.text.length} chars, ${Math.round(result.confidence)}% confidence`)
+  }
+
+  // 2. AI Enhancement (OpenAI GPT > Azure Health > local-only)
+  let extractionMethod = 'local-regex'
+  if (result.text && result.text.length > 0) {
+    try {
+      if (isOpenAIEnabled()) {
+        onProgress({ phase: 'ai-submit', progress: 0.7, message: `OpenAI analyzing ${filename}...` })
+        const aiEntities = await analyzeWithOpenAI(result.text, onProgress)
+        if (aiEntities) {
+          result.clinicalEntities = mergeClinicalEntities(result.clinicalEntities, aiEntities)
+          extractionMethod = 'openai'
+          console.log(`[Direct-OCR] ${filename}: enhanced with OpenAI GPT`)
+        }
+      } else if (isAzureHealthEnabled()) {
+        onProgress({ phase: 'ai-submit', progress: 0.7, message: `Azure AI analyzing ${filename}...` })
+        const aiEntities = await analyzeWithAzureHealth(result.text, onProgress)
+        if (aiEntities) {
+          result.clinicalEntities = mergeClinicalEntities(result.clinicalEntities, aiEntities)
+          extractionMethod = 'azure-ai'
+          console.log(`[Direct-OCR] ${filename}: enhanced with Azure Health AI`)
+        }
+      }
+    } catch (aiErr) {
+      console.warn(`[Direct-OCR] AI enhancement failed for ${filename}:`, aiErr.message)
+    }
+  }
+  result.extractionMethod = extractionMethod
+
+  // 3. Terminate OCR worker to free memory
+  try { await terminateOCR() } catch { /* ignore */ }
+  onProgress({ phase: 'ocr-complete', progress: 1, message: 'Document processing complete' })
+
+  // 4. Convert to app rows
+  const rows = documentResultToAppRows(result, filename)
+
+  // 5. Build patient from demographics
+  const demo = result.clinicalEntities?.demographics
+  const patientRows = []
+  if (demo) {
+    const nameParts = (demo.name || '').split(/\s+/)
+    patientRows.push({
+      patId: demo.mrn || `OCR-${Date.now()}`,
+      name: demo.name || 'Unknown Patient',
+      firstName: nameParts[0] || 'Unknown',
+      lastName: nameParts.length > 1 ? nameParts[nameParts.length - 1] : 'Patient',
+      age: demo.age || 0,
+      city: '', state: '', zip: '',
+      birthDate: demo.dateOfBirth || '',
+      sex: demo.sex || 'Unknown',
+      ethnicGroup: '', language: '', maritalStatus: '',
+      _source: 'ocr',
+    })
+  } else {
+    patientRows.push({
+      patId: `OCR-${Date.now()}`, name: 'Unknown Patient',
+      firstName: 'Unknown', lastName: 'Patient', age: 0,
+      city: '', state: '', zip: '', birthDate: '', sex: 'Unknown',
+      ethnicGroup: '', language: '', maritalStatus: '',
+      _source: 'ocr',
+    })
+  }
+
+  // 6. Build patient summary
+  const abnormalResults = (rows.results || []).filter(r => r.flag && r.flag !== 'Normal')
+  const patient = patientRows[0]
+  const selectedPatient = {
+    ...patient,
+    encounters: [],
+    orders: rows.orders || [],
+    results: rows.results || [],
+    conditions: rows.conditions || [],
+    medications: rows.medications || [],
+    abnormalResults,
+    allergies: rows.allergies || [],
+    immunizations: [],
+    vitals: rows.vitals || [],
+    documents: rows.documentRow ? [rows.documentRow] : [],
+    encounterCount: 0,
+    orderCount: (rows.orders || []).length,
+    resultCount: (rows.results || []).length,
+    conditionCount: (rows.conditions || []).length,
+    medicationCount: (rows.medications || []).length,
+  }
+
+  const totalRecords = (rows.medications?.length || 0) + (rows.conditions?.length || 0) +
+    (rows.allergies?.length || 0) + (rows.results?.length || 0) + (rows.orders?.length || 0) +
+    (rows.vitals?.length || 0)
+
+  const parsedData = {
+    patients: [selectedPatient],
+    selectedPatient,
+    encounters: [],
+    orders: rows.orders || [],
+    results: rows.results || [],
+    medications: rows.medications || [],
+    conditions: rows.conditions || [],
+    allergies: rows.allergies || [],
+    immunizations: [],
+    vitals: rows.vitals || [],
+    documents: rows.documentRow ? [rows.documentRow] : [],
+    providers: {},
+    totalRecords,
+    totalPatients: 1,
+    dataSourceCount: 1,
+    dateRange: { start: '', end: '' },
+    isSample: false,
+    fhirResources: {},
+    vendor: 'document-ocr',
+    rulesLoaded: [],
+  }
+
+  console.log(`[Direct-OCR] Complete: ${totalRecords} records extracted from ${filename}`)
+
+  return {
+    parsedData,
+    aiSummary: generateAISummary(selectedPatient),
+    selectedPatient,
+    vendor: 'document-ocr',
+    format: 'document',
+    ocrDocuments: [{ filename, result }],
+  }
+}
 
 export function DataProvider({ children }) {
   const [uploadedFiles, setUploadedFiles] = useState([])
@@ -321,9 +490,13 @@ export function DataProvider({ children }) {
         const currentParsed = parsedDataRef.current
         const currentPatient = selectedPatientRef.current
 
-        // 1. Parse just this one file (pass onProgress for OCR feedback)
+        // 1. Parse this file — route documents directly to OCR, everything else to TSV parser
         //    options.password is used ONLY for in-memory PDF decrypt — never saved
-        const result = await parseUploadedFiles([file], onProgress, options)
+        const ext = (file.name || '').split('.').pop().toLowerCase()
+        const isDirectOCR = DIRECT_OCR_EXTENSIONS.has(ext)
+        const result = isDirectOCR
+          ? await parseDocumentDirectly(file, onProgress, options)
+          : await parseUploadedFiles([file], onProgress, options)
 
         // 2. Create a data source for this file
         const newSource = createDataSource(file.name, currentSources.length)
