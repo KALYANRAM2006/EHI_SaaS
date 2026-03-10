@@ -25,6 +25,10 @@ import {
   getAzureHealthConfig, saveAzureHealthConfig, isAzureHealthEnabled,
   analyzeWithAzureHealth, testAzureHealthConnection
 } from '../services/azureHealthAI'
+import {
+  getOpenAIConfig, saveOpenAIConfig, isOpenAIEnabled,
+  analyzeWithOpenAI, testOpenAIConnection
+} from '../services/openAIClinicalParser'
 
 // ─── Sample test PDFs bundled in public/sample-pdfs/ ─────────────────────────
 const SAMPLE_PDFS = [
@@ -54,19 +58,42 @@ export default function DocumentIntelligence() {
   const [loadingSamples, setLoadingSamples] = useState(false)
   const fileInputRef = useRef(null)
 
-  // ─── Azure AI Configuration ───────────────────────────────────────────────
+  // ─── AI Configuration (Azure + OpenAI) ─────────────────────────────────────
   const [showAISettings, setShowAISettings] = useState(false)
+  const [aiProvider, setAiProvider] = useState(() => {
+    // Auto-detect which provider is configured
+    if (isOpenAIEnabled()) return 'openai'
+    if (isAzureHealthEnabled()) return 'azure'
+    return 'local'
+  })
+
+  // Azure config
   const [aiConfig, setAiConfig] = useState(() => getAzureHealthConfig())
-  const [testResult, setTestResult] = useState(null) // { ok, message }
+  const [testResult, setTestResult] = useState(null)
   const [testingConnection, setTestingConnection] = useState(false)
 
-  const aiEnabled = aiConfig.enabled && aiConfig.endpoint && aiConfig.apiKey
+  // OpenAI config
+  const [openaiConfig, setOpenaiConfig] = useState(() => getOpenAIConfig())
+  const [openaiTestResult, setOpenaiTestResult] = useState(null)
+  const [testingOpenAI, setTestingOpenAI] = useState(false)
+
+  const azureEnabled = aiConfig.enabled && aiConfig.endpoint && aiConfig.apiKey
+  const openaiEnabled = openaiConfig.enabled && openaiConfig.apiKey
+  const aiEnabled = azureEnabled || openaiEnabled
+  const activeProvider = openaiEnabled ? 'openai' : azureEnabled ? 'azure' : 'local'
 
   const handleSaveAIConfig = (updates) => {
     const newConfig = { ...aiConfig, ...updates }
     setAiConfig(newConfig)
     saveAzureHealthConfig(newConfig)
-    setTestResult(null) // Reset test when config changes
+    setTestResult(null)
+  }
+
+  const handleSaveOpenAIConfig = (updates) => {
+    const newConfig = { ...openaiConfig, ...updates }
+    setOpenaiConfig(newConfig)
+    saveOpenAIConfig(newConfig)
+    setOpenaiTestResult(null)
   }
 
   const handleTestConnection = async () => {
@@ -74,6 +101,29 @@ export default function DocumentIntelligence() {
     const result = await testAzureHealthConnection()
     setTestResult(result)
     setTestingConnection(false)
+  }
+
+  const handleTestOpenAI = async () => {
+    setTestingOpenAI(true)
+    const result = await testOpenAIConnection()
+    setOpenaiTestResult(result)
+    setTestingOpenAI(false)
+  }
+
+  // Helper: Run AI enhancement on extracted text
+  const enhanceWithAI = async (text, label, setProgressFn) => {
+    // Priority: OpenAI > Azure > local
+    if (isOpenAIEnabled() && text) {
+      setProgressFn({ phase: 'ai-submit', progress: 0.7, message: `OpenAI analyzing ${label}...` })
+      const aiEntities = await analyzeWithOpenAI(text, (p) => setProgressFn(p))
+      return { entities: aiEntities, method: 'openai-gpt' }
+    }
+    if (isAzureHealthEnabled() && text) {
+      setProgressFn({ phase: 'ai-submit', progress: 0.7, message: `Azure AI analyzing ${label}...` })
+      const aiEntities = await analyzeWithAzureHealth(text, (p) => setProgressFn(p))
+      return { entities: aiEntities, method: 'azure-ai' }
+    }
+    return null
   }
 
   // ─── Upload & Process a document ──────────────────────────────────────────
@@ -90,21 +140,18 @@ export default function DocumentIntelligence() {
         // Step 1: Always extract text using local OCR/PDF.js pipeline
         const result = await processDocument(file, file.name, (p) => setProgress(p))
 
-        // Step 2: If Azure AI is enabled, enhance extraction with cloud AI
-        if (isAzureHealthEnabled() && result.text) {
-          try {
-            setProgress({ phase: 'ai-submit', progress: 0.7, message: 'Enhancing with Azure AI...' })
-            const aiEntities = await analyzeWithAzureHealth(result.text, (p) => setProgress(p))
-
-            // Merge AI entities with local extraction (AI takes priority)
-            result.clinicalEntities = mergeEntities(result.clinicalEntities, aiEntities)
-            result.extractionMethod = 'azure-ai'
-          } catch (aiErr) {
-            console.warn('[AI] Azure Health AI failed, using local extraction:', aiErr.message)
-            result.aiError = aiErr.message
+        // Step 2: If any AI provider is enabled, enhance extraction
+        try {
+          const enhanced = await enhanceWithAI(result.text, file.name, (p) => setProgress(p))
+          if (enhanced) {
+            result.clinicalEntities = mergeEntities(result.clinicalEntities, enhanced.entities)
+            result.extractionMethod = enhanced.method
+          } else {
             result.extractionMethod = 'local-regex'
           }
-        } else {
+        } catch (aiErr) {
+          console.warn('[AI] Enhancement failed, using local extraction:', aiErr.message)
+          result.aiError = aiErr.message
           result.extractionMethod = 'local-regex'
         }
 
@@ -149,18 +196,17 @@ export default function DocumentIntelligence() {
         setProgress({ phase: 'processing', progress: 0.1, message: `Processing ${sample.label}...` })
         const result = await processDocument(file, sample.name, (p) => setProgress(p))
 
-        // If Azure AI is enabled, enhance with AI
-        if (isAzureHealthEnabled() && result.text) {
-          try {
-            setProgress({ phase: 'ai-submit', progress: 0.7, message: `AI analyzing ${sample.label}...` })
-            const aiEntities = await analyzeWithAzureHealth(result.text, (p) => setProgress(p))
-            result.clinicalEntities = mergeEntities(result.clinicalEntities, aiEntities)
-            result.extractionMethod = 'azure-ai'
-          } catch (aiErr) {
-            console.warn('[AI] Azure fallback for sample:', aiErr.message)
+        // If any AI provider is enabled, enhance with AI
+        try {
+          const enhanced = await enhanceWithAI(result.text, sample.label, (p) => setProgress(p))
+          if (enhanced) {
+            result.clinicalEntities = mergeEntities(result.clinicalEntities, enhanced.entities)
+            result.extractionMethod = enhanced.method
+          } else {
             result.extractionMethod = 'local-regex'
           }
-        } else {
+        } catch (aiErr) {
+          console.warn('[AI] Enhancement fallback for sample:', aiErr.message)
           result.extractionMethod = 'local-regex'
         }
 
@@ -273,7 +319,12 @@ export default function DocumentIntelligence() {
         </div>
         <div className="flex items-center gap-2 mt-3 md:mt-0">
           {/* AI Mode Badge */}
-          {aiEnabled ? (
+          {openaiEnabled ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <Brain className="w-3.5 h-3.5" />
+              OpenAI GPT Enabled
+            </span>
+          ) : azureEnabled ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
               <CloudLightning className="w-3.5 h-3.5" />
               Azure AI Enabled
@@ -303,59 +354,139 @@ export default function DocumentIntelligence() {
         </div>
       </div>
 
-      {/* Azure AI Settings Panel */}
+      {/* AI Settings Panel — Provider Selector */}
       {showAISettings && (
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-              <CloudLightning className="w-5 h-5 text-purple-600" />
-              Azure AI Extraction Settings
+              <Settings className="w-5 h-5 text-indigo-600" />
+              AI Extraction Settings
             </h3>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500">{aiEnabled ? 'AI Active' : 'Local Only'}</span>
-              <button
-                onClick={() => handleSaveAIConfig({ enabled: !aiConfig.enabled })}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  aiConfig.enabled ? 'bg-purple-600' : 'bg-gray-300'
-                }`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  aiConfig.enabled ? 'translate-x-6' : 'translate-x-1'
-                }`} />
-              </button>
-            </div>
+            <span className="text-xs font-medium text-gray-500">
+              Active: {activeProvider === 'openai' ? 'OpenAI GPT' : activeProvider === 'azure' ? 'Azure AI' : 'Local Regex'}
+            </span>
           </div>
 
-          {/* Mode Comparison */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className={`p-4 rounded-xl border-2 transition-all ${!aiConfig.enabled ? 'border-green-400 bg-green-50/50' : 'border-gray-200 bg-gray-50/50'}`}>
+          {/* Three Mode Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Local */}
+            <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${activeProvider === 'local' ? 'border-green-400 bg-green-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
+              onClick={() => {
+                handleSaveAIConfig({ enabled: false })
+                handleSaveOpenAIConfig({ enabled: false })
+              }}
+            >
               <div className="flex items-center gap-2 mb-2">
                 <Shield className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-semibold text-gray-800">Local Extraction (Default)</span>
+                <span className="text-sm font-semibold text-gray-800">Local Extraction</span>
               </div>
               <ul className="text-xs text-gray-600 space-y-1">
-                <li className="flex items-center gap-1"><Lock className="w-3 h-3 text-green-500" /> 100% client-side — zero data leaves browser</li>
-                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-green-500" /> Regex + dictionary-based NLP</li>
-                <li className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> No API key or Azure subscription needed</li>
+                <li className="flex items-center gap-1"><Lock className="w-3 h-3 text-green-500" /> 100% client-side</li>
+                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-green-500" /> Regex + NLP dictionary</li>
+                <li className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> No API keys needed</li>
               </ul>
             </div>
 
-            <div className={`p-4 rounded-xl border-2 transition-all ${aiConfig.enabled ? 'border-purple-400 bg-purple-50/50' : 'border-gray-200 bg-gray-50/50'}`}>
+            {/* OpenAI GPT */}
+            <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${activeProvider === 'openai' ? 'border-emerald-400 bg-emerald-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
+              onClick={() => {
+                handleSaveOpenAIConfig({ enabled: true })
+                handleSaveAIConfig({ enabled: false })
+                setAiProvider('openai')
+              }}
+            >
               <div className="flex items-center gap-2 mb-2">
-                <CloudLightning className="w-4 h-4 text-purple-600" />
-                <span className="text-sm font-semibold text-gray-800">Azure AI (Enhanced)</span>
+                <Brain className="w-4 h-4 text-emerald-600" />
+                <span className="text-sm font-semibold text-gray-800">OpenAI GPT</span>
+                <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-100 text-emerald-700">BEST</span>
               </div>
               <ul className="text-xs text-gray-600 space-y-1">
-                <li className="flex items-center gap-1"><Brain className="w-3 h-3 text-purple-500" /> AI-powered clinical entity recognition</li>
-                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-purple-500" /> Auto ICD-10, RxNorm, SNOMED CT, LOINC codes</li>
-                <li className="flex items-center gap-1"><Shield className="w-3 h-3 text-purple-500" /> Negation & certainty detection</li>
+                <li className="flex items-center gap-1"><Brain className="w-3 h-3 text-emerald-500" /> GPT-4o-mini / GPT-4o</li>
+                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-emerald-500" /> Best unstructured text accuracy</li>
+                <li className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-emerald-500" /> Contextual ICD-10 mapping</li>
+              </ul>
+            </div>
+
+            {/* Azure */}
+            <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${activeProvider === 'azure' ? 'border-purple-400 bg-purple-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
+              onClick={() => {
+                handleSaveAIConfig({ enabled: true })
+                handleSaveOpenAIConfig({ enabled: false })
+                setAiProvider('azure')
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <CloudLightning className="w-4 h-4 text-purple-600" />
+                <span className="text-sm font-semibold text-gray-800">Azure AI Health</span>
+              </div>
+              <ul className="text-xs text-gray-600 space-y-1">
+                <li className="flex items-center gap-1"><Brain className="w-3 h-3 text-purple-500" /> Clinical entity recognition</li>
+                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-purple-500" /> Auto SNOMED CT, LOINC, RxNorm</li>
+                <li className="flex items-center gap-1"><Shield className="w-3 h-3 text-purple-500" /> HIPAA-compliant with BAA</li>
               </ul>
             </div>
           </div>
 
-          {/* API Configuration */}
+          {/* OpenAI Configuration */}
+          {openaiConfig.enabled && (
+            <div className="space-y-3 pt-2 border-t border-gray-100">
+              <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Brain className="w-4 h-4 text-emerald-600" />
+                OpenAI Configuration
+              </h4>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">API Key</label>
+                <input
+                  type="password"
+                  placeholder="sk-..."
+                  value={openaiConfig.apiKey || ''}
+                  onChange={(e) => handleSaveOpenAIConfig({ apiKey: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Model</label>
+                <select
+                  value={openaiConfig.model || 'gpt-4o-mini'}
+                  onChange={(e) => handleSaveOpenAIConfig({ model: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
+                >
+                  <option value="gpt-4o-mini">GPT-4o-mini (Fast & Cheap)</option>
+                  <option value="gpt-4o">GPT-4o (Most Accurate)</option>
+                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Fastest)</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleTestOpenAI}
+                  disabled={testingOpenAI || !openaiConfig.apiKey}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {testingOpenAI ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                  Test Connection
+                </button>
+                {openaiTestResult && (
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium ${openaiTestResult.ok ? 'text-green-600' : 'text-red-600'}`}>
+                    {openaiTestResult.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                    {openaiTestResult.message}
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                API key stored in browser localStorage only. OpenAI does NOT train on API data. PHI will leave the browser.
+              </p>
+            </div>
+          )}
+
+          {/* Azure Configuration */}
           {aiConfig.enabled && (
             <div className="space-y-3 pt-2 border-t border-gray-100">
+              <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <CloudLightning className="w-4 h-4 text-purple-600" />
+                Azure Configuration
+              </h4>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Azure Language Endpoint</label>
                 <input
@@ -511,7 +642,13 @@ export default function DocumentIntelligence() {
                       {r.extractionMethod === 'azure-ai' && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
                           <CloudLightning className="w-3 h-3" />
-                          AI Enhanced
+                          Azure AI
+                        </span>
+                      )}
+                      {r.extractionMethod === 'openai-gpt' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                          <Brain className="w-3 h-3" />
+                          OpenAI GPT
                         </span>
                       )}
                     </div>
@@ -723,7 +860,7 @@ export default function DocumentIntelligence() {
           {[
             { step: '1', title: 'Upload', desc: 'Drop a PDF, scanned doc, or photo of a clinical document', icon: Upload, color: 'from-blue-500 to-blue-600' },
             { step: '2', title: 'Extract', desc: 'PDF.js reads text layers; Tesseract.js OCRs scanned pages', icon: ScanLine, color: 'from-purple-500 to-purple-600' },
-            { step: '3', title: 'Analyze', desc: aiEnabled ? 'Azure AI detects entities with negation & certainty' : 'Regex + dictionary NLP extracts clinical entities', icon: aiEnabled ? CloudLightning : Sparkles, color: aiEnabled ? 'from-purple-500 to-pink-600' : 'from-indigo-500 to-indigo-600' },
+            { step: '3', title: 'Analyze', desc: activeProvider === 'openai' ? 'OpenAI GPT extracts entities with contextual understanding' : activeProvider === 'azure' ? 'Azure AI detects entities with negation & certainty' : 'Regex + dictionary NLP extracts clinical entities', icon: activeProvider === 'openai' ? Brain : activeProvider === 'azure' ? CloudLightning : Sparkles, color: activeProvider === 'openai' ? 'from-emerald-500 to-teal-600' : activeProvider === 'azure' ? 'from-purple-500 to-pink-600' : 'from-indigo-500 to-indigo-600' },
             { step: '4', title: 'Classify', desc: 'Maps to ICD-10, LOINC, SNOMED CT, RxNorm standard codes', icon: Brain, color: 'from-green-500 to-green-600' },
           ].map(({ step, title, desc, icon: StepIcon, color }) => (
             <div key={step} className="flex flex-col items-center text-center p-4 rounded-xl bg-gray-50 border border-gray-100">
