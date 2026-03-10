@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { Upload, File, X, CheckCircle2, AlertCircle, Loader2, User, Calendar, ShieldCheck, ShieldAlert } from 'lucide-react'
+import { useState, useRef, useCallback } from 'react'
+import { Upload, File, X, CheckCircle2, AlertCircle, Loader2, User, Calendar, ShieldCheck, ShieldAlert, Lock, Eye, EyeOff } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import OCRProgress from './OCRProgress'
 
@@ -9,6 +9,9 @@ export default function FileUpload({ onComplete }) {
   const [dragOver, setDragOver] = useState(false)
   const [parseError, setParseError] = useState(null)
   const [files, setFiles] = useState([])       // { file, status, progress, patient, matchStatus, matchDetails, ocrProgress }
+  const [passwordPrompt, setPasswordPrompt] = useState(null) // { fileIndex, filename, file, attempts }
+  const [showPassword, setShowPassword] = useState(false)
+  const passwordRef = useRef(null)             // ref to <input> — password never stored in state
   const fileInputRef = useRef(null)
   const { addFileAndParse, dataSources } = useData()
 
@@ -90,7 +93,7 @@ export default function FileUpload({ onComplete }) {
     }, 100)
   }
 
-  const parseFileAndUpdate = async (file, fileIndex) => {
+  const parseFileAndUpdate = async (file, fileIndex, options = {}) => {
     try {
       // Determine if this file needs OCR (PDF/image)
       const ext = file.name.split('.').pop().toLowerCase()
@@ -103,7 +106,21 @@ export default function FileUpload({ onComplete }) {
         ))
       } : undefined
 
-      const result = await addFileAndParse(file, onProgress)
+      const result = await addFileAndParse(file, onProgress, options)
+
+      if (result.status === 'password-required') {
+        // PDF needs password — show prompt. Password is NEVER stored in state.
+        setFiles(prev => prev.map((f, i) =>
+          i === fileIndex ? { ...f, status: 'password-required', matchDetails: 'Password-protected PDF' } : f
+        ))
+        setPasswordPrompt({
+          fileIndex,
+          filename: result.filename || file.name,
+          file,
+          attempts: (options._attempts || 0),
+        })
+        return
+      }
 
       if (result.status === 'mismatch') {
         setFiles(prev => prev.map((f, i) =>
@@ -138,6 +155,47 @@ export default function FileUpload({ onComplete }) {
       setParseError(err.message)
     }
   }
+
+  // ─── Password Submit Handler ──────────────────────────────────────────────
+  // Password is read from the uncontrolled <input> ref, used for the single
+  // in-memory PDF decrypt, then immediately wiped. It is NEVER saved to
+  // React state, localStorage, context, or transmitted to any server.
+  const handlePasswordSubmit = useCallback(() => {
+    if (!passwordPrompt || !passwordRef.current) return
+
+    const pw = passwordRef.current.value
+    if (!pw) return
+
+    const { fileIndex, file, attempts } = passwordPrompt
+
+    // Immediately clear the input field
+    passwordRef.current.value = ''
+    setShowPassword(false)
+
+    // Close the prompt
+    setPasswordPrompt(null)
+
+    // Mark file as re-parsing
+    setFiles(prev => prev.map((f, i) =>
+      i === fileIndex ? { ...f, status: 'parsing', matchDetails: '' } : f
+    ))
+
+    // Retry parse with password — password lives only in this closure scope
+    // and is garbage-collected after the async call completes
+    parseFileAndUpdate(file, fileIndex, { password: pw, _attempts: attempts + 1 })
+  }, [passwordPrompt])
+
+  const handlePasswordCancel = useCallback(() => {
+    if (passwordRef.current) passwordRef.current.value = ''
+    setShowPassword(false)
+    if (passwordPrompt) {
+      const { fileIndex } = passwordPrompt
+      setFiles(prev => prev.map((f, i) =>
+        i === fileIndex ? { ...f, status: 'error', matchDetails: 'Password-protected PDF — cancelled' } : f
+      ))
+    }
+    setPasswordPrompt(null)
+  }, [passwordPrompt])
 
   const removeFile = (index) => {
     setFiles(prev => prev.filter((_, i) => i !== index))
@@ -293,6 +351,12 @@ export default function FileUpload({ onComplete }) {
                           </span>
                         </div>
                       )}
+                      {item.status === 'password-required' && (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-amber-600">
+                          <Lock className="w-4 h-4" />
+                          <span>Password-protected PDF — enter password to unlock</span>
+                        </div>
+                      )}
                       {/* OCR progress indicator for PDF/image files */}
                       {item.ocrProgress && item.status === 'parsing' && (
                         <OCRProgress
@@ -309,6 +373,8 @@ export default function FileUpload({ onComplete }) {
                       <AlertCircle className="w-6 h-6 text-red-500" />
                     ) : item.status === 'mismatch' ? (
                       <ShieldAlert className="w-6 h-6 text-amber-500" />
+                    ) : item.status === 'password-required' ? (
+                      <Lock className="w-6 h-6 text-amber-500" />
                     ) : null}
                     <button
                       onClick={() => removeFile(index)}
@@ -392,6 +458,79 @@ export default function FileUpload({ onComplete }) {
               'Continue to Dashboard'
             )}
           </button>
+        </div>
+      )}
+
+      {/* ─── Password Prompt Modal ─────────────────────────────────────────── */}
+      {passwordPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4 animate-in fade-in zoom-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Password-Protected PDF</h3>
+                <p className="text-sm text-gray-500 truncate max-w-[280px]">{passwordPrompt.filename}</p>
+              </div>
+            </div>
+
+            {passwordPrompt.attempts > 0 && (
+              <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-700">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                Incorrect password — please try again
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label htmlFor="pdf-password" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Enter PDF password
+              </label>
+              <div className="relative">
+                <input
+                  id="pdf-password"
+                  ref={passwordRef}
+                  type={showPassword ? 'text' : 'password'}
+                  autoFocus
+                  autoComplete="off"
+                  placeholder="Enter password…"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handlePasswordSubmit() }}
+                  className="w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mb-4 p-2.5 bg-blue-50 border border-blue-100 rounded-lg">
+              <ShieldCheck className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <p className="text-xs text-blue-700">
+                Your password is used only to unlock this PDF in your browser. It is <strong>never saved</strong> or sent to any server.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handlePasswordCancel}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePasswordSubmit}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                Unlock PDF
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

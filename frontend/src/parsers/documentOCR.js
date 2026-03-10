@@ -31,6 +31,22 @@ const PDF_RENDER_SCALE = 2.0
 const MIN_TEXT_LENGTH = 20
 const MAX_IMAGE_DIMENSION = 4000
 
+// ─── Password-Protected PDF Error ───────────────────────────────────────────
+
+/**
+ * Custom error thrown when a PDF requires a password to open.
+ * The UI layer catches this and prompts the user for their password.
+ * The password is used ONLY for that single in-memory decrypt — never saved.
+ */
+export class PDFPasswordError extends Error {
+  constructor(filename) {
+    super(`PDF "${filename}" is password-protected. Please enter the password to unlock it.`)
+    this.name = 'PDFPasswordError'
+    this.filename = filename
+    this.isPasswordError = true
+  }
+}
+
 // ─── Lazy-loaded module references ──────────────────────────────────────────
 
 let _pdfjsLib = null
@@ -95,9 +111,11 @@ export async function terminateOCR() {
 // 1. PDF TEXT EXTRACTION (Digital PDFs — no OCR needed)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function extractPDFText(buffer, onProgress = () => {}) {
+async function extractPDFText(buffer, onProgress = () => {}, password = null) {
   const pdfjsLib = await getPdfjs()
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+  const loadOpts = { data: buffer }
+  if (password) loadOpts.password = password
+  const pdf = await pdfjsLib.getDocument(loadOpts).promise
   const pageCount = pdf.numPages
   let fullText = ''
 
@@ -135,9 +153,11 @@ async function ocrImage(imageData, onProgress = () => {}) {
   }
 }
 
-async function ocrPDF(buffer, onProgress = () => {}) {
+async function ocrPDF(buffer, onProgress = () => {}, password = null) {
   const pdfjsLib = await getPdfjs()
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+  const loadOpts = { data: buffer }
+  if (password) loadOpts.password = password
+  const pdf = await pdfjsLib.getDocument(loadOpts).promise
   const pageCount = pdf.numPages
   const worker = await getOCRWorker()
 
@@ -190,10 +210,24 @@ async function ocrPDF(buffer, onProgress = () => {}) {
  * @param {Function} onProgress - ({ phase, progress, message })
  * @returns {DocumentResult}
  */
-export async function processDocument(file, filename, onProgress = () => {}) {
+/**
+ * Process any document (PDF, image) and extract text + clinical entities.
+ *
+ * @param {File|Blob} file
+ * @param {string} filename
+ * @param {Function} onProgress - ({ phase, progress, message })
+ * @param {Object} [options] - { password: string } — PDF password, used once then discarded
+ * @returns {DocumentResult}
+ * @throws {PDFPasswordError} When PDF is password-protected and no/wrong password given
+ */
+export async function processDocument(file, filename, onProgress = () => {}, options = {}) {
   const ext = (filename || file.name || '').split('.').pop().toLowerCase()
   const isPDF = ext === 'pdf'
   const isImage = ['jpg', 'jpeg', 'png', 'tif', 'tiff', 'bmp', 'gif'].includes(ext)
+
+  // Password is used ONLY for this one-time in-memory PDF decrypt.
+  // It is NEVER saved to localStorage, state, or transmitted anywhere.
+  let password = options.password || null
 
   if (!isPDF && !isImage) {
     return {
@@ -214,9 +248,21 @@ export async function processDocument(file, filename, onProgress = () => {}) {
 
     // Step 1: Try native text extraction (loads PDF.js only)
     onProgress({ phase: 'extracting', progress: 0.05, message: 'Extracting text from PDF...' })
-    const textResult = await extractPDFText(buffer, (p) =>
-      onProgress({ phase: 'extracting', progress: 0.05 + p * 0.45, message: `Reading page ${Math.ceil(p * 2)}...` })
-    )
+    let textResult
+    try {
+      textResult = await extractPDFText(buffer, (p) =>
+        onProgress({ phase: 'extracting', progress: 0.05 + p * 0.45, message: `Reading page ${Math.ceil(p * 2)}...` }),
+        password
+      )
+    } catch (pdfErr) {
+      // Detect pdf.js PasswordException (code 1 = need password, code 2 = wrong password)
+      if (pdfErr?.name === 'PasswordException' || pdfErr?.message?.toLowerCase().includes('password')) {
+        // Wipe the password from local scope immediately
+        password = null
+        throw new PDFPasswordError(filename)
+      }
+      throw pdfErr
+    }
 
     if (textResult.hasText) {
       result = {
@@ -230,7 +276,8 @@ export async function processDocument(file, filename, onProgress = () => {}) {
       // Scanned PDF — now load Tesseract (only if needed)
       onProgress({ phase: 'loading-ocr', progress: 0.5, message: 'Scanned PDF detected — loading OCR engine...' })
       const ocrResult = await ocrPDF(buffer, (p) =>
-        onProgress({ phase: 'ocr', progress: 0.5 + p * 0.5, message: `OCR page ${Math.ceil(p * textResult.pageCount)}/${textResult.pageCount}...` })
+        onProgress({ phase: 'ocr', progress: 0.5 + p * 0.5, message: `OCR page ${Math.ceil(p * textResult.pageCount)}/${textResult.pageCount}...` }),
+        password
       )
       result = {
         text: ocrResult.text,
@@ -240,6 +287,9 @@ export async function processDocument(file, filename, onProgress = () => {}) {
       }
       onProgress({ phase: 'complete', progress: 1, message: `OCR complete (${Math.round(ocrResult.confidence)}% confidence)` })
     }
+
+    // Clear password from memory after successful decrypt
+    password = null
   } else {
     // Image — load Tesseract
     onProgress({ phase: 'loading-ocr', progress: 0, message: 'Loading OCR engine...' })
@@ -806,6 +856,7 @@ export function documentResultToAppRows(docResult, filename) {
       procedures: (clinicalEntities.procedures || []).length,
     },
     _source: 'ocr', _sourceFile: filename,
+    _extractionSource: method === 'openai' ? 'openai' : method === 'azure' ? 'azure-ai' : 'local-regex',
   }
 
   return rows

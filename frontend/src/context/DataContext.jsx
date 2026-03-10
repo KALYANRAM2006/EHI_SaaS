@@ -311,7 +311,7 @@ export function DataProvider({ children }) {
   // Uses refs + promise queue to prevent race conditions when multiple files
   // upload in quick succession. Each file parse waits for the previous to finish.
 
-  const addFileAndParse = useCallback((file, onProgress) => {
+  const addFileAndParse = useCallback((file, onProgress, options = {}) => {
     const task = parseQueueRef.current.then(async () => {
       setLoading(true)
       setError(null)
@@ -322,7 +322,8 @@ export function DataProvider({ children }) {
         const currentPatient = selectedPatientRef.current
 
         // 1. Parse just this one file (pass onProgress for OCR feedback)
-        const result = await parseUploadedFiles([file], onProgress)
+        //    options.password is used ONLY for in-memory PDF decrypt — never saved
+        const result = await parseUploadedFiles([file], onProgress, options)
 
         // 2. Create a data source for this file
         const newSource = createDataSource(file.name, currentSources.length)
@@ -423,8 +424,12 @@ export function DataProvider({ children }) {
         setLoading(false)
         return { status: 'ok', patient: newSource.patient, source: newSource }
       } catch (err) {
-        setError(err.message)
         setLoading(false)
+        // Password-protected PDF — signal UI to prompt for password
+        if (err?.isPasswordError || err?.name === 'PDFPasswordError') {
+          return { status: 'password-required', error: err.message, filename: err.filename }
+        }
+        setError(err.message)
         return { status: 'error', error: err.message }
       }
     })

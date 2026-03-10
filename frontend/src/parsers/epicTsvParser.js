@@ -26,7 +26,7 @@ import {
   parseFHIRJSON,
   parseCCDA,
 } from './formatParsers'
-import { processDocument, documentResultToAppRows, terminateOCR } from './documentOCR'
+import { processDocument, documentResultToAppRows, terminateOCR, PDFPasswordError } from './documentOCR'
 import { isOpenAIEnabled, analyzeWithOpenAI } from '../services/openAIClinicalParser'
 import { isAzureHealthEnabled, analyzeWithAzureHealth } from '../services/azureHealthAI'
 
@@ -804,7 +804,7 @@ function assembleParsedData(assembled, documentIndexes, vendor, rules, ocrResult
  * @param {File[]} fileList - Array of uploaded File objects
  * @returns {{ parsedData, aiSummary, selectedPatient, vendor, format }}
  */
-export async function parseUploadedFiles(fileList, onProgress = () => {}) {
+export async function parseUploadedFiles(fileList, onProgress = () => {}, options = {}) {
   // 1. Extract & categorize all files
   const extracted = await extractAllFiles(fileList)
 
@@ -919,7 +919,7 @@ export async function parseUploadedFiles(fileList, onProgress = () => {}) {
             filename: doc.filename,
             ...p,
           })
-        })
+        }, { password: options.password || null })
 
         if (result.text && result.text.length > 0) {
           // ─── AI Enhancement: same pipeline as Document Intelligence ───
@@ -951,6 +951,8 @@ export async function parseUploadedFiles(fileList, onProgress = () => {}) {
           console.log(`[OCR] ${doc.filename}: no text extracted`)
         }
       } catch (err) {
+        // Re-throw password errors so the UI can prompt for the password
+        if (err instanceof PDFPasswordError || err?.isPasswordError) throw err
         console.warn(`[OCR] Failed to process ${doc.filename}:`, err.message)
       }
     }
