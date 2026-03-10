@@ -272,6 +272,9 @@ export function DataProvider({ children }) {
     const filteredRes  = res.filter(r => !r._duplicate)
     const filteredCond = cond.filter(c => !c._duplicate)
     const filteredAlrg = alrg.filter(a => !a._duplicate)
+    const filteredOrd  = ord.filter(o => !o._duplicate)
+    const filteredEnc  = enc.filter(e => !e._duplicate)
+    const filteredImmn = immn.filter(i => !i._duplicate)
     const abnormal = filteredRes.filter(r => r.flag && r.flag !== 'Normal')
 
     // Keep ALL records (including duplicates) for lineage view
@@ -279,20 +282,24 @@ export function DataProvider({ children }) {
     const allRes  = res
     const allCond = cond
     const allAlrg = alrg
+    const allOrd  = ord
+    const allEnc  = enc
+    const allImmn = immn
 
     return {
       ...patient,
-      encounters: enc, orders: ord,
+      encounters: filteredEnc, orders: filteredOrd,
       // Primary views get deduplicated (smart-merged) records
       results: filteredRes, conditions: filteredCond,
       medications: filteredMeds, allergies: filteredAlrg,
-      immunizations: immn, abnormalResults: abnormal,
-      encounterCount: enc.length, orderCount: ord.length,
+      immunizations: filteredImmn, abnormalResults: abnormal,
+      encounterCount: filteredEnc.length, orderCount: filteredOrd.length,
       resultCount: filteredRes.length, conditionCount: filteredCond.length,
       medicationCount: filteredMeds.length,
       // Lineage view gets ALL records (including duplicates) for full traceability
       _allMedications: allMeds, _allResults: allRes,
       _allConditions: allCond, _allAllergies: allAlrg,
+      _allOrders: allOrd, _allEncounters: allEnc, _allImmunizations: allImmn,
       // Dedup stats
       _rawMedCount: meds.length, _rawResCount: res.length,
       _dedupedMeds: meds.filter(m => m._duplicate).length,

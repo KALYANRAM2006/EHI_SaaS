@@ -313,6 +313,24 @@ export function reconcileData(sourcesWithData) {
   merged.conditions = deduplicateByKey(merged.conditions, c => (c.name || '').toLowerCase().trim())
   // Allergies: dedup by allergen name
   merged.allergies = deduplicateByKey(merged.allergies, a => (a.allergen || a.name || '').toLowerCase().trim())
+  // Orders/Procedures: dedup by procedure name (normalized)
+  merged.orders = deduplicateByKey(merged.orders || [], o => {
+    const name = (o.procName || o.name || '').toLowerCase().trim()
+    return name || ''
+  })
+  // Encounters: dedup by CSN ID or by type+date
+  merged.encounters = deduplicateByKey(merged.encounters || [], e => {
+    if (e.csnId) return String(e.csnId)
+    const type = (e.encType || e.type || '').toLowerCase().trim()
+    const date = (e.contactDate || '').split('T')[0] || ''
+    return type && date ? `${type}|${date}` : ''
+  })
+  // Immunizations: dedup by vaccine name + date
+  merged.immunizations = deduplicateByKey(merged.immunizations || [], i => {
+    const name = (i.name || '').toLowerCase().trim()
+    const date = (i.date || '').split('T')[0] || ''
+    return name ? `${name}|${date}` : ''
+  })
 
   return merged
 }
@@ -354,7 +372,9 @@ function smartMergeRecord(keeper, dup) {
   // Fill empty string fields from duplicate
   for (const field of ['value', 'unit', 'units', 'flag', 'referenceRange', 'dose', 'route',
                         'frequency', 'indication', 'reaction', 'severity', 'icd10', 'code',
-                        'codeSystem', 'snomed', 'snomedCT', 'loinc', 'rxcui', 'drugClass']) {
+                        'codeSystem', 'snomed', 'snomedCT', 'loinc', 'rxcui', 'drugClass',
+                        'procName', 'procCode', 'cptDescription', 'orderDate', 'specimen',
+                        'priority', 'diagnosis', 'chiefComplaint', 'manufacturer']) {
     if ((!merged[field] || merged[field] === '') && dup[field] && dup[field] !== '') {
       merged[field] = dup[field]
     }
@@ -398,6 +418,24 @@ export function deduplicateMergedData(data) {
   deduped.allergies = deduplicateByKey(deduped.allergies || [], a => {
     const name = (a.allergen || a.name || '').toLowerCase().trim()
     return name || ''
+  })
+  // Orders/Procedures: dedup by procedure name (normalized)
+  deduped.orders = deduplicateByKey(deduped.orders || [], o => {
+    const name = (o.procName || o.name || '').toLowerCase().trim()
+    return name || ''
+  })
+  // Encounters: dedup by CSN ID or by type+date
+  deduped.encounters = deduplicateByKey(deduped.encounters || [], e => {
+    if (e.csnId) return String(e.csnId)
+    const type = (e.encType || e.type || '').toLowerCase().trim()
+    const date = (e.contactDate || '').split('T')[0] || ''
+    return type && date ? `${type}|${date}` : ''
+  })
+  // Immunizations: dedup by vaccine name + date
+  deduped.immunizations = deduplicateByKey(deduped.immunizations || [], i => {
+    const name = (i.name || '').toLowerCase().trim()
+    const date = (i.date || '').split('T')[0] || ''
+    return name ? `${name}|${date}` : ''
   })
   return deduped
 }
