@@ -452,6 +452,8 @@ function splitIntoSections(text) {
 
   // Map of header patterns → normalized section names
   const SECTION_PATTERNS = [
+    // Advance Directives / Code Status / Legal (must come BEFORE medications to avoid misclassification)
+    { pattern: /^advance(?:d)?\s+(?:care|directive)|^code\s+status|^(?:health\s*care\s*)?(?:power\s+of\s+attorney|proxy|agent)|^living\s+will|^resuscitation|^(?:full|dnr|dni|dnar)\s+code|^goals?\s+of\s+care/i, section: 'advance_directives' },
     // Medications
     { pattern: /^(?:current\s+)?medications?(?:\s+list)?|^active\s+medications?|^medications?\s+(?:and\s+dosages?|prescribed)|^home\s+medications?|^meds\s*:|^prescriptions?|^rx\b/i, section: 'medications' },
     // Diagnoses / Problems
@@ -653,6 +655,26 @@ function extractMedications(text, upper, sections = {}) {
   const meds = []
   const seenNames = new Set()
 
+  // ── Blacklist: phrases that are NOT medications ────────────────────────
+  const NON_MED_PHRASES = /\b(?:advance(?:d)?\s+(?:care|directive)|patient\s+(?:capacity|status|information|name|demographics?)|code\s+status|healthcare?\s+agents?|(?:no|not)\s+(?:on\s+file|active|known|applicable)|full\s+capacity|history\s+of\s+(?:patient|present)|date\s+active|order\s+id|user\s+context|comments?|current\s+code|advance\s+care\s+planning|power\s+of\s+attorney|living\s+will|health\s+care\s+proxy|medical\s+(?:record|history)|emergency\s+contact|page\s+\d|printed|prepared\s+(?:by|for|on)|confidential|facility|department|encounter|visit\s+(?:date|type|summary|information|diagnosis)|follow[\s-]?up|reviewed|assessment|plan\s+of\s+care|return\s+to|instructions?|education|appointment|scheduled|referred|referral|this\s+(?:patient|document|report)|provider|nurse|staff|signed|verified|cosigned|electronically|addendum)\b/i
+
+  // ── Quick sanity check: does a line look like a medication? ─────────────
+  function looksLikeMed(line) {
+    if (!line || line.length < 3 || line.length > 200) return false
+    // Reject if it matches known non-med phrases
+    if (NON_MED_PHRASES.test(line)) return false
+    // Reject if it looks like a table header row (multiple column-header words)
+    if (/\b(?:date|active|status|order|comments?)\b.*\b(?:date|active|status|order|comments?)\b/i.test(line)) return false
+    // Reject if it's a full sentence (medications are typically short fragments)
+    if (/\b(?:the\s+patient|there\s+(?:are|is)|please|has\s+(?:been|no)|this\s+is|was\s+(?:seen|found|given)|if\s+you|do\s+not|call\s+(?:your|the|us)|go\s+to|make\s+sure)\b/i.test(line)) return false
+    // Reject lines that are mostly numbers or punctuation
+    const alphaRatio = (line.match(/[a-zA-Z]/g) || []).length / line.length
+    if (alphaRatio < 0.4) return false
+    // Reject pure dates
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(line.trim())) return false
+    return true
+  }
+
   // ── USE PRE-SPLIT SECTIONS (most reliable) ────────────────────────────
   const sectionText = sections.medications || null
 
@@ -742,11 +764,13 @@ function extractMedications(text, upper, sections = {}) {
       if (!line || line.length < 3) continue
       // Skip sub-headers
       if (/^(medication|drug|name|dose|frequency|route|status|refill|prescribed|taking|stop)/i.test(line)) continue
+      // Skip non-medication phrases
+      if (!looksLikeMed(line)) continue
 
-      // Check for dosage unit or known instruction
+      // Check for dosage unit or known instruction — HIGH confidence
       if (/\d+\s*(?:mg|mcg|ml|units?|iu|meq|gm?|%|patch|spray|puff|drop)\b/i.test(line) || /\b(?:take|inject|inhale|apply|instill|insert|chew)\b/i.test(line)) {
         const parsed = parseMedLine(line)
-        if (parsed && parsed.name.length > 2) {
+        if (parsed && parsed.name.length > 2 && looksLikeMed(parsed.name)) {
           const key = parsed.name.toLowerCase().replace(/\s+/g, '')
           if (!seenNames.has(key)) {
             meds.push({ ...parsed, source: 'ocr', confidence: 'high' })
@@ -762,7 +786,7 @@ function extractMedications(text, upper, sections = {}) {
       )
       if (medParen) {
         const parsed = parseMedLine(line)
-        if (parsed && parsed.name.length > 2) {
+        if (parsed && parsed.name.length > 2 && looksLikeMed(parsed.name)) {
           const key = parsed.name.toLowerCase().replace(/\s+/g, '')
           if (!seenNames.has(key)) {
             meds.push({ ...parsed, source: 'ocr', confidence: 'high' })
@@ -772,10 +796,12 @@ function extractMedications(text, upper, sections = {}) {
         continue
       }
 
-      // Any remaining line in the med section with enough characters → try to parse
-      if (line.length >= 5 && line.length <= 120 && /[A-Za-z]{3,}/.test(line)) {
+      // Remaining lines in med section: ONLY accept if they look like a drug name
+      // Must contain a word that ends with a common drug suffix, OR be short enough to be a drug name
+      const DRUG_SUFFIX = /(?:ol|in|ine|ide|ate|one|pam|lam|cin|xin|mab|nib|tid|zol|pine|pril|tan|lol|fen|lin|min|dine|zine|done|sone|mide|azole|oxin|mycin|statin|sartan|dipine|oxacin|profen|etine|adol|idol|artan|ipine)\b/i
+      if (line.length >= 5 && line.length <= 80 && DRUG_SUFFIX.test(line)) {
         const parsed = parseMedLine(line)
-        if (parsed && parsed.name.length > 2) {
+        if (parsed && parsed.name.length > 2 && looksLikeMed(parsed.name)) {
           const key = parsed.name.toLowerCase().replace(/\s+/g, '')
           if (!seenNames.has(key)) {
             meds.push({ ...parsed, source: 'ocr', confidence: 'medium' })

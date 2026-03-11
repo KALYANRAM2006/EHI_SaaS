@@ -80,10 +80,20 @@ export async function lookupRxNorm(drugName) {
     }
 
     const best = candidates[0]
+    const score = parseInt(best.score, 10) || 0
+    
+    // Reject low-confidence matches — the approximate API always returns SOMETHING,
+    // even for garbage text like "advance care planning". Score < 60 means poor match.
+    if (score < 60) {
+      console.log(`[CodeValidation] RxNorm: rejected "${drugName}" → score ${score} (too low)`)
+      _cache.rxnorm.set(key, null)
+      return null
+    }
+    
     const result = {
       rxcui: best.rxcui,
       name: best.name || drugName,
-      score: best.score,
+      score,
     }
     _cache.rxnorm.set(key, result)
     return result
@@ -355,8 +365,17 @@ export async function validateAndEnrichCodes(entities) {
 
   // ── 1. Enrich medications with RxNorm ───────────────────────────────────
   if (Array.isArray(enriched.medications)) {
+    // Pre-filter: skip names that are clearly not medications
+    const NON_DRUG = /\b(?:advance|planning|patient|capacity|status|history|agents?|context|comments?|order\s+id|not\s+on\s+file|code\s+status|healthcare|directive|the\s+patient|there\s+(?:are|is)|date\s+active)\b/i
+    
     const medPromises = enriched.medications.map(async (med) => {
       if (med.rxcui) return med // Already has code
+      // Skip names that are obviously not drugs
+      if (!med.name || med.name.length < 3 || med.name.length > 80 || NON_DRUG.test(med.name)) {
+        return med
+      }
+      // Skip if name has too many words (real drug names are usually 1-4 words)
+      if (med.name.split(/\s+/).length > 5) return med
       try {
         const result = await lookupRxNorm(med.name)
         if (result) {
