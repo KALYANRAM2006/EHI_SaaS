@@ -425,6 +425,7 @@ export function parseClinicalText(text, filename = '') {
   entities.labResults = extractLabResults(text, upper, sections)
   entities.allergies = extractAllergies(text, upper, sections)
   entities.procedures = extractProcedures(text, upper)
+  entities.careTeam = extractCareTeam(text, upper, sections)
   entities.documentType = classifyDocumentType(text, upper, filename)
   entities.fullText = text
 
@@ -463,6 +464,12 @@ function splitIntoSections(text) {
     { pattern: /^procedures?|^surgic(?:al|ies)|^surgical\s*history|^past\s*surgical|^operations?\b|^imaging|^radiology/i, section: 'procedures' },
     // Immunizations
     { pattern: /^immuniz(?:ation)?s?|^vaccin(?:ation|e)s?|^flu\s+(?:shot|vaccine)/i, section: 'immunizations' },
+    // Care Team
+    { pattern: /^care\s*team/i, section: 'care_team' },
+    // PPD / Tuberculin / Skin Test → labs
+    { pattern: /^ppd|^tb\s+(?:skin|test)|^tuberculin/i, section: 'labs' },
+    // Questionnaire (noise reduction)
+    { pattern: /^questionnaire\b/i, section: 'questionnaire' },
     // Instructions / Education
     { pattern: /^(?:patient\s+)?(?:instructions?|education)|^(?:after[\s\-]?visit|discharge)\s+(?:summary|instructions?)|^follow[\s\-]?up|^appointments?|^next\s+(?:visit|appointment)|^what\s+(?:to\s+do|we\s+discussed)/i, section: 'instructions' },
     // Family / Social
@@ -480,6 +487,22 @@ function splitIntoSections(text) {
 
     // Skip page markers
     if (/^---\s*Page\s+\d+\s*---$/.test(trimmed)) continue
+
+    // Skip page continuation headers like "Patient (continued)"
+    if (/^patient\s*\(continued\)/i.test(trimmed)) continue
+
+    // Handle "Section (continued)" → stay in that section
+    if (/\(continued\)/i.test(trimmed)) {
+      const baseText = trimmed.replace(/\s*\(continued\)\s*/i, '').trim()
+      for (const { pattern, section } of SECTION_PATTERNS) {
+        if (pattern.test(baseText)) {
+          currentSection = section
+          if (!sections[currentSection]) sections[currentSection] = ''
+          break
+        }
+      }
+      continue
+    }
 
     // Check if this line is a section header
     let matched = false
@@ -527,7 +550,7 @@ function createEmptyClinicalEntities() {
   return {
     demographics: null, dates: [], medications: [], diagnoses: [],
     vitals: [], labResults: [], allergies: [], procedures: [],
-    immunizations: [],
+    immunizations: [], careTeam: [],
     documentType: 'Unknown', fullText: '',
   }
 }
@@ -748,7 +771,7 @@ function isImmunizationLine(line) {
   // Direct vaccine keywords
   if (/\b(?:vaccin|immuniz|inoculat|booster)\b/i.test(line)) return true
   // Specific vaccine names / products
-  if (/\b(?:covid[\-\s]?19|sars[\-\s]?cov|pfizer|moderna|johnson|janssen|astrazeneca|novavax|biontech|mrna|flu\s+shot|influenza\s+(?:vaccine|inj)|tdap|dtap|mmr|hep\s*[ab]|hepatitis|polio|ipv|opv|varicella|shingrix|zoster|pneumo(?:vax|coccal)|prevnar|pcv|gardasil|hpv|meningococcal|menactra|rotavirus|bcg|rabies|typhoid|yellow\s*fever)\b/i.test(line)) return true
+  if (/\b(?:covid[\-\s]?19|sars[\-\s]?cov|pfizer|moderna|johnson|janssen|astrazeneca|novavax|biontech|mrna|flu\s+shot|influenza\s+(?:vaccine|inj)|tdap|dtap|mmr|hep\s*[ab]|hepatitis|polio|ipv|opv|varicella|shingrix|zoster|pneumo(?:vax|coccal)|prevnar|pcv|gardasil|hpv|meningococcal|menactra|rotavirus|bcg|rabies|typhoid|yellow\s*fever|hav\b|hbv\b|infs\b|fluarix|fluzone|flucelvax|adacel|boostrix|havrix|engerix|tetanus|diphtheria|pertussis|quadrivalent)\b/i.test(line)) return true
   // Vaccine admin metadata patterns
   if (/\b(?:given\s+by|lot\s*(?:number|#)|ndc\s*:|cvx\s*(?:code)?\s*:|vis\s+publish|expiration\s*date|manufacturer|site\s*:\s*(?:left|right)\s+(?:deltoid|arm|thigh|gluteal)|route\s*:\s*(?:intramuscular|subcutaneous|intradermal|oral|intranasal)|(?:0\.\d+|\d+)\s*ml\s*\[?milliliters?\]?)\b/i.test(line)) return true
   // "PURPLE CAP" / "GRAY CAP" / "ORANGE CAP" — vaccine packaging
@@ -788,45 +811,94 @@ function extractDiagnoses(text, upper, sections = {}, immunizationEntities = [])
   const hasDxSection = !!(sectionText || secMatch)
 
   // Strategy 1: Line-by-line parsing within problem/diagnosis section
+  // Handles Kaiser/Epic Problem List format:
+  //   LUMBAR MUSCLE STRAIN                    (condition name — bold header)
+  //   Diagnosis: LUMBAR MUSCLE STRAIN   Noted on: 02/01/2019   Chronic: No
+  //   ICD-10-CM: S39.012A
   if (hasDxSection) {
     const dxText = sectionText || secMatch[1]
     const lines = dxText.split('\n')
+    let currentDx = null  // Track current diagnosis for ICD code attachment
+
     for (const rawLine of lines) {
-      const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*\d\.]+/, '').trim()
+      const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*]+/, '').trim()
       if (!line || line.length < 3) continue
-      // Skip sub-headers
-      if (/^(diagnosis|problem|condition|issue|status|date|onset|provider|note|resolved|active|inactive|#)/i.test(line)) continue
-      // Skip very short non-clinical words
+
+      // ── Skip meta lines ───────────────────────────────────────────────
+      if (/^(problem|condition|issue|status|date|onset|provider|note|resolved|active|inactive|#)/i.test(line)) continue
+      if (/^problems?\s+last\s+reviewed/i.test(line)) continue
       if (line.length < 5 && !/[A-Z]\d{2}/.test(line)) continue
 
-      // ╔══ IMMUNIZATION FILTER ══════════════════════════════════════════╗
-      // Skip lines that are clearly immunization / vaccine records
-      if (isImmunizationLine(line)) {
-        console.log(`[OCR-DX] Skipping immunization line: "${line.substring(0,80)}"`);
+      // ── Immunization filter ───────────────────────────────────────────
+      if (isImmunizationLine(line)) continue
+
+      // ── Parse "ICD-10-CM: S39.012A" or "ICD-10: E11.65" ──────────────
+      const icdLabelMatch = line.match(/^ICD[\-\s]?10[\-\s]?(?:CM)?\s*:\s*([A-TV-Z]\d{2}(?:\.[\dA-Za-z]{1,4})?)/i)
+      if (icdLabelMatch) {
+        const code = icdLabelMatch[1]
+        if (immunizationCodes.has(code)) continue
+        if (currentDx && !currentDx.code) {
+          // Attach ICD code to the current diagnosis being built
+          currentDx.code = code
+          currentDx.codeSystem = 'ICD-10'
+          currentDx.icd10 = code
+          seenCodes.add(code)
+        } else if (!seenCodes.has(code)) {
+          diagnoses.push({ name: code, code, codeSystem: 'ICD-10', icd10: code, source: 'ocr', confidence: 'high' })
+          seenCodes.add(code)
+        }
         continue
       }
-      // ╚════════════════════════════════════════════════════════════════╝
 
-      // Extract ICD code if present: "condition text (E11.65)" or "condition - E11.65"
-      const icdInLine = line.match(/^(.+?)\s*[\(\-\u2013\u2014]\s*([A-TV-Z]\d{2}(?:\.\d{1,4})?)\)?/)
+      // ── Parse "Diagnosis: CONDITION   Noted on: DATE   Chronic: Yes/No"
+      const dxLabelMatch = line.match(/^Diagnosis\s*:\s*(.+?)(?:\s{2,}|\t|$)/i)
+      if (dxLabelMatch) {
+        const name = dxLabelMatch[1].trim()
+        if (name.length > 2 && !isImmunizationLine(name)) {
+          const key = name.toLowerCase()
+          const notedMatch = line.match(/noted\s+on\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)
+          const chronicMatch = line.match(/chronic\s*:\s*(yes|no)/i)
+          if (seenConditions.has(key)) {
+            // Enrich existing diagnosis with metadata
+            const existing = diagnoses.find(d => d.name.toLowerCase() === key)
+            if (existing) {
+              if (notedMatch) existing.onsetDate = notedMatch[1]
+              if (chronicMatch) existing.chronic = chronicMatch[1].toLowerCase() === 'yes'
+              currentDx = existing
+            }
+          } else {
+            currentDx = { name, source: 'ocr', confidence: 'high' }
+            if (notedMatch) currentDx.onsetDate = notedMatch[1]
+            if (chronicMatch) currentDx.chronic = chronicMatch[1].toLowerCase() === 'yes'
+            diagnoses.push(currentDx)
+            seenConditions.add(key)
+          }
+        }
+        continue
+      }
+
+      // ── Inline ICD: "condition text (E11.65)" or "condition - E11.65"
+      const icdInLine = line.match(/^(.+?)\s*[\(\-\u2013\u2014]\s*([A-TV-Z]\d{2}(?:\.[\dA-Za-z]{1,4})?)\)?/)
       if (icdInLine) {
         const name = icdInLine[1].replace(/[\s\-\u2013\u2014]+$/, '').trim()
         const code = icdInLine[2]
-        if (immunizationCodes.has(code)) continue // Already an immunization code
-        if (isImmunizationLine(name)) continue // Name looks like a vaccine
+        if (immunizationCodes.has(code)) continue
+        if (isImmunizationLine(name)) continue
         if (!seenCodes.has(code) && name.length > 2) {
-          diagnoses.push({ name, code, codeSystem: 'ICD-10', icd10: code, source: 'ocr', confidence: 'high' })
+          currentDx = { name, code, codeSystem: 'ICD-10', icd10: code, source: 'ocr', confidence: 'high' }
+          diagnoses.push(currentDx)
           seenCodes.add(code)
           seenConditions.add(name.toLowerCase())
         }
         continue
       }
 
-      // Any remaining non-trivial line in the problems section is likely a diagnosis
+      // ── Any remaining non-trivial line → likely a diagnosis name ──────
       if (line.length >= 5 && line.length <= 150 && !/^\d+$/.test(line)) {
         const key = line.toLowerCase()
         if (!seenConditions.has(key)) {
-          diagnoses.push({ name: line, source: 'ocr', confidence: hasDxSection ? 'high' : 'medium' })
+          currentDx = { name: line, source: 'ocr', confidence: hasDxSection ? 'high' : 'medium' }
+          diagnoses.push(currentDx)
           seenConditions.add(key)
         }
       }
@@ -837,8 +909,8 @@ function extractDiagnoses(text, upper, sections = {}, immunizationEntities = [])
   // ONLY search within the diagnosis section text (not full text) to avoid vaccine ICD codes
   const strategy2Text = hasDxSection ? searchText : text
   const linePatterns = [
-    /^[\-\s]*(.+?)\s*[\-\u2013\u2014]\s*([A-TV-Z]\d{2}(?:\.\d{1,4})?)\s*$/gm,
-    /^[\-\s]*(.+?)\s*\((?:ICD[\- ]?10\s*:\s*)?([A-TV-Z]\d{2}(?:\.\d{1,4})?)\)\s*$/gm,
+    /^[\-\s]*(.+?)\s*[\-\u2013\u2014]\s*([A-TV-Z]\d{2}(?:\.[\dA-Za-z]{1,4})?)\s*$/gm,
+    /^[\-\s]*(.+?)\s*\((?:ICD[\- ]?10\s*:\s*)?([A-TV-Z]\d{2}(?:\.[\dA-Za-z]{1,4})?)\)\s*$/gm,
   ]
   for (const pat of linePatterns) {
     let m
@@ -873,7 +945,7 @@ function extractDiagnoses(text, upper, sections = {}, immunizationEntities = [])
   // Strategy 4: Standalone ICD codes — ONLY from the diagnosis section text, not full text
   // This prevents picking up ICD codes from immunization records (U07.1 etc.)
   if (hasDxSection) {
-    const icdPat = /\b([A-TV-Z]\d{2}(?:\.\d{1,4})?)\b/g
+    const icdPat = /\b([A-TV-Z]\d{2}(?:\.[\dA-Za-z]{1,4})?)\b/g
     let m
     while ((m = icdPat.exec(searchText))) {
       if (seenCodes.has(m[1])) continue
@@ -916,12 +988,14 @@ function extractImmunizations(text, upper, sections = {}) {
   for (const rawLine of lines) {
     const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*]+/, '').trim()
     if (!line || line.length < 3) continue
-    // Skip sub-headers
-    if (/^(immunization|vaccination|vaccine|status|date|dose|type|#|questionnaire|question\s+answer)/i.test(line)) continue
+    // Skip sub-headers and noise lines
+    if (/^(immunization|vaccination|vaccine|status|date|dose|type|#|questionnaire|question\s+answer|user|reviewed\s+on|previous\s+revisions?|\[pending\]|the\s+documentation|is\s+this\s+ehs|admin\s+location)/i.test(line)) continue
+    // Skip reviewer lines: "Rodriguez, Adrina L (L.V.N.) 10/10/2024 1408"
+    if (/^[A-Z][a-z]+,\s+[A-Z][a-z]+.*\((?:L\.?V\.?N|R\.?N|M\.?D|D\.?O|N\.?P|P\.?A)\.?\)\s+\d{1,2}\/\d{1,2}\/\d{4}/i.test(line)) continue
 
     // Detect a new vaccine name line (e.g., "COVID-19 mRNA, LNP-S, PF (Pfizer-BioNTech) PURPLE CAP")
-    const isVaccineName = /\b(?:vaccin|covid|influenza|tdap|dtap|mmr|hep\s*[ab]|hepatitis|polio|varicella|shingrix|zoster|pneumo|prevnar|gardasil|hpv|meningo|rotavirus|bcg|rabies|typhoid|yellow\s*fever|mrna|lnp)\b/i.test(line)
-      || /^(?:COVID|FLU|TDAP|MMR|HEPB?|IPV|VAR|PCV|HIB|ROTAVIRUS)/i.test(line)
+    const isVaccineName = /\b(?:vaccin|covid|influenza|tdap|dtap|mmr|hep\s*[ab]|hepatitis|polio|varicella|shingrix|zoster|pneumo|prevnar|gardasil|hpv|meningo|rotavirus|bcg|rabies|typhoid|yellow\s*fever|mrna|lnp|fluarix|fluzone|flucelvax|adacel|boostrix|havrix|engerix|tetanus|diphtheria|pertussis|quadrivalent)\b/i.test(line)
+      || /^(?:COVID|FLU|TDAP|MMR|HEPB?|IPV|VAR|PCV|HIB|ROTAVIRUS|HAV|HBV|INFS|ADACEL|BOOSTRIX|Tdap)/i.test(line)
 
     if (isVaccineName) {
       // Save previous vaccine if exists
@@ -1238,6 +1312,85 @@ function extractProcedures(text) {
   return procs
 }
 
+// ─── Care Team ──────────────────────────────────────────────────────────────
+
+/**
+ * Extract Care Team members from clinical text.
+ * Handles Epic/Kaiser table format:
+ *   Name               Identifier   Relationship      Specialty   Phone             Duration
+ *   Siy, James (M.D.)  1811075591   PCP - General     —           916-817-5341      03/05/2026 - Present
+ */
+function extractCareTeam(text, upper, sections = {}) {
+  const team = []
+  const seen = new Set()
+
+  const sectionText = sections.care_team || ''
+  if (!sectionText) return team
+
+  const lines = sectionText.split('\n')
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line || line.length < 5) continue
+    // Skip table headers and sub-headers
+    if (/^(name|active|inactive|care\s*team|identifier|relationship|specialty|phone|duration|status)\b/i.test(line)) continue
+
+    // Strategy 1: Line with NPI-like identifier (10-digit number)
+    const npiMatch = line.match(/^(.+?)\s+(\d{7,10})\s+(.*)$/)
+    if (npiMatch) {
+      const name = npiMatch[1].trim()
+      const identifier = npiMatch[2]
+      const rest = npiMatch[3].trim()
+      const key = name.toLowerCase()
+      if (seen.has(key) || name.length < 3) continue
+
+      const provider = { name, identifier, source: 'ocr', status: 'Active' }
+
+      // Extract phone number
+      const phoneMatch = rest.match(/(\d{3}[\-\.]\d{3}[\-\.]\d{4}(?:\s*x\d+)?)/)
+      if (phoneMatch) provider.phone = phoneMatch[1]
+
+      // Extract date range: "03/05/2026 - Present"
+      const dateMatch = rest.match(/(\d{1,2}\/\d{1,2}\/\d{4})\s*-\s*(\w+|\d{1,2}\/\d{1,2}\/\d{4})/)
+      if (dateMatch) {
+        provider.startDate = dateMatch[1]
+        provider.status = /present/i.test(dateMatch[2]) ? 'Active' : 'Inactive'
+      }
+
+      // Extract relationship (first meaningful text chunk after identifier)
+      const relText = rest
+        .replace(phoneMatch?.[0] || '', '')
+        .replace(dateMatch?.[0] || '', '')
+        .replace(/[—\-]+/g, ' ')
+        .trim()
+      const relParts = relText.split(/\s{2,}/).filter(s => s.length > 1 && !/^\d/.test(s))
+      if (relParts.length > 0) provider.relationship = relParts[0].substring(0, 60)
+
+      team.push(provider)
+      seen.add(key)
+      continue
+    }
+
+    // Strategy 2: Line with credentials "(M.D.)", "(D.O.)", "(N.P.)", etc.
+    const credMatch = line.match(/^(.+?)\s*\(([A-Z][A-Z.\s]{1,10})\)(.*)$/i)
+    if (credMatch) {
+      const name = `${credMatch[1].trim()} (${credMatch[2].trim()})`
+      const rest = credMatch[3].trim()
+      const key = name.toLowerCase()
+      if (seen.has(key) || credMatch[1].trim().length < 3) continue
+
+      const provider = { name, source: 'ocr', status: 'Active' }
+      const phoneMatch = rest.match(/(\d{3}[\-\.]\d{3}[\-\.]\d{4}(?:\s*x\d+)?)/)
+      if (phoneMatch) provider.phone = phoneMatch[1]
+
+      team.push(provider)
+      seen.add(key)
+    }
+  }
+
+  return team
+}
+
 // ─── Document Classification ────────────────────────────────────────────────
 
 function classifyDocumentType(text, upper, filename) {
@@ -1282,7 +1435,7 @@ export function documentResultToAppRows(docResult, filename) {
   const { clinicalEntities, text, method, confidence, metadata } = docResult
   const now = new Date().toISOString()
 
-  const rows = { medications: [], conditions: [], allergies: [], vitals: [], results: [], orders: [], immunizations: [], documentRow: null }
+  const rows = { medications: [], conditions: [], allergies: [], vitals: [], results: [], orders: [], immunizations: [], careTeam: [], documentRow: null }
 
   if (!clinicalEntities) return rows
 
@@ -1303,7 +1456,10 @@ export function documentResultToAppRows(docResult, filename) {
     icd10: dx.icd10 || dx.code || '',
     icd10Display: dx.icd10Display || '',
     snomedCT: dx.snomedCT || '', snomedDisplay: dx.snomedDisplay || '',
-    severity: 'Moderate', status: 'Active', onsetDate: clinicalEntities.dates[0] || now,
+    severity: dx.chronic === true ? 'Chronic' : (dx.chronic === false ? 'Acute' : 'Moderate'),
+    status: 'Active',
+    onset: dx.onsetDate || clinicalEntities.dates[0] || now,
+    onsetDate: dx.onsetDate || clinicalEntities.dates[0] || now,
     _source: 'ocr', _ocrConfidence: dx.confidence, _sourceFile: filename,
     _extractionSource: dx.source || 'local-regex',
   }))
@@ -1365,6 +1521,18 @@ export function documentResultToAppRows(docResult, filename) {
     _extractionSource: imm.source || 'local-regex',
   }))
 
+  rows.careTeam = (clinicalEntities.careTeam || []).map((ct, i) => ({
+    patId: '', careTeamId: `OCR-CT-${Date.now()}-${i}`,
+    name: ct.name,
+    identifier: ct.identifier || '',
+    relationship: ct.relationship || '',
+    phone: ct.phone || '',
+    startDate: ct.startDate || '',
+    status: ct.status || 'Active',
+    _source: 'ocr', _sourceFile: filename,
+    _extractionSource: ct.source || 'local-regex',
+  }))
+
   rows.documentRow = {
     docId: metadata?.fileName || filename,
     type: clinicalEntities.documentType,
@@ -1383,6 +1551,7 @@ export function documentResultToAppRows(docResult, filename) {
       labResults: clinicalEntities.labResults.length,
       procedures: (clinicalEntities.procedures || []).length,
       immunizations: (clinicalEntities.immunizations || []).length,
+      careTeam: (clinicalEntities.careTeam || []).length,
     },
     _source: 'ocr', _sourceFile: filename,
     _extractionSource: method === 'openai' ? 'openai' : method === 'azure' ? 'azure-ai' : 'local-regex',

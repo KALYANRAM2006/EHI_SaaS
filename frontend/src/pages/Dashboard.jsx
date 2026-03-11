@@ -33,6 +33,9 @@ import {
   Bot,
   MessageSquare,
   FileBarChart,
+  Heart,
+  Users,
+  ClipboardList,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { generateAISummary, providers } from '../data/sampleData'
@@ -58,6 +61,7 @@ export default function Dashboard() {
   const [timelineSearch, setTimelineSearch] = useState('')
   const [explorerSearch, setExplorerSearch] = useState('')
   const [expandedExplorer, setExpandedExplorer] = useState({ patient: true })
+  const [recordsCategory, setRecordsCategory] = useState(null)
   const [privacyOpen, setPrivacyOpen] = useState(false)
   const demoMode = isDemo()
 
@@ -81,118 +85,85 @@ export default function Dashboard() {
     }
   }, [uploadedFiles, navigate, demoMode, loading, parsedData, loadSampleData])
 
-  // Derive dashboard stats from parsed data
+  // ─── Configuration: category metadata for dynamic rendering ──────────────
+  const CATEGORY_META = useMemo(() => ({
+    conditions:    { icon: AlertCircle,    label: 'Conditions',    gradient: 'from-red-500 to-red-600',    bg: 'bg-red-50',    shadow: 'rgba(239,68,68,0.2)',    border: 'border-red-200',    ring: 'ring-red-500',    text: 'text-red-700',    bgPill: 'bg-red-100',    countLabel: 'Active' },
+    medications:   { icon: Pill,           label: 'Medications',   gradient: 'from-purple-500 to-purple-600', bg: 'bg-purple-50', shadow: 'rgba(168,85,247,0.2)', border: 'border-purple-200', ring: 'ring-purple-500', text: 'text-purple-700', bgPill: 'bg-purple-100', countLabel: 'Active' },
+    immunizations: { icon: Syringe,        label: 'Immunizations', gradient: 'from-orange-500 to-orange-600', bg: 'bg-orange-50', shadow: 'rgba(249,115,22,0.2)', border: 'border-orange-200', ring: 'ring-orange-500', text: 'text-orange-700', bgPill: 'bg-orange-100', countLabel: 'Records' },
+    allergies:     { icon: AlertTriangle,  label: 'Allergies',     gradient: 'from-amber-500 to-amber-600',  bg: 'bg-amber-50',  shadow: 'rgba(245,158,11,0.2)', border: 'border-amber-200',  ring: 'ring-amber-500',  text: 'text-amber-700', bgPill: 'bg-amber-100', countLabel: 'Known' },
+    results:       { icon: TestTube,       label: 'Lab Results',   gradient: 'from-green-500 to-emerald-600', bg: 'bg-green-50', shadow: 'rgba(34,197,94,0.2)',  border: 'border-green-200',  ring: 'ring-green-500',  text: 'text-green-700', bgPill: 'bg-green-100', countLabel: 'Results' },
+    encounters:    { icon: Stethoscope,    label: 'Visits',        gradient: 'from-blue-500 to-blue-600',    bg: 'bg-blue-50',   shadow: 'rgba(59,130,246,0.2)', border: 'border-blue-200',   ring: 'ring-blue-500',   text: 'text-blue-700', bgPill: 'bg-blue-100', countLabel: 'Encounters' },
+    vitals:        { icon: Heart,          label: 'Vitals',        gradient: 'from-pink-500 to-pink-600',    bg: 'bg-pink-50',   shadow: 'rgba(236,72,153,0.2)', border: 'border-pink-200',   ring: 'ring-pink-500',   text: 'text-pink-700', bgPill: 'bg-pink-100', countLabel: 'Signs' },
+    careTeam:      { icon: Users,          label: 'Care Team',     gradient: 'from-indigo-500 to-indigo-600', bg: 'bg-indigo-50', shadow: 'rgba(99,102,241,0.2)', border: 'border-indigo-200', ring: 'ring-indigo-500', text: 'text-indigo-700', bgPill: 'bg-indigo-100', countLabel: 'Providers' },
+    orders:        { icon: ClipboardList,  label: 'Orders',        gradient: 'from-cyan-500 to-cyan-600',    bg: 'bg-cyan-50',   shadow: 'rgba(6,182,212,0.2)',  border: 'border-cyan-200',   ring: 'ring-cyan-500',   text: 'text-cyan-700', bgPill: 'bg-cyan-100', countLabel: 'Total' },
+    documents:     { icon: FileBarChart,   label: 'Documents',     gradient: 'from-gray-500 to-gray-600',    bg: 'bg-gray-50',   shadow: 'rgba(107,114,128,0.2)', border: 'border-gray-200',  ring: 'ring-gray-500',  text: 'text-gray-700', bgPill: 'bg-gray-100', countLabel: 'Files' },
+    procedures:    { icon: Activity,       label: 'Procedures',    gradient: 'from-teal-500 to-teal-600',    bg: 'bg-teal-50',   shadow: 'rgba(20,184,166,0.2)', border: 'border-teal-200',   ring: 'ring-teal-500',   text: 'text-teal-700', bgPill: 'bg-teal-100', countLabel: 'Total' },
+  }), [])
+
+  // Default metadata for unknown categories discovered dynamically
+  const defaultMeta = { icon: FileText, label: '', gradient: 'from-slate-500 to-slate-600', bg: 'bg-slate-50', shadow: 'rgba(100,116,139,0.2)', border: 'border-slate-200', ring: 'ring-slate-500', text: 'text-slate-700', bgPill: 'bg-slate-100', countLabel: 'Records' }
+
+  // Derive dashboard stats — DYNAMIC: detect ALL data arrays from selectedPatient
   const stats = useMemo(() => {
     if (!parsedData || !selectedPatient) return null
-    return {
+    const base = {
       patientName: `${selectedPatient.firstName} ${selectedPatient.lastName}`,
       age: selectedPatient.age,
       sex: selectedPatient.sex,
-      conditions: selectedPatient.conditions || [],
-      medications: selectedPatient.medications || [],
-      allergies: selectedPatient.allergies || [],
-      encounters: selectedPatient.encounters || [],
-      results: selectedPatient.results || [],
-      orders: selectedPatient.orders || [],
       abnormalResults: selectedPatient.abnormalResults || [],
     }
+    // Dynamically detect every array property as a category
+    const dynamicCategories = {}
+    for (const [key, val] of Object.entries(selectedPatient)) {
+      if (Array.isArray(val) && !key.startsWith('_') && key !== 'abnormalResults') {
+        dynamicCategories[key] = val
+      }
+    }
+    return { ...base, ...dynamicCategories }
   }, [parsedData, selectedPatient])
 
+  // DYNAMIC category cards — auto-generated from whatever data is present
   const categoryCards = useMemo(() => {
     if (!stats) return []
-    const activeConditions = stats.conditions.filter(c => c.status === 'Active')
-    return [
-      {
-        icon: Pill, label: 'Medications',
-        count: stats.medications.length,
-        countLabel: 'Active',
-        gradient: 'from-purple-500 to-purple-600',
-        bgColor: 'bg-purple-50',
-        shadowColor: 'rgba(168,85,247,0.2)',
-        borderColor: 'border-purple-200',
-        items: stats.medications.slice(0, 2).map(m => {
-          const dose = m.dose || m.frequency || ''
-          // Avoid showing duplicate dose when it's already in the name
-          const nameHasDose = dose && m.name && m.name.toLowerCase().includes(dose.toLowerCase().split(' ')[0])
-          return nameHasDose ? m.name : `${m.name}${dose ? ' - ' + dose : ''}`
-        }),
-        total: stats.medications.length,
-        link: 'medications',
-      },
-      {
-        icon: TestTube, label: 'Lab Results',
-        count: stats.results.length,
-        countLabel: 'Results',
-        gradient: 'from-green-500 to-emerald-600',
-        bgColor: 'bg-green-50',
-        shadowColor: 'rgba(34,197,94,0.2)',
-        borderColor: 'border-green-200',
-        items: stats.results.slice(0, 2).map(r => `${r.name || r.component || 'Result'} - ${r.value || ''} ${r.units || r.unit || ''}`),  
-        total: stats.results.length,
-        link: 'labs',
-      },
-      {
-        icon: Stethoscope, label: 'Visits',
-        count: stats.encounters.length,
-        countLabel: 'Encounters',
-        gradient: 'from-blue-500 to-blue-600',
-        bgColor: 'bg-blue-50',
-        shadowColor: 'rgba(59,130,246,0.2)',
-        borderColor: 'border-blue-200',
-        items: stats.encounters.slice(0, 2).map(e => `${new Date(e.contactDate).toLocaleDateString()} - ${e.visitType || 'Visit'}`),
-        total: stats.encounters.length,
-        link: 'encounters',
-      },
-      {
-        icon: AlertCircle, label: 'Conditions',
-        count: activeConditions.length,
-        countLabel: 'Active',
-        gradient: 'from-red-500 to-red-600',
-        bgColor: 'bg-red-50',
-        shadowColor: 'rgba(239,68,68,0.2)',
-        borderColor: 'border-red-200',
-        items: activeConditions.slice(0, 2).map(c => c.name),
-        total: activeConditions.length,
-        link: 'conditions',
-      },
-      {
-        icon: AlertTriangle, label: 'Allergies',
-        count: stats.allergies.length,
-        countLabel: 'Known',
-        gradient: 'from-amber-500 to-amber-600',
-        bgColor: 'bg-amber-50',
-        shadowColor: 'rgba(245,158,11,0.2)',
-        borderColor: 'border-amber-200',
-        items: stats.allergies.slice(0, 2).map(a => `${a.name || a.allergen || 'Unknown'} ${a.reaction ? '- ' + a.reaction : ''}`),
-        total: stats.allergies.length,
-        link: 'conditions',
-      },
-      {
-        icon: Syringe, label: 'Immunizations',
-        count: stats.orders.filter(o => o.orderType === 'Immunization').length || 0,
-        countLabel: 'Records',
-        gradient: 'from-orange-500 to-orange-600',
-        bgColor: 'bg-orange-50',
-        shadowColor: 'rgba(249,115,22,0.2)',
-        borderColor: 'border-orange-200',
-        items: stats.orders.filter(o => o.orderType === 'Immunization').slice(0, 2).map(o => o.name),
-        total: stats.orders.filter(o => o.orderType === 'Immunization').length || 0,
-        link: 'procedures',
-      },
-      {
-        icon: Activity, label: 'Orders',
-        count: stats.orders.length,
-        countLabel: 'Total',
-        gradient: 'from-indigo-500 to-indigo-600',
-        bgColor: 'bg-indigo-50',
-        shadowColor: 'rgba(99,102,241,0.2)',
-        borderColor: 'border-indigo-200',
-        items: stats.orders.slice(0, 2).map(o => o.name || 'Order'),
-        total: stats.orders.length,
-        link: 'procedures',
-      },
-    ]
-  }, [stats])
+    // Priority order for display
+    const priorityOrder = ['conditions', 'medications', 'immunizations', 'allergies', 'results', 'encounters', 'vitals', 'careTeam', 'orders', 'documents', 'procedures']
+    // Detect all array categories
+    const detected = []
+    for (const [key, val] of Object.entries(stats)) {
+      if (Array.isArray(val) && val.length > 0 && !key.startsWith('_') && key !== 'abnormalResults') {
+        detected.push(key)
+      }
+    }
+    // Sort by priority, unknown categories go last
+    detected.sort((a, b) => {
+      const ia = priorityOrder.indexOf(a), ib = priorityOrder.indexOf(b)
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+    })
+    return detected.map(key => {
+      const items = stats[key]
+      const meta = CATEGORY_META[key] || { ...defaultMeta, label: key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()) }
+      // Smart preview: show first 2 items with best available name
+      const preview = items.slice(0, 2).map(item => {
+        const name = item.name || item.allergen || item.component || item.visitType || item.orderType || item.type || JSON.stringify(item).slice(0, 40)
+        const detail = item.value || item.dose || item.dosage || item.reaction || item.date || item.onset || item.contactDate || ''
+        return detail ? `${name} — ${detail}` : name
+      })
+      return {
+        key,
+        icon: meta.icon,
+        label: meta.label,
+        count: items.length,
+        countLabel: meta.countLabel,
+        gradient: meta.gradient,
+        bgColor: meta.bg,
+        shadowColor: meta.shadow,
+        borderColor: meta.border,
+        items: preview,
+        total: items.length,
+        link: 'records',
+      }
+    })
+  }, [stats, CATEGORY_META, defaultMeta])
 
   const toggleSection = (sectionId) => {
     setExpandedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }))
@@ -227,17 +198,21 @@ export default function Dashboard() {
     })
   }
 
-  // Tab definitions matching Figma mockup
-  const tabItems = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'ai-summary', label: 'AI Summary' },
-    { id: 'timeline', label: 'Timeline' },
-    { id: 'insights', label: 'Insights' },
-    { id: 'data-explorer', label: 'Data Explorer' },
-    { id: 'ai-assistant', label: 'AI Assistant' },
-    { id: 'data-lineage', label: 'Data Lineage' },
-    { id: 'documents', label: 'Documents' },
-  ]
+  // Tab definitions — Records tab is dynamic, only if data exists
+  const tabItems = useMemo(() => {
+    const base = [
+      { id: 'overview', label: 'Overview' },
+      { id: 'records', label: 'Records' },
+      { id: 'ai-summary', label: 'AI Summary' },
+      { id: 'timeline', label: 'Timeline' },
+      { id: 'insights', label: 'Insights' },
+      { id: 'data-explorer', label: 'Data Explorer' },
+      { id: 'ai-assistant', label: 'AI Assistant' },
+      { id: 'data-lineage', label: 'Data Lineage' },
+      { id: 'documents', label: 'Documents' },
+    ]
+    return base
+  }, [])
 
   // Generate AI-driven health insights from patient data
   const healthInsights = useMemo(() => {
@@ -245,7 +220,7 @@ export default function Dashboard() {
     const insights = []
 
     // Blood pressure trend
-    const bpResults = stats.results.filter(r => {
+    const bpResults = (stats.results || []).filter(r => {
       const comp = (r.name || r.component || '').toLowerCase()
       return comp.includes('systolic') || comp.includes('blood pressure') || comp.includes('intravascular systolic')
     })
@@ -274,12 +249,12 @@ export default function Dashboard() {
     }
 
     // Medication compliance
-    if (stats.medications.length > 0 && stats.conditions.filter(c => c.status === 'Active').length > 0) {
+    if ((stats.medications || []).length > 0 && (stats.conditions || []).filter(c => c.status === 'Active').length > 0) {
       insights.push({
         icon: CheckCircle2,
         iconColor: 'text-green-500',
         title: 'Medication Compliance',
-        description: `Patient is on appropriate therapy for ${stats.conditions.filter(c => c.status === 'Active').length} documented condition${stats.conditions.filter(c => c.status === 'Active').length !== 1 ? 's' : ''}.`,
+        description: `Patient is on appropriate therapy for ${(stats.conditions || []).filter(c => c.status === 'Active').length} documented condition${(stats.conditions || []).filter(c => c.status === 'Active').length !== 1 ? 's' : ''}.`,
         severity: 'positive',
       })
     }
@@ -296,7 +271,7 @@ export default function Dashboard() {
     }
 
     // Overdue screenings
-    if (stats.encounters.length > 0) {
+    if ((stats.encounters || []).length > 0) {
       const lastVisit = new Date(stats.encounters[0]?.contactDate)
       const monthsSince = Math.floor((Date.now() - lastVisit) / (1000 * 60 * 60 * 24 * 30))
       if (monthsSince > 12) {
@@ -318,6 +293,28 @@ export default function Dashboard() {
         title: 'Allergy Awareness',
         description: `${stats.allergies.length} documented allergy${stats.allergies.length !== 1 ? 'ies' : 'y'}. Ensure all providers are aware before prescribing.`,
         severity: 'info',
+      })
+    }
+
+    // Immunization awareness
+    if ((stats.immunizations || []).length > 0) {
+      insights.push({
+        icon: Syringe,
+        iconColor: 'text-orange-500',
+        title: 'Immunization Records',
+        description: `${stats.immunizations.length} immunization${stats.immunizations.length !== 1 ? 's' : ''} documented. Review your vaccination history in the Records tab.`,
+        severity: 'info',
+      })
+    }
+
+    // Care team info
+    if ((stats.careTeam || []).length > 0) {
+      insights.push({
+        icon: Users,
+        iconColor: 'text-indigo-500',
+        title: 'Care Team Identified',
+        description: `${stats.careTeam.length} care team member${stats.careTeam.length !== 1 ? 's' : ''} on record: ${stats.careTeam.map(c => c.name).join(', ')}.`,
+        severity: 'positive',
       })
     }
 
@@ -453,11 +450,11 @@ export default function Dashboard() {
               <div className="flex items-center gap-3 mt-3 md:mt-0">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
                   <Activity className="w-3.5 h-3.5" />
-                  {stats.encounters.length + stats.orders.length + stats.results.length + stats.medications.length + stats.conditions.length + stats.allergies.length} Total Records
+                  {Object.entries(stats).reduce((sum, [k, v]) => sum + (Array.isArray(v) && !k.startsWith('_') && k !== 'abnormalResults' ? v.length : 0), 0)} Total Records
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
                   <Calendar className="w-3.5 h-3.5" />
-                  {stats.encounters.length > 0 ? `${new Date(stats.encounters[0].contactDate).toLocaleDateString()} - ${new Date(stats.encounters[stats.encounters.length - 1].contactDate).toLocaleDateString()}` : 'No dates'}
+                  {(stats.encounters || []).length > 0 ? `${new Date(stats.encounters[0].contactDate).toLocaleDateString()} - ${new Date(stats.encounters[stats.encounters.length - 1].contactDate).toLocaleDateString()}` : 'OCR Extracted'}
                 </span>
               </div>
             </div>
@@ -510,19 +507,19 @@ export default function Dashboard() {
                       )}
                       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
                         <p className="text-white/60 text-xs">Medications</p>
-                        <p className="text-white text-xl font-bold">{stats.medications.length}</p>
+                        <p className="text-white text-xl font-bold">{(stats.medications || []).length}</p>
                       </div>
                       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
                         <p className="text-white/60 text-xs">Conditions</p>
-                        <p className="text-white text-xl font-bold">{stats.conditions.filter(c => c.status === 'Active').length}</p>
+                        <p className="text-white text-xl font-bold">{(stats.conditions || []).filter(c => c.status === 'Active').length}</p>
                       </div>
                       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
                         <p className="text-white/60 text-xs">Lab Results</p>
-                        <p className="text-white text-xl font-bold">{stats.results.length}</p>
+                        <p className="text-white text-xl font-bold">{(stats.results || []).length}</p>
                       </div>
                       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
-                        <p className="text-white/60 text-xs">Encounters</p>
-                        <p className="text-white text-xl font-bold">{stats.encounters.length}</p>
+                        <p className="text-white/60 text-xs">Immunizations</p>
+                        <p className="text-white text-xl font-bold">{(stats.immunizations || []).length}</p>
                       </div>
                     </div>
 
@@ -546,7 +543,7 @@ export default function Dashboard() {
                   <div
                     key={index}
                     className={`bg-white rounded-2xl border-t-4 ${card.borderColor} shadow-lg p-6 cursor-pointer transition-all duration-200 hover:-translate-y-1`}
-                    onClick={() => setActiveView(card.link)}
+                    onClick={() => { setRecordsCategory(card.key); setActiveView('records') }}
                     style={{boxShadow: `0 4px 14px ${card.shadowColor}`}}
                     onMouseEnter={e => e.currentTarget.style.boxShadow = `0 12px 30px ${card.shadowColor}`}
                     onMouseLeave={e => e.currentTarget.style.boxShadow = `0 4px 14px ${card.shadowColor}`}
@@ -720,9 +717,9 @@ export default function Dashboard() {
                     <p key={i}>{renderFormattedText(p)}</p>
                   ))}
                 </div>
-                {stats.encounters.length > 0 && (
+                {(stats.encounters || []).length > 0 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[...new Set(stats.encounters.map(e => providers[e.visitProvider]?.name).filter(Boolean))].map((provName, idx) => (
+                    {[...new Set((stats.encounters || []).map(e => providers[e.visitProvider]?.name).filter(Boolean))].map((provName, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100 hover:bg-blue-100 transition-colors">
                         <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
                           <User className="w-5 h-5 text-white" />
@@ -754,7 +751,7 @@ export default function Dashboard() {
         {activeView === 'timeline' && (() => {
           // Build unified timeline events from encounters, medications, results
           const timelineEvents = []
-          stats.encounters.forEach(enc => {
+          ;(stats.encounters || []).forEach(enc => {
             const prov = providers[enc.visitProvider]
             timelineEvents.push({
               date: enc.contactDate,
@@ -770,7 +767,7 @@ export default function Dashboard() {
               data: enc,
             })
           })
-          stats.medications.forEach(med => {
+          ;(stats.medications || []).forEach(med => {
             timelineEvents.push({
               date: med.startDate,
               type: 'medication',
@@ -782,7 +779,7 @@ export default function Dashboard() {
               data: med,
             })
           })
-          stats.results.forEach(result => {
+          ;(stats.results || []).forEach(result => {
             const compName = result.name || result.component || 'Lab Result'
             const refRange = result.referenceRange || (result.refLow != null && result.refHigh != null ? `${result.refLow}-${result.refHigh}` : '')
             timelineEvents.push({
@@ -995,231 +992,187 @@ export default function Dashboard() {
           )
         })()}
 
-        {/* ===== RECORDS VIEW ===== */}
-        {activeView === 'records' && (
+        {/* ===== DYNAMIC RECORDS VIEW ===== */}
+        {(activeView === 'records' || activeView === 'medications' || activeView === 'conditions' || activeView === 'labs' || activeView === 'encounters' || activeView === 'procedures' || activeView === 'trends') && (() => {
+          // Detect all categories with data
+          const priorityOrder = ['conditions', 'medications', 'immunizations', 'allergies', 'results', 'encounters', 'vitals', 'careTeam', 'orders', 'documents', 'procedures']
+          const detectedCats = Object.entries(stats)
+            .filter(([k, v]) => Array.isArray(v) && v.length > 0 && !k.startsWith('_') && k !== 'abnormalResults')
+            .map(([k]) => k)
+            .sort((a, b) => {
+              const ia = priorityOrder.indexOf(a), ib = priorityOrder.indexOf(b)
+              return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+            })
+
+          // Map legacy view names to categories
+          const legacyMap = { medications: 'medications', conditions: 'conditions', labs: 'results', encounters: 'encounters', procedures: 'orders' }
+          const effectiveCat = (activeView !== 'records' && legacyMap[activeView]) ? legacyMap[activeView] : (recordsCategory || detectedCats[0] || null)
+
+          // Smart column detection for a category
+          const getColumns = (items) => {
+            if (!items || items.length === 0) return []
+            const allKeys = new Set()
+            items.forEach(item => {
+              Object.keys(item).forEach(k => {
+                if (!k.startsWith('_') && k !== 'patId' && k !== 'orderId' && typeof item[k] !== 'object') {
+                  allKeys.add(k)
+                }
+              })
+            })
+            // Prioritize important columns
+            const priority = ['name', 'component', 'allergen', 'visitType', 'orderType', 'type', 'status', 'value', 'dose', 'dosage', 'reaction', 'severity', 'icd10', 'cvx', 'ndc', 'relationship', 'identifier', 'phone', 'date', 'onset', 'contactDate', 'startDate', 'resultTime', 'unit', 'units', 'flag', 'referenceRange', 'route', 'site', 'manufacturer', 'lotNumber', 'prescriber', 'drugClass', 'rxcui', 'frequency', 'purpose', 'chronic', 'loinc']
+            const sorted = [...allKeys].sort((a, b) => {
+              const ia = priority.indexOf(a), ib = priority.indexOf(b)
+              return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+            })
+            return sorted.slice(0, 10) // Max 10 columns
+          }
+
+          // Format cell value for display
+          const formatCell = (val, colName) => {
+            if (val == null || val === '' || val === undefined) return '—'
+            // Date formatting
+            if (/date|onset|time|start/i.test(colName) && typeof val === 'string') {
+              try { const d = new Date(val); if (!isNaN(d.getTime()) && val.length > 4) return d.toLocaleDateString() } catch { /* */ }
+            }
+            if (typeof val === 'boolean') return val ? 'Yes' : 'No'
+            return String(val)
+          }
+
+          // Pretty column header
+          const colHeader = (col) => col
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/^./, c => c.toUpperCase())
+            .replace(/Icd10/, 'ICD-10')
+            .replace(/Cvx/, 'CVX')
+            .replace(/Ndc/, 'NDC')
+            .replace(/Loinc/, 'LOINC')
+            .replace(/Rxcui/, 'RxCUI')
+            .trim()
+
+          const items = effectiveCat ? (stats[effectiveCat] || []) : []
+          const columns = getColumns(items)
+          const meta = CATEGORY_META[effectiveCat] || { ...defaultMeta, label: (effectiveCat || 'Records').replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()) }
+          const CatIcon = meta.icon
+
+          return (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">Health Records</h2>
-              <span className="text-gray-500">{stats.encounters.length + stats.orders.length + stats.results.length} Total Records</span>
+            {/* Category sub-tabs */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={() => setActiveView('overview')} className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Overview</button>
+              <div className="h-5 w-px bg-gray-300" />
+              {detectedCats.map(cat => {
+                const cm = CATEGORY_META[cat] || defaultMeta
+                const Icon = cm.icon
+                const isActive = cat === effectiveCat
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => { setRecordsCategory(cat); if (activeView !== 'records') setActiveView('records') }}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all ${
+                      isActive
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                        : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {cm.label || cat.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase())}
+                    <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : cm.bgPill + ' ' + cm.text}`}>
+                      {(stats[cat] || []).length}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-            {/* Encounters */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">🏥 Encounters ({stats.encounters.length})</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 text-left text-gray-500">
-                      <th className="pb-3 pr-4">Date</th>
-                      <th className="pb-3 pr-4">Type</th>
-                      <th className="pb-3 pr-4">Provider</th>
-                      <th className="pb-3 pr-4">Diagnosis</th>
-                      <th className="pb-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.encounters.sort((a, b) => new Date(b.contactDate) - new Date(a.contactDate)).map((enc, i) => {
-                      const prov = providers[enc.visitProvider]
-                      return (
-                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-3 pr-4">{new Date(enc.contactDate).toLocaleDateString()}</td>
-                          <td className="py-3 pr-4">{enc.encType}</td>
-                          <td className="py-3 pr-4">{prov?.name || 'Unknown'}</td>
-                          <td className="py-3 pr-4">{enc.diagnosis}</td>
-                          <td className="py-3">
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${enc.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {enc.status}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+
+            {/* Category header */}
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 bg-gradient-to-br ${meta.gradient} rounded-xl flex items-center justify-center shadow-lg`}>
+                <CatIcon className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">{meta.label}</h2>
+                <p className="text-sm text-gray-500">{items.length} record{items.length !== 1 ? 's' : ''} found</p>
               </div>
             </div>
-            {/* Lab Results */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">🧪 Lab Results ({stats.results.length})</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 text-left text-gray-500">
-                      <th className="pb-3 pr-4">Component</th>
-                      <th className="pb-3 pr-4">LOINC</th>
-                      <th className="pb-3 pr-4">Value</th>
-                      <th className="pb-3 pr-4">Unit</th>
-                      <th className="pb-3 pr-4">Reference</th>
-                      <th className="pb-3 pr-4">Flag</th>
-                      <th className="pb-3 pr-4">Date</th>
-                      <th className="pb-3">Source</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.results.map((result, i) => {
-                      const compName = result.name || result.component || 'Lab Result'
-                      const refRange = result.referenceRange || (result.refLow != null && result.refHigh != null ? `${result.refLow}-${result.refHigh}` : '—')
-                      const resultDate = result.date || result.resultTime
-                      const dateStr = resultDate ? (() => { try { const d = new Date(resultDate); return isNaN(d.getTime()) ? resultDate : d.toLocaleDateString() } catch { return resultDate } })() : '—'
-                      const flagVal = result.flag || ''
-                      const src = result._extractionSource || (result._sourceFile ? 'local-regex' : result._source ? 'tsv' : 'unknown')
-                      const srcLabel = { 'openai': 'OpenAI GPT', 'azure-ai': 'Azure AI', 'local-regex': 'OCR Regex', 'tsv': 'TSV Parser' }[src] || src
-                      const srcColor = { 'openai': 'bg-emerald-100 text-emerald-700', 'azure-ai': 'bg-purple-100 text-purple-700', 'local-regex': 'bg-blue-100 text-blue-700', 'tsv': 'bg-gray-100 text-gray-600' }[src] || 'bg-gray-100 text-gray-600'
-                      return (
-                      <tr key={i} className={`border-b border-gray-100 ${flagVal && flagVal !== 'Normal' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                        <td className="py-3 pr-4 font-medium">{compName}</td>
-                        <td className="py-3 pr-4">{result.loinc ? <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700" title={result.loincDisplay || ''}>{result.loinc}</span> : <span className="text-gray-300">—</span>}</td>
-                        <td className="py-3 pr-4 font-semibold">{result.value || '—'}</td>
-                        <td className="py-3 pr-4 text-gray-500">{result.unit || result.units || ''}</td>
-                        <td className="py-3 pr-4 text-gray-500">{refRange}</td>
-                        <td className="py-3 pr-4">
-                          {flagVal ? (
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${flagVal === 'Normal' ? 'bg-green-100 text-green-700' : flagVal === 'High' || flagVal === 'CRITICAL' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                            {flagVal}
-                          </span>
-                          ) : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className="py-3 pr-4 text-gray-500">{dateStr}</td>
-                        <td className="py-3">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${srcColor}`}>{srcLabel}</span>
-                          {result._mergedCount > 1 && (
-                            <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-600">Merged {result._mergedCount}</span>
-                          )}
-                        </td>
+
+            {/* Records table */}
+            {items.length > 0 ? (
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-600">
+                        <th className="px-4 py-3 text-xs font-semibold">#</th>
+                        {columns.map(col => (
+                          <th key={col} className="px-4 py-3 text-xs font-semibold">{colHeader(col)}</th>
+                        ))}
                       </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {items.map((item, i) => (
+                        <tr key={i} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
+                          <td className="px-4 py-3 text-gray-400 text-xs font-mono">{i + 1}</td>
+                          {columns.map(col => {
+                            const val = formatCell(item[col], col)
+                            // Special badge rendering for known columns
+                            if (col === 'icd10' && item[col]) return <td key={col} className="px-4 py-3"><span className="px-2 py-0.5 rounded text-[10px] font-medium bg-rose-100 text-rose-700">ICD-10: {item[col]}</span></td>
+                            if (col === 'cvx' && item[col]) return <td key={col} className="px-4 py-3"><span className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">CVX: {item[col]}</span></td>
+                            if (col === 'ndc' && item[col]) return <td key={col} className="px-4 py-3"><span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-100 text-cyan-700">NDC: {item[col]}</span></td>
+                            if (col === 'loinc' && item[col]) return <td key={col} className="px-4 py-3"><span className="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">{item[col]}</span></td>
+                            if (col === 'rxcui' && item[col]) return <td key={col} className="px-4 py-3"><span className="px-2 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700">RxCUI: {item[col]}</span></td>
+                            if (col === 'flag' && item[col]) return <td key={col} className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${item[col] === 'Normal' ? 'bg-green-100 text-green-700' : item[col] === 'High' || item[col] === 'CRITICAL' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{item[col]}</span></td>
+                            if (col === 'status' && item[col]) return <td key={col} className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${item[col] === 'Active' ? 'bg-orange-100 text-orange-700' : item[col] === 'Resolved' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{item[col]}</span></td>
+                            if (col === 'severity' && item[col]) return <td key={col} className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${item[col] === 'Chronic' ? 'bg-red-100 text-red-700' : item[col] === 'Acute' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{item[col]}</span></td>
+                            if (col === 'chronic' && item[col] !== undefined) return <td key={col} className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${item[col] ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{item[col] ? 'Chronic' : 'Acute'}</span></td>
+                            // Name column is bold
+                            if (col === 'name' || col === 'component' || col === 'allergen') return <td key={col} className="px-4 py-3 font-semibold text-gray-900">{val}</td>
+                            return <td key={col} className="px-4 py-3 text-gray-700">{val}</td>
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* ===== MEDICATIONS VIEW ===== */}
-        {activeView === 'medications' && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Active Medications</h2>
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              {stats.medications.length > 0 ? (
-                <div className="space-y-4">
-                  {stats.medications.map((med, index) => (
-                    <div key={index} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start space-x-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Pill className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-semibold text-gray-900">{med.name}</p>
-                              {med.rxcui && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700" title={`RxNorm CUI: ${med.rxcui}`}>RxCUI:{med.rxcui}</span>}
-                              {med.ndc && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-100 text-cyan-700" title={`NDC: ${med.ndc}`}>NDC</span>}
-                              {med.drugClass && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">{med.drugClass}</span>}
-                            </div>
-                            {med.genericName && med.genericName !== med.name?.toLowerCase() && <p className="text-xs text-indigo-500 mt-0.5">Generic: {med.genericName}</p>}
-                            <p className="text-sm text-gray-600 mt-1">{med.dosage}</p>
-                            <p className="text-sm text-gray-500 mt-1">{med.purpose}</p>
-                            <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                              <span>Prescribed by {med.prescriber}</span>
-                              <span>•</span>
-                              <span>Started {new Date(med.startDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+            ) : (
+              <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CatIcon className="w-8 h-8 text-gray-400" />
                 </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">No active medications documented</p>
-              )}
-            </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{meta.label}</h3>
+                <p className="text-gray-600">No {meta.label.toLowerCase()} data found for this patient.</p>
+              </div>
+            )}
           </div>
-        )}
-
-        {/* ===== CONDITIONS VIEW ===== */}
-        {activeView === 'conditions' && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Health Conditions</h2>
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              {stats.conditions.length > 0 ? (
-                <div className="space-y-4">
-                  {stats.conditions.map((condition, index) => (
-                    <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-gray-900">{condition.name}</p>
-                            {condition.icd10 && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-100 text-rose-700" title={condition.icd10Display || ''}>ICD-10: {condition.icd10}</span>}
-                            {condition.snomedCT && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700" title={condition.snomedDisplay || ''}>SNOMED</span>}
-                          </div>
-                          <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
-                            <span>Onset: {new Date(condition.onset).toLocaleDateString()}</span>
-                            <span>•</span>
-                            <span>Severity: {condition.severity}</span>
-                          </div>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${condition.status === 'Active' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                          {condition.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">No conditions documented</p>
-              )}
-            </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* ===== DATA EXPLORER VIEW ===== */}
         {activeView === 'data-explorer' && (() => {
-          // Build the data object to explore for the selected patient
-          const explorerData = selectedPatient ? {
-            patient: {
-              name: `${selectedPatient.firstName} ${selectedPatient.lastName}`,
-              age: selectedPatient.age,
-              sex: selectedPatient.sex,
-              birthDate: selectedPatient.birthDate,
-              city: selectedPatient.city,
-              state: selectedPatient.state,
-              zip: selectedPatient.zip,
-              language: selectedPatient.language,
-              maritalStatus: selectedPatient.maritalStatus,
-            },
-            encounters: stats.encounters.map(e => ({
-              date: e.contactDate,
-              type: e.encType,
-              provider: providers[e.visitProvider]?.name || 'Unknown',
-              diagnosis: e.diagnosis,
-              chiefComplaint: e.chiefComplaint,
-              status: e.status,
-              patientClass: e.patientClass,
-            })),
-            medications: stats.medications.map(m => ({
-              name: m.name,
-              dosage: m.dosage,
-              purpose: m.purpose,
-              prescriber: m.prescriber,
-              startDate: m.startDate,
-            })),
-            conditions: stats.conditions.map(c => ({
-              name: c.name,
-              status: c.status,
-              severity: c.severity,
-              onset: c.onset,
-            })),
-            labResults: stats.results.map(r => ({
-              component: r.name || r.component,
-              value: r.value,
-              unit: r.unit || r.units,
-              flag: r.flag,
-              referenceRange: r.referenceRange || (r.refLow != null && r.refHigh != null ? `${r.refLow}-${r.refHigh}` : ''),
-              date: r.date || r.resultTime,
-            })),
-            allergies: stats.allergies || [],
-          } : {}
+          // Build the data object to explore — DYNAMIC: include ALL categories
+          const explorerData = selectedPatient ? (() => {
+            const data = {
+              patient: {
+                name: `${selectedPatient.firstName} ${selectedPatient.lastName}`,
+                age: selectedPatient.age,
+                sex: selectedPatient.sex,
+                birthDate: selectedPatient.birthDate,
+                city: selectedPatient.city,
+                state: selectedPatient.state,
+                zip: selectedPatient.zip,
+                language: selectedPatient.language,
+                maritalStatus: selectedPatient.maritalStatus,
+              },
+            }
+            // Dynamically add all array categories
+            for (const [key, val] of Object.entries(stats)) {
+              if (Array.isArray(val) && val.length > 0 && !key.startsWith('_') && key !== 'abnormalResults') {
+                data[key] = val
+              }
+            }
+            return data
+          })() : {}
 
           // Render color-coded value
           const renderValue = (value) => {
@@ -1327,28 +1280,16 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Stats Badges */}
+                {/* Stats Badges — dynamic */}
                 <div className="flex flex-wrap gap-2">
                   <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
                     Total Fields: {JSON.stringify(explorerData).split('"').length - 1}
                   </span>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
-                    Encounters: {stats.encounters.length}
-                  </span>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
-                    Medications: {stats.medications.length}
-                  </span>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
-                    Conditions: {stats.conditions.length}
-                  </span>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
-                    Lab Results: {stats.results.length}
-                  </span>
-                  {stats.allergies.length > 0 && (
-                    <span className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
-                      Allergies: {stats.allergies.length}
+                  {Object.entries(stats).filter(([k, v]) => Array.isArray(v) && !k.startsWith('_') && k !== 'abnormalResults').map(([key, val]) => (
+                    <span key={key} className="px-3 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-600">
+                      {(CATEGORY_META[key]?.label || key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()))}: {val.length}
                     </span>
-                  )}
+                  ))}
                 </div>
               </div>
             </div>
@@ -1384,7 +1325,7 @@ export default function Dashboard() {
           // Encounter frequency data for bar chart
           const encounterFrequency = (() => {
             const freq = {}
-            stats.encounters.forEach(e => {
+            ;(stats.encounters || []).forEach(e => {
               const type = e.encType || 'Other'
               freq[type] = (freq[type] || 0) + 1
             })
@@ -1392,7 +1333,7 @@ export default function Dashboard() {
           })()
 
           // Lab results over time for trend charts
-          const labTrendData = stats.results
+          const labTrendData = (stats.results || [])
             .filter(r => r.resultTime)
             .sort((a, b) => new Date(a.resultTime) - new Date(b.resultTime))
             .map(r => ({
@@ -1404,10 +1345,10 @@ export default function Dashboard() {
 
           // Health score calculation
           const healthScore = Math.min(100, Math.max(0, 100 - stats.abnormalResults.length * 10))
-          const medAdherence = stats.medications.length > 0 ? 85 : 0
-          const vitalScore = stats.results.length > 0 ? Math.round((1 - stats.abnormalResults.length / Math.max(1, stats.results.length)) * 100) : 72
-          const preventiveScore = stats.encounters.length > 2 ? 90 : stats.encounters.length * 30
-          const conditionScore = stats.conditions.filter(c => c.status === 'Active').length > 0 ? 65 : 80
+          const medAdherence = (stats.medications || []).length > 0 ? 85 : 0
+          const vitalScore = (stats.results || []).length > 0 ? Math.round((1 - stats.abnormalResults.length / Math.max(1, (stats.results || []).length)) * 100) : 72
+          const preventiveScore = (stats.encounters || []).length > 2 ? 90 : (stats.encounters || []).length * 30
+          const conditionScore = (stats.conditions || []).filter(c => c.status === 'Active').length > 0 ? 65 : 80
 
           return (
           <div className="space-y-6">
@@ -1498,7 +1439,7 @@ export default function Dashboard() {
               )}
 
               {/* Condition Severity Breakdown */}
-              {stats.conditions.length > 0 && (
+              {(stats.conditions || []).length > 0 && (
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
                   <div className="p-6 border-b border-gray-100">
                     <h3 className="text-lg font-bold text-gray-900">Condition Status Overview</h3>
@@ -1506,7 +1447,7 @@ export default function Dashboard() {
                   </div>
                   <div className="p-6">
                     <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={stats.conditions.map(c => ({ name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name, severity: c.severity === 'Moderate' ? 2 : c.severity === 'Mild' ? 1 : 3 }))}>
+                      <BarChart data={(stats.conditions || []).map(c => ({ name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name, severity: c.severity === 'Moderate' ? 2 : c.severity === 'Mild' ? 1 : 3 }))}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" height={60} />
                         <YAxis />
@@ -1520,7 +1461,7 @@ export default function Dashboard() {
               )}
 
               {/* Medication Timeline */}
-              {stats.medications.length > 0 && (
+              {(stats.medications || []).length > 0 && (
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
                   <div className="p-6 border-b border-gray-100">
                     <h3 className="text-lg font-bold text-gray-900">Medication Timeline</h3>
@@ -1528,7 +1469,7 @@ export default function Dashboard() {
                   </div>
                   <div className="p-6">
                     <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={stats.medications.map(m => ({
+                      <BarChart data={(stats.medications || []).map(m => ({
                         name: m.name.split(' ')[0],
                         months: Math.max(1, Math.round((Date.now() - new Date(m.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30))),
                       })).sort((a, b) => b.months - a.months)} layout="vertical">
@@ -1614,103 +1555,6 @@ export default function Dashboard() {
         {/* ===== DOCUMENT INTELLIGENCE VIEW ===== */}
         {activeView === 'documents' && (
           <DocumentIntelligence />
-        )}
-
-        {['labs', 'encounters', 'procedures', 'trends'].includes(activeView) && (
-          <div className="space-y-6">
-            <div className="flex items-center space-x-3">
-              <button onClick={() => setActiveView('overview')} className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Dashboard</button>
-            </div>
-            {activeView === 'labs' && stats.results.length > 0 ? (
-              <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-gray-900">Lab Results</h2>
-                <div className="bg-white rounded-2xl shadow-lg p-6">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 text-left text-gray-500">
-                          <th className="pb-3 pr-4">Component</th>
-                          <th className="pb-3 pr-4">LOINC</th>
-                          <th className="pb-3 pr-4">Value</th>
-                          <th className="pb-3 pr-4">Unit</th>
-                          <th className="pb-3 pr-4">Reference Range</th>
-                          <th className="pb-3 pr-4">Flag</th>
-                          <th className="pb-3 pr-4">Date</th>
-                          <th className="pb-3">Source</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {stats.results.map((result, i) => {
-                          const compName = result.name || result.component || 'Lab Result'
-                          const refRange = result.referenceRange || (result.refLow != null && result.refHigh != null ? `${result.refLow}-${result.refHigh}` : '—')
-                          const resultDate = result.date || result.resultTime
-                          const dateStr = resultDate ? (() => { try { const d = new Date(resultDate); return isNaN(d.getTime()) ? resultDate : d.toLocaleDateString() } catch { return resultDate } })() : '—'
-                          const flagVal = result.flag || ''
-                          const src = result._extractionSource || (result._sourceFile ? 'local-regex' : result._source ? 'tsv' : 'unknown')
-                          const srcLabel = { 'openai': 'OpenAI GPT', 'azure-ai': 'Azure AI', 'local-regex': 'OCR Regex', 'tsv': 'TSV Parser' }[src] || src
-                          const srcColor = { 'openai': 'bg-emerald-100 text-emerald-700', 'azure-ai': 'bg-purple-100 text-purple-700', 'local-regex': 'bg-blue-100 text-blue-700', 'tsv': 'bg-gray-100 text-gray-600' }[src] || 'bg-gray-100 text-gray-600'
-                          return (
-                          <tr key={i} className={`border-b border-gray-100 ${flagVal && flagVal !== 'Normal' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                            <td className="py-3 pr-4 font-medium">{compName}</td>
-                            <td className="py-3 pr-4">{result.loinc ? <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700" title={result.loincDisplay || ''}>{result.loinc}</span> : <span className="text-gray-300">—</span>}</td>
-                            <td className="py-3 pr-4 font-semibold">{result.value || '—'}</td>
-                            <td className="py-3 pr-4 text-gray-500">{result.unit || result.units || ''}</td>
-                            <td className="py-3 pr-4 text-gray-500">{refRange}</td>
-                            <td className="py-3 pr-4">
-                              {flagVal ? (
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${flagVal === 'Normal' ? 'bg-green-100 text-green-700' : flagVal === 'High' || flagVal === 'CRITICAL' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                {flagVal}
-                              </span>
-                              ) : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className="py-3 pr-4 text-gray-500">{dateStr}</td>
-                            <td className="py-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${srcColor}`}>{srcLabel}</span>
-                            </td>
-                          </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            ) : activeView === 'encounters' && stats.encounters.length > 0 ? (
-              <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-gray-900">Encounters</h2>
-                {stats.encounters.sort((a, b) => new Date(b.contactDate) - new Date(a.contactDate)).map((enc, i) => {
-                  const prov = providers[enc.visitProvider]
-                  return (
-                    <div key={i} className="bg-white rounded-xl shadow-sm p-5">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-sm text-gray-500">{new Date(enc.contactDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
-                          <p className="font-semibold text-gray-900 mt-1">{enc.encType}: {enc.diagnosis}</p>
-                          <p className="text-sm text-gray-600 mt-1">{prov?.name} | {prov?.specialty}</p>
-                          {enc.chiefComplaint && <p className="text-sm text-gray-500 mt-1">Complaint: {enc.chiefComplaint}</p>}
-                        </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${enc.patientClass === 'Emergency' ? 'bg-red-100 text-red-700' : enc.patientClass === 'Inpatient' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                          {enc.patientClass}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-                <div className="max-w-md mx-auto">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Activity className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2 capitalize">{activeView.replace('-', ' ')}</h3>
-                  <p className="text-gray-600 mb-6">
-                    No {activeView.replace('-', ' ')} data available for this patient.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
         )}
       </main>
 
