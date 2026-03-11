@@ -412,13 +412,17 @@ export function parseClinicalText(text, filename = '') {
   const upper = text.toUpperCase()
   const entities = createEmptyClinicalEntities()
 
+  // ── Split document into sections first ──────────────────────────────────
+  const sections = splitIntoSections(text)
+  console.log('[OCR] Detected sections:', Object.keys(sections).map(k => `${k}(${sections[k].split('\n').length} lines)`).join(', '))
+
   entities.demographics = extractDemographics(text)
   entities.dates = extractDates(text)
-  entities.medications = extractMedications(text, upper)
-  entities.diagnoses = extractDiagnoses(text, upper)
-  entities.vitals = extractVitals(text)
-  entities.labResults = extractLabResults(text, upper)
-  entities.allergies = extractAllergies(text, upper)
+  entities.medications = extractMedications(text, upper, sections)
+  entities.diagnoses = extractDiagnoses(text, upper, sections)
+  entities.vitals = extractVitals(text, sections)
+  entities.labResults = extractLabResults(text, upper, sections)
+  entities.allergies = extractAllergies(text, upper, sections)
   entities.procedures = extractProcedures(text, upper)
   entities.documentType = classifyDocumentType(text, upper, filename)
   entities.fullText = text
@@ -426,6 +430,96 @@ export function parseClinicalText(text, filename = '') {
   console.log(`[OCR] parseClinicalText results: meds=${entities.medications.length}, dx=${entities.diagnoses.length}, vitals=${entities.vitals.length}, labs=${entities.labResults.length}, allergies=${entities.allergies.length}, procs=${entities.procedures.length}, docType=${entities.documentType}`)
 
   return entities
+}
+
+// ─── Generic Section Splitter for Epic/Clinical PDFs ────────────────────────
+
+/**
+ * Splits extracted text into named sections based on common clinical headers.
+ * Returns { medications: "...", diagnoses: "...", allergies: "...", vitals: "...", labs: "...", ... }
+ * This is the KEY fix: instead of each extractor trying to find its own section
+ * (which fails when headers don't exactly match), we scan all lines for ANY header.
+ */
+function splitIntoSections(text) {
+  const lines = text.split('\n')
+  const sections = {}
+  let currentSection = '_header'
+  sections[currentSection] = ''
+
+  // Map of header patterns → normalized section names
+  const SECTION_PATTERNS = [
+    // Medications
+    { pattern: /^(?:current\s+)?medications?(?:\s+list)?|^active\s+medications?|^medications?\s+(?:and\s+dosages?|prescribed)|^home\s+medications?|^meds\s*:|^prescriptions?|^rx\b/i, section: 'medications' },
+    // Diagnoses / Problems
+    { pattern: /^(?:current\s+)?(?:health\s+)?(?:issues?|problems?|conditions?)|^active\s+problems?|^problem\s*list|^diagnos(?:es|is)|^assessment|^impression|^medical\s*(?:history|conditions?)|^past\s*medical\s*history|^(?:pmh|pmhx)\b|^chief\s*complaint|^reason\s*for\s*visit|^history\s*of\s*present\s*illness|^hpi\b/i, section: 'diagnoses' },
+    // Allergies
+    { pattern: /^allerg(?:y|ies)(?:\s*\/?\s*(?:adverse\s*)?reactions?)?|^drug\s+allergies|^known\s+allergies/i, section: 'allergies' },
+    // Vitals
+    { pattern: /^vital\s*signs?|^vitals?\b|^measurements?\b|^physical\s+(?:exam(?:ination)?|findings?)|^review\s+of\s+systems?|^ros\b/i, section: 'vitals' },
+    // Lab Results
+    { pattern: /^lab(?:oratory)?\s*(?:results?|values?|findings?|tests?)?|^results?\b|^(?:blood|urine|serum)\s+(?:test|work)|^diagnostic\s+(?:results?|tests?)|^(?:cbc|cmp|bmp|lipid|thyroid)\b/i, section: 'labs' },
+    // Procedures / Orders
+    { pattern: /^procedures?|^surgic(?:al|ies)|^surgical\s*history|^past\s*surgical|^operations?\b|^imaging|^radiology/i, section: 'procedures' },
+    // Immunizations
+    { pattern: /^immuniz(?:ation)?s?|^vaccin(?:ation|e)s?|^flu\s+(?:shot|vaccine)/i, section: 'immunizations' },
+    // Instructions / Education
+    { pattern: /^(?:patient\s+)?(?:instructions?|education)|^(?:after[\s\-]?visit|discharge)\s+(?:summary|instructions?)|^follow[\s\-]?up|^appointments?|^next\s+(?:visit|appointment)|^what\s+(?:to\s+do|we\s+discussed)/i, section: 'instructions' },
+    // Family / Social
+    { pattern: /^family\s*(?:history|medical)|^social\s*history|^(?:fh|sh)\b/i, section: 'family_social' },
+    // Demographics
+    { pattern: /^patient\s*(?:information|demographics?|details?)|^personal\s*information/i, section: 'demographics' },
+  ]
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      sections[currentSection] += '\n'
+      continue
+    }
+
+    // Skip page markers
+    if (/^---\s*Page\s+\d+\s*---$/.test(trimmed)) continue
+
+    // Check if this line is a section header
+    let matched = false
+    for (const { pattern, section } of SECTION_PATTERNS) {
+      if (pattern.test(trimmed)) {
+        currentSection = section
+        if (!sections[currentSection]) sections[currentSection] = ''
+        matched = true
+        break
+      }
+    }
+
+    if (!matched) {
+      // Also detect "ALL CAPS" section headers (common in clinical docs)
+      // e.g., "MEDICATIONS", "ALLERGIES", "VITAL SIGNS"
+      if (trimmed === trimmed.toUpperCase() && trimmed.length > 3 && trimmed.length < 60 && /^[A-Z\s\-\/&]+$/.test(trimmed)) {
+        const upperTrimmed = trimmed
+        // Check upper-case variants
+        for (const { pattern, section } of SECTION_PATTERNS) {
+          if (pattern.test(upperTrimmed)) {
+            currentSection = section
+            if (!sections[currentSection]) sections[currentSection] = ''
+            matched = true
+            break
+          }
+        }
+        // If still no match but it's clearly a header, start a generic section
+        if (!matched && /^[A-Z][A-Z\s\-\/&]{3,}$/.test(trimmed)) {
+          currentSection = trimmed.toLowerCase().replace(/[^a-z]/g, '_')
+          if (!sections[currentSection]) sections[currentSection] = ''
+          matched = true
+        }
+      }
+    }
+
+    if (!matched) {
+      sections[currentSection] += trimmed + '\n'
+    }
+  }
+
+  return sections
 }
 
 function createEmptyClinicalEntities() {
@@ -524,20 +618,25 @@ const COMMON_MEDS = [
   'enoxaparin','heparin','empagliflozin','semaglutide','dulaglutide',
 ]
 
-function extractMedications(text) {
+function extractMedications(text, upper, sections = {}) {
   const meds = []
   const seenNames = new Set()
 
-  // ── Epic-style section headers ──────────────────────────────────────────
-  const secMatch = text.match(
+  // ── USE PRE-SPLIT SECTIONS (most reliable) ────────────────────────────
+  const sectionText = sections.medications || null
+
+  // ── Fallback: Epic-style regex section match ──────────────────────────
+  const secMatch = !sectionText ? text.match(
     /(?:current\s+medications?|active\s+medications?|medication\s*list|medications?\s*(?:and\s*dosages?)?|prescriptions?|rx|meds|home\s+medications?)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*(?:allerg|diagnos|problem|vital|lab|assessment|plan|procedure|health\s*issue|immuniz|surgical|family|social|review\s*of|past\s*medical|current\s*(?:health|problem)|after\s*visit|follow|appoint)|\n\s*\n\s*\n|$))/i
-  )
-  const searchText = secMatch ? secMatch[1] : text
+  ) : null
+
+  const searchText = sectionText || (secMatch ? secMatch[1] : text)
+  const hasMedSection = !!(sectionText || secMatch)
 
   // Strategy 1: Line-by-line parsing within the medication section
-  // Epic format: "drug name dose unit, instructions" or "- drug name dose"
-  if (secMatch) {
-    const lines = secMatch[1].split('\n')
+  if (hasMedSection) {
+    const medText = sectionText || secMatch[1]
+    const lines = medText.split('\n')
     for (const rawLine of lines) {
       const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*]+/, '').trim()
       if (!line || line.length < 3) continue
@@ -640,20 +739,26 @@ const COMMON_CONDITIONS = [
   'sleep apnea','insomnia',
 ]
 
-function extractDiagnoses(text) {
+function extractDiagnoses(text, upper, sections = {}) {
   const diagnoses = []
   const seenCodes = new Set()
   const seenConditions = new Set()
 
-  // ── Epic-style section headers ──────────────────────────────────────────
-  const secMatch = text.match(
+  // ── USE PRE-SPLIT SECTIONS (most reliable) ────────────────────────────
+  const sectionText = sections.diagnoses || null
+
+  // ── Fallback: regex section match ──────────────────────────────────────
+  const secMatch = !sectionText ? text.match(
     /(?:current\s+(?:health\s+)?(?:issues?|problems?|conditions?)|active\s+problems?|problem\s*list|diagnos(?:es|is)|assessment|impression|medical\s*(?:history|conditions?)|health\s*issues?|past\s*medical\s*history|chief\s*complaint|reason\s*for\s*visit)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*(?:medication|allerg|vital|lab|plan|procedure|immuniz|surgical|social|family|review\s*of|current\s*med|after\s*visit|follow|appoint|home\s*med)|\n\s*\n\s*\n|$))/i
-  )
-  const searchText = secMatch ? secMatch[1] : text
+  ) : null
+
+  const searchText = sectionText || (secMatch ? secMatch[1] : text)
+  const hasDxSection = !!(sectionText || secMatch)
 
   // Strategy 1: Line-by-line parsing within problem/diagnosis section
-  if (secMatch) {
-    const lines = secMatch[1].split('\n')
+  if (hasDxSection) {
+    const dxText = sectionText || secMatch[1]
+    const lines = dxText.split('\n')
     for (const rawLine of lines) {
       const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*\d\.]+/, '').trim()
       if (!line || line.length < 3) continue
@@ -679,7 +784,7 @@ function extractDiagnoses(text) {
       if (line.length >= 5 && line.length <= 150 && !/^\d+$/.test(line)) {
         const key = line.toLowerCase()
         if (!seenConditions.has(key)) {
-          diagnoses.push({ name: line, source: 'ocr', confidence: secMatch ? 'high' : 'medium' })
+          diagnoses.push({ name: line, source: 'ocr', confidence: hasDxSection ? 'high' : 'medium' })
           seenConditions.add(key)
         }
       }
@@ -712,7 +817,7 @@ function extractDiagnoses(text) {
     if (searchText.toLowerCase().includes(c)) {
       const alreadyLinked = diagnoses.some(d => d.name.toLowerCase().includes(c))
       if (!alreadyLinked) {
-        diagnoses.push({ name: c.charAt(0).toUpperCase() + c.slice(1), source: 'ocr', confidence: secMatch ? 'high' : 'low' })
+        diagnoses.push({ name: c.charAt(0).toUpperCase() + c.slice(1), source: 'ocr', confidence: hasDxSection ? 'high' : 'low' })
         seenConditions.add(c)
       }
     }
@@ -733,9 +838,11 @@ function extractDiagnoses(text) {
 
 // ─── Vitals ─────────────────────────────────────────────────────────────────
 
-function extractVitals(text) {
+function extractVitals(text, sections = {}) {
   const vitals = []
   const seen = new Set()
+  // Search vitals section first, then full text
+  const searchText = sections.vitals ? (sections.vitals + '\n' + text) : text
   const patterns = [
     { name: 'Blood Pressure', regex: /(?:BP|blood\s*pressure|systolic\s*\/?\s*diastolic)\s*[:\-]?\s*(\d{2,3})\s*[\/\\]\s*(\d{2,3})/i, fmt: m => `${m[1]}/${m[2]} mmHg` },
     { name: 'Heart Rate',     regex: /(?:HR|heart\s*rate|pulse)\s*[:\-]?\s*(\d{2,3})\s*(?:bpm|\/min)?/i, fmt: m => `${m[1]} bpm` },
@@ -749,7 +856,7 @@ function extractVitals(text) {
     { name: 'Pain Level',     regex: /(?:pain\s*(?:level|score|scale))\s*[:\-]?\s*(\d{1,2})\s*(?:\/\s*10)?/i, fmt: m => `${m[1]}/10` },
   ]
   for (const { name, regex, fmt } of patterns) {
-    const m = text.match(regex)
+    const m = searchText.match(regex)
     if (m && !seen.has(name)) {
       vitals.push({ name, value: fmt(m), source: 'ocr' })
       seen.add(name)
@@ -760,9 +867,11 @@ function extractVitals(text) {
 
 // ─── Lab Results ────────────────────────────────────────────────────────────
 
-function extractLabResults(text) {
+function extractLabResults(text, upper, sections = {}) {
   const results = []
   const seen = new Set()
+  // Search labs section first, then full text
+  const searchText = sections.labs ? (sections.labs + '\n' + text) : text
 
   // Named patterns — match "TestName : value unit" or "TestName value unit"
   const patterns = [
@@ -800,7 +909,7 @@ function extractLabResults(text) {
   ]
 
   for (const { name, regex, unit } of patterns) {
-    const m = text.match(regex)
+    const m = searchText.match(regex)
     if (m) {
       const key = name.toLowerCase()
       if (!seen.has(key)) {
@@ -814,7 +923,7 @@ function extractLabResults(text) {
   // Catches labs not in the named patterns above
   const tableLineRegex = /^[\s\|]*([A-Z][A-Za-z\s\-\/]{2,30}?)\s{1,}(\d{1,5}(?:\.\d{1,3})?)\s{1,}([A-Za-z\/%]{1,15})\s{1,}[\d<>\.\-]/gm
   let tm
-  while ((tm = tableLineRegex.exec(text))) {
+  while ((tm = tableLineRegex.exec(searchText))) {
     const name = tm[1].trim()
     const value = tm[2]
     const unit = tm[3].trim()
@@ -832,7 +941,7 @@ function extractLabResults(text) {
 
 // ─── Allergies ──────────────────────────────────────────────────────────────
 
-function extractAllergies(text, upper) {
+function extractAllergies(text, upper, sections = {}) {
   const allergies = []
   const seen = new Set()
 
@@ -841,13 +950,18 @@ function extractAllergies(text, upper) {
     return allergies
   }
 
-  // ── Section-based extraction ──────────────────────────────────────────────
-  const secMatch = text.match(
-    /(?:allerg(?:y|ies)(?:\s*\/\s*(?:adverse\s*)?reactions?)?)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*(?:medication|diagnos|problem|vital|lab|assessment|plan|procedure|immuniz|surgical|current\s*(?:med|health|problem)|after\s*visit|follow)|\n\s*\n\s*\n|$))/i
-  )
+  // ── USE PRE-SPLIT SECTIONS (most reliable) ────────────────────────────
+  const sectionText = sections.allergies || null
 
-  if (secMatch) {
-    const lines = secMatch[1].split('\n')
+  // ── Fallback: regex section match ──────────────────────────────────────
+  const secMatch = !sectionText ? text.match(
+    /(?:allerg(?:y|ies)(?:\s*\/\s*(?:adverse\s*)?reactions?)?)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*(?:medication|diagnos|problem|vital|lab|assessment|plan|procedure|immuniz|surgical|current\s*(?:med|health|problem)|after\s*visit|follow)|\n\s*\n\s*\n|$))/i
+  ) : null
+
+  const allergyText = sectionText || (secMatch ? secMatch[1] : null)
+
+  if (allergyText) {
+    const lines = allergyText.split('\n')
     for (const rawLine of lines) {
       const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*]+/, '').trim()
       if (!line || line.length < 2) continue
@@ -874,7 +988,7 @@ function extractAllergies(text, upper) {
   }
 
   // ── Known allergen keyword search (fallback) ────────────────────────────
-  const lookIn = secMatch ? secMatch[1] : text
+  const lookIn = allergyText || text
   const allergens = [
     'penicillin','amoxicillin','sulfa','aspirin','ibuprofen','nsaid',
     'codeine','morphine','latex','contrast dye','iodine','shellfish',
