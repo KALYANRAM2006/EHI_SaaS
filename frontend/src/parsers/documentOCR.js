@@ -419,7 +419,8 @@ export function parseClinicalText(text, filename = '') {
   entities.demographics = extractDemographics(text)
   entities.dates = extractDates(text)
   entities.medications = extractMedications(text, upper, sections)
-  entities.diagnoses = extractDiagnoses(text, upper, sections)
+  entities.immunizations = extractImmunizations(text, upper, sections)
+  entities.diagnoses = extractDiagnoses(text, upper, sections, entities.immunizations)
   entities.vitals = extractVitals(text, sections)
   entities.labResults = extractLabResults(text, upper, sections)
   entities.allergies = extractAllergies(text, upper, sections)
@@ -427,7 +428,7 @@ export function parseClinicalText(text, filename = '') {
   entities.documentType = classifyDocumentType(text, upper, filename)
   entities.fullText = text
 
-  console.log(`[OCR] parseClinicalText results: meds=${entities.medications.length}, dx=${entities.diagnoses.length}, vitals=${entities.vitals.length}, labs=${entities.labResults.length}, allergies=${entities.allergies.length}, procs=${entities.procedures.length}, docType=${entities.documentType}`)
+  console.log(`[OCR] parseClinicalText results: meds=${entities.medications.length}, dx=${entities.diagnoses.length}, imm=${entities.immunizations.length}, vitals=${entities.vitals.length}, labs=${entities.labResults.length}, allergies=${entities.allergies.length}, procs=${entities.procedures.length}, docType=${entities.documentType}`)
 
   return entities
 }
@@ -526,6 +527,7 @@ function createEmptyClinicalEntities() {
   return {
     demographics: null, dates: [], medications: [], diagnoses: [],
     vitals: [], labResults: [], allergies: [], procedures: [],
+    immunizations: [],
     documentType: 'Unknown', fullText: '',
   }
 }
@@ -739,13 +741,43 @@ const COMMON_CONDITIONS = [
   'sleep apnea','insomnia',
 ]
 
-function extractDiagnoses(text, upper, sections = {}) {
+// ─── Immunization / Vaccine line detector ────────────────────────────────────
+// Used to EXCLUDE vaccine records from the diagnoses extractor
+function isImmunizationLine(line) {
+  const lower = line.toLowerCase()
+  // Direct vaccine keywords
+  if (/\b(?:vaccin|immuniz|inoculat|booster)\b/i.test(line)) return true
+  // Specific vaccine names / products
+  if (/\b(?:covid[\-\s]?19|sars[\-\s]?cov|pfizer|moderna|johnson|janssen|astrazeneca|novavax|biontech|mrna|flu\s+shot|influenza\s+(?:vaccine|inj)|tdap|dtap|mmr|hep\s*[ab]|hepatitis|polio|ipv|opv|varicella|shingrix|zoster|pneumo(?:vax|coccal)|prevnar|pcv|gardasil|hpv|meningococcal|menactra|rotavirus|bcg|rabies|typhoid|yellow\s*fever)\b/i.test(line)) return true
+  // Vaccine admin metadata patterns
+  if (/\b(?:given\s+by|lot\s*(?:number|#)|ndc\s*:|cvx\s*(?:code)?\s*:|vis\s+publish|expiration\s*date|manufacturer|site\s*:\s*(?:left|right)\s+(?:deltoid|arm|thigh|gluteal)|route\s*:\s*(?:intramuscular|subcutaneous|intradermal|oral|intranasal)|(?:0\.\d+|\d+)\s*ml\s*\[?milliliters?\]?)\b/i.test(line)) return true
+  // "PURPLE CAP" / "GRAY CAP" / "ORANGE CAP" — vaccine packaging
+  if (/\b(?:purple|gray|grey|orange|blue|green|yellow|white)\s+cap\b/i.test(line)) return true
+  // Dose / series patterns for immunizations ("Dose: 0.3 mL", "Dose 1 of 2")
+  if (/\bdose\s*(?:#|\d|:)\s*(?:\d|0\.)/i.test(line)) return true
+  // CVX, NDC, or VIS references
+  if (/\b(?:cvx|ndc|vis)\b/i.test(lower)) return true
+  // "Product: ...VACCINE..." pattern
+  if (/^product\s*:/i.test(line)) return true
+  return false
+}
+
+function extractDiagnoses(text, upper, sections = {}, immunizationEntities = []) {
   const diagnoses = []
   const seenCodes = new Set()
   const seenConditions = new Set()
 
+  // Build a set of ICD codes already captured as immunizations (to avoid double-counting)
+  const immunizationCodes = new Set()
+  for (const imm of immunizationEntities) {
+    if (imm.icd10) immunizationCodes.add(imm.icd10)
+    if (imm.cvx) immunizationCodes.add(imm.cvx)
+  }
+
   // ── USE PRE-SPLIT SECTIONS (most reliable) ────────────────────────────
   const sectionText = sections.diagnoses || null
+  // EXCLUDE immunization section text from diagnosis searching
+  const immunizationSectionText = sections.immunizations || ''
 
   // ── Fallback: regex section match ──────────────────────────────────────
   const secMatch = !sectionText ? text.match(
@@ -767,11 +799,21 @@ function extractDiagnoses(text, upper, sections = {}) {
       // Skip very short non-clinical words
       if (line.length < 5 && !/[A-Z]\d{2}/.test(line)) continue
 
+      // ╔══ IMMUNIZATION FILTER ══════════════════════════════════════════╗
+      // Skip lines that are clearly immunization / vaccine records
+      if (isImmunizationLine(line)) {
+        console.log(`[OCR-DX] Skipping immunization line: "${line.substring(0,80)}"`);
+        continue
+      }
+      // ╚════════════════════════════════════════════════════════════════╝
+
       // Extract ICD code if present: "condition text (E11.65)" or "condition - E11.65"
       const icdInLine = line.match(/^(.+?)\s*[\(\-\u2013\u2014]\s*([A-TV-Z]\d{2}(?:\.\d{1,4})?)\)?/)
       if (icdInLine) {
         const name = icdInLine[1].replace(/[\s\-\u2013\u2014]+$/, '').trim()
         const code = icdInLine[2]
+        if (immunizationCodes.has(code)) continue // Already an immunization code
+        if (isImmunizationLine(name)) continue // Name looks like a vaccine
         if (!seenCodes.has(code) && name.length > 2) {
           diagnoses.push({ name, code, codeSystem: 'ICD-10', icd10: code, source: 'ocr', confidence: 'high' })
           seenCodes.add(code)
@@ -792,19 +834,22 @@ function extractDiagnoses(text, upper, sections = {}) {
   }
 
   // Strategy 2: Lines with "diagnosis text - ICD_CODE" or "diagnosis text (ICD-10: CODE)"
+  // ONLY search within the diagnosis section text (not full text) to avoid vaccine ICD codes
+  const strategy2Text = hasDxSection ? searchText : text
   const linePatterns = [
     /^[\-\s]*(.+?)\s*[\-\u2013\u2014]\s*([A-TV-Z]\d{2}(?:\.\d{1,4})?)\s*$/gm,
     /^[\-\s]*(.+?)\s*\((?:ICD[\- ]?10\s*:\s*)?([A-TV-Z]\d{2}(?:\.\d{1,4})?)\)\s*$/gm,
   ]
   for (const pat of linePatterns) {
     let m
-    while ((m = pat.exec(searchText))) {
+    while ((m = pat.exec(strategy2Text))) {
       const name = m[1].replace(/\s*[\-\u2013\u2014]\s*$/, '').trim()
       const code = m[2]
-      if (name && !seenCodes.has(code)) {
-        diagnoses.push({ name, code, codeSystem: 'ICD-10', icd10: code, source: 'ocr', confidence: 'high' })
-        seenCodes.add(code)
-      }
+      if (!name || seenCodes.has(code)) continue
+      if (immunizationCodes.has(code)) continue
+      if (isImmunizationLine(name)) continue
+      diagnoses.push({ name, code, codeSystem: 'ICD-10', icd10: code, source: 'ocr', confidence: 'high' })
+      seenCodes.add(code)
       for (const c of COMMON_CONDITIONS) {
         if (name.toLowerCase().includes(c)) seenConditions.add(c)
       }
@@ -812,9 +857,11 @@ function extractDiagnoses(text, upper, sections = {}) {
   }
 
   // Strategy 3: COMMON_CONDITIONS not already captured
+  // Only search OUTSIDE the immunization section
+  const nonImmText = hasDxSection ? searchText : text.replace(immunizationSectionText, '')
   for (const c of COMMON_CONDITIONS) {
     if (seenConditions.has(c)) continue
-    if (searchText.toLowerCase().includes(c)) {
+    if (nonImmText.toLowerCase().includes(c)) {
       const alreadyLinked = diagnoses.some(d => d.name.toLowerCase().includes(c))
       if (!alreadyLinked) {
         diagnoses.push({ name: c.charAt(0).toUpperCase() + c.slice(1), source: 'ocr', confidence: hasDxSection ? 'high' : 'low' })
@@ -823,17 +870,133 @@ function extractDiagnoses(text, upper, sections = {}) {
     }
   }
 
-  // Strategy 4: Standalone ICD codes not already attached to a diagnosis
-  const icdPat = /\b([A-TV-Z]\d{2}(?:\.\d{1,4})?)\b/g
-  let m
-  while ((m = icdPat.exec(searchText))) {
-    if (!seenCodes.has(m[1])) {
+  // Strategy 4: Standalone ICD codes — ONLY from the diagnosis section text, not full text
+  // This prevents picking up ICD codes from immunization records (U07.1 etc.)
+  if (hasDxSection) {
+    const icdPat = /\b([A-TV-Z]\d{2}(?:\.\d{1,4})?)\b/g
+    let m
+    while ((m = icdPat.exec(searchText))) {
+      if (seenCodes.has(m[1])) continue
+      if (immunizationCodes.has(m[1])) continue
       diagnoses.push({ name: m[1], code: m[1], codeSystem: 'ICD-10', icd10: m[1], source: 'ocr', confidence: 'high' })
       seenCodes.add(m[1])
     }
   }
 
   return diagnoses
+}
+
+// ─── Immunizations ──────────────────────────────────────────────────────────
+
+/**
+ * Extract immunization / vaccine records from clinical text.
+ * Returns array of { name, date, dose, route, site, lotNumber, manufacturer, cvx, ndc, icd10, source }
+ */
+function extractImmunizations(text, upper, sections = {}) {
+  const immunizations = []
+  const seenNames = new Set()
+
+  // Use immunization section if available
+  const sectionText = sections.immunizations || null
+
+  // Fallback: regex section match for immunization block
+  const secMatch = !sectionText ? text.match(
+    /(?:immuniz(?:ation)?s?|vaccin(?:ation|e)s?)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*(?:medication|allerg|diagnos|problem|vital|lab|plan|procedure|surgical|social|family|review\s*of|questionnaire|after\s*visit|follow|appoint|current\s*(?:health|problem|med))|\n\s*\n\s*\n|$))/i
+  ) : null
+
+  const searchText = sectionText || (secMatch ? secMatch[1] : '')
+  if (!searchText) {
+    // Also try to find vaccine records in the full text
+    return extractImmunizationsFromFullText(text)
+  }
+
+  const lines = searchText.split('\n')
+  let currentVaccine = null
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*]+/, '').trim()
+    if (!line || line.length < 3) continue
+    // Skip sub-headers
+    if (/^(immunization|vaccination|vaccine|status|date|dose|type|#|questionnaire|question\s+answer)/i.test(line)) continue
+
+    // Detect a new vaccine name line (e.g., "COVID-19 mRNA, LNP-S, PF (Pfizer-BioNTech) PURPLE CAP")
+    const isVaccineName = /\b(?:vaccin|covid|influenza|tdap|dtap|mmr|hep\s*[ab]|hepatitis|polio|varicella|shingrix|zoster|pneumo|prevnar|gardasil|hpv|meningo|rotavirus|bcg|rabies|typhoid|yellow\s*fever|mrna|lnp)\b/i.test(line)
+      || /^(?:COVID|FLU|TDAP|MMR|HEPB?|IPV|VAR|PCV|HIB|ROTAVIRUS)/i.test(line)
+
+    if (isVaccineName) {
+      // Save previous vaccine if exists
+      if (currentVaccine && !seenNames.has(currentVaccine.name.toLowerCase())) {
+        immunizations.push(currentVaccine)
+        seenNames.add(currentVaccine.name.toLowerCase())
+      }
+      currentVaccine = { name: line.substring(0, 120), source: 'ocr', confidence: 'high' }
+      continue
+    }
+
+    // Parse metadata lines into current vaccine
+    if (currentVaccine) {
+      // "Given by: ... Date: 4/16/2021 Dose: 0.3 mL"
+      const dateM = line.match(/date\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)
+      if (dateM) currentVaccine.date = dateM[1]
+      const doseM = line.match(/dose\s*:\s*([\d.]+\s*(?:ml|mg|mcg)[\s\w]*)/i)
+      if (doseM) currentVaccine.dose = doseM[1]
+      // "Site: Left Deltoid Route: Intramuscular NDC: 59267-1000-01"
+      const siteM = line.match(/site\s*:\s*([^\s](?:[^R]*?)?)\s*(?:route|ndc|$)/i)
+      if (siteM) currentVaccine.site = siteM[1].trim()
+      const routeM = line.match(/route\s*:\s*(\S+)/i)
+      if (routeM) currentVaccine.route = routeM[1].trim()
+      const ndcM = line.match(/ndc\s*:\s*([\d\-]+)/i)
+      if (ndcM) currentVaccine.ndc = ndcM[1]
+      // "CVX code: 208"
+      const cvxM = line.match(/cvx\s*(?:code)?\s*:\s*(\d+)/i)
+      if (cvxM) currentVaccine.cvx = cvxM[1]
+      // "Product: PFIZER COVID-19 VACCINE (PF) Manufacturer: Pfizer, Inc Lot number: ER8735"
+      const lotM = line.match(/lot\s*(?:number|#)?\s*:\s*(\S+)/i)
+      if (lotM) currentVaccine.lotNumber = lotM[1]
+      const mfgM = line.match(/manufacturer\s*:\s*([^L]+)/i)
+      if (mfgM) currentVaccine.manufacturer = mfgM[1].trim().replace(/\s+$/, '')
+      // "Expiration date: 7/31/2021"
+      // (not critical for clinical display, skip)
+    }
+  }
+
+  // Push last vaccine
+  if (currentVaccine && !seenNames.has(currentVaccine.name.toLowerCase())) {
+    immunizations.push(currentVaccine)
+    seenNames.add(currentVaccine.name.toLowerCase())
+  }
+
+  return immunizations
+}
+
+/**
+ * Fallback: search full text for vaccine patterns when no immunization section found.
+ */
+function extractImmunizationsFromFullText(text) {
+  const immunizations = []
+  const seenNames = new Set()
+
+  // Match known vaccine patterns in the full text
+  const vaccinePatterns = [
+    /\b(COVID[\-\s]?19\s+(?:mRNA|viral\s+vector|protein\s+subunit)[^\n]{0,80})/gi,
+    /\b((?:PFIZER|MODERNA|JANSSEN|JOHNSON|ASTRAZENECA|NOVAVAX)\s+COVID[^\n]{0,80})/gi,
+    /\b(influenza\s+(?:vaccine|inj(?:ection)?)[^\n]{0,60})/gi,
+    /\b((?:Tdap|DTaP|MMR|Hep\s*[AB]|IPV|Varicella|Shingrix|Pneumovax|Prevnar|Gardasil)\s*[^\n]{0,60})/gi,
+  ]
+
+  for (const pat of vaccinePatterns) {
+    let m
+    while ((m = pat.exec(text))) {
+      const name = m[1].trim().substring(0, 120)
+      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 30)
+      if (!seenNames.has(key)) {
+        immunizations.push({ name, source: 'ocr', confidence: 'medium' })
+        seenNames.add(key)
+      }
+    }
+  }
+
+  return immunizations
 }
 
 // ─── Vitals ─────────────────────────────────────────────────────────────────
@@ -1119,7 +1282,7 @@ export function documentResultToAppRows(docResult, filename) {
   const { clinicalEntities, text, method, confidence, metadata } = docResult
   const now = new Date().toISOString()
 
-  const rows = { medications: [], conditions: [], allergies: [], vitals: [], results: [], orders: [], documentRow: null }
+  const rows = { medications: [], conditions: [], allergies: [], vitals: [], results: [], orders: [], immunizations: [], documentRow: null }
 
   if (!clinicalEntities) return rows
 
@@ -1186,6 +1349,22 @@ export function documentResultToAppRows(docResult, filename) {
     _extractionSource: proc.source || 'local-regex',
   }))
 
+  rows.immunizations = (clinicalEntities.immunizations || []).map((imm, i) => ({
+    patId: '', immunizationId: `OCR-IMM-${Date.now()}-${i}`,
+    name: imm.name,
+    date: imm.date || clinicalEntities.dates[0] || now,
+    dose: imm.dose || '',
+    route: imm.route || '',
+    site: imm.site || '',
+    lotNumber: imm.lotNumber || '',
+    manufacturer: imm.manufacturer || '',
+    cvx: imm.cvx || '',
+    ndc: imm.ndc || '',
+    status: 'Completed',
+    _source: 'ocr', _sourceFile: filename,
+    _extractionSource: imm.source || 'local-regex',
+  }))
+
   rows.documentRow = {
     docId: metadata?.fileName || filename,
     type: clinicalEntities.documentType,
@@ -1203,6 +1382,7 @@ export function documentResultToAppRows(docResult, filename) {
       vitals: clinicalEntities.vitals.length,
       labResults: clinicalEntities.labResults.length,
       procedures: (clinicalEntities.procedures || []).length,
+      immunizations: (clinicalEntities.immunizations || []).length,
     },
     _source: 'ocr', _sourceFile: filename,
     _extractionSource: method === 'openai' ? 'openai' : method === 'azure' ? 'azure-ai' : 'local-regex',

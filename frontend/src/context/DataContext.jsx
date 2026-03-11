@@ -44,7 +44,7 @@ function mergeClinicalEntities(local, ai) {
   if (ai.demographics && Object.keys(ai.demographics).length > 0) {
     merged.demographics = { ...(local.demographics || {}), ...ai.demographics }
   }
-  const listKeys = ['medications', 'diagnoses', 'labResults', 'vitals', 'allergies', 'procedures']
+  const listKeys = ['medications', 'diagnoses', 'labResults', 'vitals', 'allergies', 'procedures', 'immunizations']
   for (const key of listKeys) {
     const aiItems = ai[key] || []
     const localItems = local[key] || []
@@ -190,7 +190,7 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
     medications: rows.medications || [],
     abnormalResults,
     allergies: rows.allergies || [],
-    immunizations: [],
+    immunizations: rows.immunizations || [],
     vitals: rows.vitals || [],
     documents: rows.documentRow ? [rows.documentRow] : [],
     encounterCount: 0,
@@ -202,7 +202,7 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
 
   const totalRecords = (rows.medications?.length || 0) + (rows.conditions?.length || 0) +
     (rows.allergies?.length || 0) + (rows.results?.length || 0) + (rows.orders?.length || 0) +
-    (rows.vitals?.length || 0)
+    (rows.vitals?.length || 0) + (rows.immunizations?.length || 0)
 
   const parsedData = {
     patients: [selectedPatient],
@@ -213,7 +213,7 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
     medications: rows.medications || [],
     conditions: rows.conditions || [],
     allergies: rows.allergies || [],
-    immunizations: [],
+    immunizations: rows.immunizations || [],
     vitals: rows.vitals || [],
     documents: rows.documentRow ? [rows.documentRow] : [],
     providers: {},
