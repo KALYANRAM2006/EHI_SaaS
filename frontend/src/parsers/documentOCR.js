@@ -122,7 +122,29 @@ async function extractPDFText(buffer, onProgress = () => {}, password = null) {
   for (let i = 1; i <= pageCount; i++) {
     const page = await pdf.getPage(i)
     const textContent = await page.getTextContent()
-    const pageText = textContent.items.map(item => item.str).join(' ').trim()
+
+    // ── Preserve line structure using Y-position changes + hasEOL ──
+    // pdf.js text items each have a transform matrix [a,b,c,d, x, y].
+    // When the Y-position jumps, that means a new line in the PDF.
+    // Simply joining with spaces destroys line breaks → section detection fails.
+    let pageText = ''
+    let lastY = null
+    for (const item of textContent.items) {
+      if (!item.str && !item.hasEOL) continue
+      const y = item.transform ? item.transform[5] : null
+      // Detect line break: if Y position changed significantly, add newline
+      if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) {
+        pageText = pageText.trimEnd() + '\n'
+      } else if (pageText && !pageText.endsWith('\n') && !pageText.endsWith(' ') && item.str) {
+        pageText += ' '
+      }
+      pageText += item.str || ''
+      if (item.hasEOL) {
+        pageText = pageText.trimEnd() + '\n'
+      }
+      if (y !== null) lastY = y
+    }
+    pageText = pageText.trim()
 
     if (pageText) {
       fullText += `\n--- Page ${i} ---\n${pageText}\n`
@@ -131,6 +153,9 @@ async function extractPDFText(buffer, onProgress = () => {}, password = null) {
     onProgress(i / pageCount * 0.5)
     page.cleanup()
   }
+
+  console.log(`[OCR] Extracted ${fullText.length} chars, ${fullText.split('\n').length} lines from ${pageCount} pages`)
+  console.log('[OCR] First 2000 chars of extracted text:', fullText.substring(0, 2000))
 
   const hasText = fullText.trim().length >= MIN_TEXT_LENGTH
   return { text: fullText.trim(), pageCount, hasText }
@@ -310,7 +335,54 @@ export async function processDocument(file, filename, onProgress = () => {}, opt
   const normalizedText = nlpResult.processedText || result.text
 
   // Parse clinical content from normalised text
-  const clinicalEntities = parseClinicalText(normalizedText, filename)
+  let clinicalEntities = parseClinicalText(normalizedText, filename)
+
+  // ── Smart OCR fallback ───────────────────────────────────────────────────
+  // If text extraction found very few clinical entities, the text layer may
+  // be garbled / incomplete. Fall through to Tesseract OCR and try again.
+  if (result.method === 'pdf-text') {
+    const entityCount =
+      clinicalEntities.medications.length +
+      clinicalEntities.diagnoses.length +
+      clinicalEntities.vitals.length +
+      clinicalEntities.labResults.length +
+      clinicalEntities.procedures.length
+    // allergies not counted (NKDA alone is not enough signal)
+    console.log(`[OCR] Text-layer entity count: ${entityCount} (meds=${clinicalEntities.medications.length}, dx=${clinicalEntities.diagnoses.length}, vitals=${clinicalEntities.vitals.length}, labs=${clinicalEntities.labResults.length}, procs=${clinicalEntities.procedures.length})`)
+
+    if (entityCount < 3) {
+      console.log('[OCR] Too few entities from text layer — retrying with Tesseract OCR...')
+      try {
+        const buffer = await readAsArrayBuffer(file)
+        onProgress({ phase: 'loading-ocr', progress: 0.5, message: 'Few results from text — trying OCR...' })
+        const ocrResult = await ocrPDF(buffer, (p) =>
+          onProgress({ phase: 'ocr', progress: 0.5 + p * 0.5, message: `OCR page ${Math.ceil(p * result.pageCount)}/${result.pageCount}...` }),
+          options.password || null
+        )
+        if (ocrResult.text.length > result.text.length) {
+          // OCR produced more text — use it instead
+          const ocrNlp = normalizeText(ocrResult.text)
+          const ocrNormalized = ocrNlp.processedText || ocrResult.text
+          const ocrEntities = parseClinicalText(ocrNormalized, filename)
+          const ocrEntityCount =
+            ocrEntities.medications.length +
+            ocrEntities.diagnoses.length +
+            ocrEntities.vitals.length +
+            ocrEntities.labResults.length +
+            ocrEntities.procedures.length
+          console.log(`[OCR] OCR entity count: ${ocrEntityCount}`)
+          if (ocrEntityCount > entityCount) {
+            clinicalEntities = ocrEntities
+            result.text = ocrResult.text
+            result.method = 'pdf-ocr-fallback'
+            result.confidence = ocrResult.confidence
+          }
+        }
+      } catch (ocrErr) {
+        console.warn('[OCR] OCR fallback failed:', ocrErr.message)
+      }
+    }
+  }
 
   // Normalize medication names (brand→generic, RxCUI)
   clinicalEntities.medications = normalizeMedications(clinicalEntities.medications)
@@ -350,6 +422,8 @@ export function parseClinicalText(text, filename = '') {
   entities.procedures = extractProcedures(text, upper)
   entities.documentType = classifyDocumentType(text, upper, filename)
   entities.fullText = text
+
+  console.log(`[OCR] parseClinicalText results: meds=${entities.medications.length}, dx=${entities.diagnoses.length}, vitals=${entities.vitals.length}, labs=${entities.labResults.length}, allergies=${entities.allergies.length}, procs=${entities.procedures.length}, docType=${entities.documentType}`)
 
   return entities
 }
@@ -452,23 +526,99 @@ const COMMON_MEDS = [
 
 function extractMedications(text) {
   const meds = []
-  const secMatch = text.match(/(?:medications?|prescriptions?|rx|meds)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*\n|diagnos|allerg|vital|lab|assessment|plan|procedure|$))/i)
+  const seenNames = new Set()
+
+  // ── Epic-style section headers ──────────────────────────────────────────
+  const secMatch = text.match(
+    /(?:current\s+medications?|active\s+medications?|medication\s*list|medications?\s*(?:and\s*dosages?)?|prescriptions?|rx|meds|home\s+medications?)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*(?:allerg|diagnos|problem|vital|lab|assessment|plan|procedure|health\s*issue|immuniz|surgical|family|social|review\s*of|past\s*medical|current\s*(?:health|problem)|after\s*visit|follow|appoint)|\n\s*\n\s*\n|$))/i
+  )
   const searchText = secMatch ? secMatch[1] : text
 
+  // Strategy 1: Line-by-line parsing within the medication section
+  // Epic format: "drug name dose unit, instructions" or "- drug name dose"
+  if (secMatch) {
+    const lines = secMatch[1].split('\n')
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*]+/, '').trim()
+      if (!line || line.length < 3) continue
+      // Skip sub-headers
+      if (/^(medication|drug|name|dose|frequency|route|status|refill|prescribed|taking|stop)/i.test(line)) continue
+
+      // Match: "DrugName 123 mg, instructions..." or "DrugName 123mg tablet..."
+      const medLine = line.match(
+        /^([A-Za-z][A-Za-z\-\/\s]{1,40}?)\s+(\d+(?:\.\d+)?\s*(?:mg|mcg|ml|units?|iu|meq|gm?|%|patch|spray|puff|drop)s?\b.*)/i
+      )
+      if (medLine) {
+        const name = medLine[1].trim()
+        const rest = medLine[2].trim()
+        const fullName = `${name} ${rest}`.substring(0, 100)
+        const key = name.toLowerCase().replace(/\s+/g, '')
+        if (!seenNames.has(key) && name.length > 2) {
+          meds.push({ name: fullName, source: 'ocr', confidence: 'high' })
+          seenNames.add(key)
+        }
+        continue
+      }
+
+      // Match: "DrugName (dose)" or "DrugName - dose"
+      const medParen = line.match(
+        /^([A-Za-z][A-Za-z\-\/\s]{1,40}?)\s*[\(\-]\s*(\d+(?:\.\d+)?\s*(?:mg|mcg|ml|units?|iu|meq|gm?|%).*)/i
+      )
+      if (medParen) {
+        const name = medParen[1].trim()
+        const dose = medParen[2].replace(/\)$/, '').trim()
+        const key = name.toLowerCase().replace(/\s+/g, '')
+        if (!seenNames.has(key) && name.length > 2) {
+          meds.push({ name: `${name} ${dose}`, source: 'ocr', confidence: 'high' })
+          seenNames.add(key)
+        }
+        continue
+      }
+
+      // Match: any line that contains "Take X by mouth" or "Inject" patterns (the line IS a med)
+      if (/\b(?:take|inject|inhale|apply|instill|insert|chew)\b/i.test(line)) {
+        const name = line.substring(0, 80).trim()
+        const key = name.toLowerCase().replace(/\s+/g, '').substring(0, 20)
+        if (!seenNames.has(key)) {
+          meds.push({ name, source: 'ocr', confidence: 'medium' })
+          seenNames.add(key)
+        }
+        continue
+      }
+
+      // Match: line with dosage units anywhere in it (probably a medication line)
+      if (/\d+\s*(?:mg|mcg|ml|units?|iu|meq)\b/i.test(line) && line.length < 120) {
+        const name = line.substring(0, 100).trim()
+        const key = name.toLowerCase().replace(/\s+/g, '').substring(0, 20)
+        if (!seenNames.has(key)) {
+          meds.push({ name, source: 'ocr', confidence: 'medium' })
+          seenNames.add(key)
+        }
+      }
+    }
+  }
+
+  // Strategy 2: Known medication name search (works even without section headers)
   for (const med of COMMON_MEDS) {
     const regex = new RegExp(`\\b${med}\\b(?:\\s+(?:\\d+\\s*(?:mg|mcg|ml|units?|iu))?)?(?:\\s+(?:daily|BID|TID|QID|PRN|QHS|QAM|QPM|once|twice|q\\d+h))?`, 'gi')
     const match = searchText.match(regex)
     if (match) {
-      meds.push({ name: match[0].trim(), source: 'ocr', confidence: 'medium' })
+      const key = med.toLowerCase()
+      if (!seenNames.has(key)) {
+        meds.push({ name: match[0].trim(), source: 'ocr', confidence: 'medium' })
+        seenNames.add(key)
+      }
     }
   }
 
-  const genericPat = /\b([A-Z][a-z]+(?:ol|in|ine|ide|ate|one|pam|lam|cin|xin|mab|nib|tid|zol|pine|pril|tan|lol))\s+(\d+\s*(?:mg|mcg|ml|units?|iu))/gi
+  // Strategy 3: Generic suffix pattern for drug names not in COMMON_MEDS
+  const genericPat = /\b([A-Z][a-z]+(?:ol|in|ine|ide|ate|one|pam|lam|cin|xin|mab|nib|tid|zol|pine|pril|tan|lol|fen|lin|min|dine|zine|done|sone|mide|azole|oxin|mycin|statin|sartan|dipine))\s+(\d+\s*(?:mg|mcg|ml|units?|iu))/gi
   let m
   while ((m = genericPat.exec(searchText))) {
     const name = m[1].toLowerCase()
-    if (!meds.some(x => x.name.toLowerCase().includes(name))) {
+    if (!seenNames.has(name)) {
       meds.push({ name: `${m[1]} ${m[2]}`.trim(), source: 'ocr', confidence: 'low' })
+      seenNames.add(name)
     }
   }
   return meds
@@ -495,10 +645,48 @@ function extractDiagnoses(text) {
   const seenCodes = new Set()
   const seenConditions = new Set()
 
-  const secMatch = text.match(/(?:diagnos|assessment|impression|problem\s*list|conditions?)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*\n|medication|allerg|vital|lab|plan|procedure|$))/i)
+  // ── Epic-style section headers ──────────────────────────────────────────
+  const secMatch = text.match(
+    /(?:current\s+(?:health\s+)?(?:issues?|problems?|conditions?)|active\s+problems?|problem\s*list|diagnos(?:es|is)|assessment|impression|medical\s*(?:history|conditions?)|health\s*issues?|past\s*medical\s*history|chief\s*complaint|reason\s*for\s*visit)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*(?:medication|allerg|vital|lab|plan|procedure|immuniz|surgical|social|family|review\s*of|current\s*med|after\s*visit|follow|appoint|home\s*med)|\n\s*\n\s*\n|$))/i
+  )
   const searchText = secMatch ? secMatch[1] : text
 
-  // 1) Lines with "diagnosis text - ICD_CODE" or "diagnosis text (ICD-10: CODE)"
+  // Strategy 1: Line-by-line parsing within problem/diagnosis section
+  if (secMatch) {
+    const lines = secMatch[1].split('\n')
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*\d\.]+/, '').trim()
+      if (!line || line.length < 3) continue
+      // Skip sub-headers
+      if (/^(diagnosis|problem|condition|issue|status|date|onset|provider|note|resolved|active|inactive|#)/i.test(line)) continue
+      // Skip very short non-clinical words
+      if (line.length < 5 && !/[A-Z]\d{2}/.test(line)) continue
+
+      // Extract ICD code if present: "condition text (E11.65)" or "condition - E11.65"
+      const icdInLine = line.match(/^(.+?)\s*[\(\-\u2013\u2014]\s*([A-TV-Z]\d{2}(?:\.\d{1,4})?)\)?/)
+      if (icdInLine) {
+        const name = icdInLine[1].replace(/[\s\-\u2013\u2014]+$/, '').trim()
+        const code = icdInLine[2]
+        if (!seenCodes.has(code) && name.length > 2) {
+          diagnoses.push({ name, code, codeSystem: 'ICD-10', icd10: code, source: 'ocr', confidence: 'high' })
+          seenCodes.add(code)
+          seenConditions.add(name.toLowerCase())
+        }
+        continue
+      }
+
+      // Any remaining non-trivial line in the problems section is likely a diagnosis
+      if (line.length >= 5 && line.length <= 150 && !/^\d+$/.test(line)) {
+        const key = line.toLowerCase()
+        if (!seenConditions.has(key)) {
+          diagnoses.push({ name: line, source: 'ocr', confidence: secMatch ? 'high' : 'medium' })
+          seenConditions.add(key)
+        }
+      }
+    }
+  }
+
+  // Strategy 2: Lines with "diagnosis text - ICD_CODE" or "diagnosis text (ICD-10: CODE)"
   const linePatterns = [
     /^[\-\s]*(.+?)\s*[\-\u2013\u2014]\s*([A-TV-Z]\d{2}(?:\.\d{1,4})?)\s*$/gm,
     /^[\-\s]*(.+?)\s*\((?:ICD[\- ]?10\s*:\s*)?([A-TV-Z]\d{2}(?:\.\d{1,4})?)\)\s*$/gm,
@@ -512,14 +700,13 @@ function extractDiagnoses(text) {
         diagnoses.push({ name, code, codeSystem: 'ICD-10', icd10: code, source: 'ocr', confidence: 'high' })
         seenCodes.add(code)
       }
-      // Track condition text so we don't re-add it from COMMON_CONDITIONS
       for (const c of COMMON_CONDITIONS) {
         if (name.toLowerCase().includes(c)) seenConditions.add(c)
       }
     }
   }
 
-  // 2) COMMON_CONDITIONS not already captured via ICD-linked lines
+  // Strategy 3: COMMON_CONDITIONS not already captured
   for (const c of COMMON_CONDITIONS) {
     if (seenConditions.has(c)) continue
     if (searchText.toLowerCase().includes(c)) {
@@ -531,7 +718,7 @@ function extractDiagnoses(text) {
     }
   }
 
-  // 3) Standalone ICD codes not already attached to a diagnosis
+  // Strategy 4: Standalone ICD codes not already attached to a diagnosis
   const icdPat = /\b([A-TV-Z]\d{2}(?:\.\d{1,4})?)\b/g
   let m
   while ((m = icdPat.exec(searchText))) {
@@ -548,19 +735,25 @@ function extractDiagnoses(text) {
 
 function extractVitals(text) {
   const vitals = []
+  const seen = new Set()
   const patterns = [
-    { name: 'Blood Pressure', regex: /(?:BP|blood\s*pressure)\s*[:\-]?\s*(\d{2,3})\s*[\/\\]\s*(\d{2,3})/i, fmt: m => `${m[1]}/${m[2]} mmHg` },
-    { name: 'Heart Rate',     regex: /(?:HR|heart\s*rate|pulse)\s*[:\-]?\s*(\d{2,3})\s*(?:bpm)?/i, fmt: m => `${m[1]} bpm` },
-    { name: 'Temperature',    regex: /(?:temp|temperature)\s*[:\-]?\s*(\d{2,3}(?:\.\d)?)\s*(?:°?[FC])?/i, fmt: m => `${m[1]}°F` },
-    { name: 'SpO2',           regex: /(?:SpO2|oxygen\s*sat|O2\s*sat)\s*[:\-]?\s*(\d{2,3})\s*%?/i, fmt: m => `${m[1]}%` },
-    { name: 'Respiratory Rate', regex: /(?:RR|resp(?:iratory)?\s*rate)\s*[:\-]?\s*(\d{1,2})/i, fmt: m => `${m[1]} breaths/min` },
-    { name: 'Weight',         regex: /(?:weight|wt)\s*[:\-]?\s*(\d{2,4}(?:\.\d)?)\s*(?:lbs?|kg|pounds?)?/i, fmt: m => `${m[1]} lbs` },
-    { name: 'Height',         regex: /(?:height|ht)\s*[:\-]?\s*(\d{1})['\s]*(\d{1,2})["\s]*/i, fmt: m => `${m[1]}'${m[2]}"` },
-    { name: 'BMI',            regex: /(?:BMI|body\s*mass)\s*[:\-]?\s*(\d{2}(?:\.\d)?)/i, fmt: m => m[1] },
+    { name: 'Blood Pressure', regex: /(?:BP|blood\s*pressure|systolic\s*\/?\s*diastolic)\s*[:\-]?\s*(\d{2,3})\s*[\/\\]\s*(\d{2,3})/i, fmt: m => `${m[1]}/${m[2]} mmHg` },
+    { name: 'Heart Rate',     regex: /(?:HR|heart\s*rate|pulse)\s*[:\-]?\s*(\d{2,3})\s*(?:bpm|\/min)?/i, fmt: m => `${m[1]} bpm` },
+    { name: 'Temperature',    regex: /(?:temp(?:erature)?)\s*[:\-]?\s*(\d{2,3}(?:\.\d)?)\s*(?:°?\s*[FC])?/i, fmt: m => `${m[1]}°F` },
+    { name: 'SpO2',           regex: /(?:SpO2|oxygen\s*sat(?:uration)?|O2\s*sat|pulse\s*ox)\s*[:\-]?\s*(\d{2,3})\s*%?/i, fmt: m => `${m[1]}%` },
+    { name: 'Respiratory Rate', regex: /(?:RR|resp(?:iratory)?\s*rate|breaths?\s*(?:per\s*min)?)\s*[:\-]?\s*(\d{1,2})/i, fmt: m => `${m[1]} breaths/min` },
+    { name: 'Weight',         regex: /(?:weight|wt)\s*[:\-]?\s*(\d{2,4}(?:\.\d{1,2})?)\s*(?:lbs?|kg|pounds?|kilograms?)?/i, fmt: m => `${m[1]} lbs` },
+    { name: 'Height',         regex: /(?:height|ht)\s*[:\-]?\s*(\d{1})['\u2032\s]*(\d{1,2})["\u2033\s]*/i, fmt: m => `${m[1]}'${m[2]}"` },
+    { name: 'Height',         regex: /(?:height|ht)\s*[:\-]?\s*(\d{2,3}(?:\.\d)?)\s*(?:cm|in)/i, fmt: m => `${m[1]} cm` },
+    { name: 'BMI',            regex: /(?:BMI|body\s*mass\s*index)\s*[:\-]?\s*(\d{2}(?:\.\d{1,2})?)/i, fmt: m => m[1] },
+    { name: 'Pain Level',     regex: /(?:pain\s*(?:level|score|scale))\s*[:\-]?\s*(\d{1,2})\s*(?:\/\s*10)?/i, fmt: m => `${m[1]}/10` },
   ]
   for (const { name, regex, fmt } of patterns) {
     const m = text.match(regex)
-    if (m) vitals.push({ name, value: fmt(m), source: 'ocr' })
+    if (m && !seen.has(name)) {
+      vitals.push({ name, value: fmt(m), source: 'ocr' })
+      seen.add(name)
+    }
   }
   return vitals
 }
@@ -641,15 +834,47 @@ function extractLabResults(text) {
 
 function extractAllergies(text, upper) {
   const allergies = []
+  const seen = new Set()
+
   if (upper.includes('NKDA') || upper.includes('NO KNOWN DRUG ALLERGIES') || upper.includes('NO KNOWN ALLERGIES')) {
     allergies.push({ name: 'NKDA', reaction: 'No Known Drug Allergies', source: 'ocr' })
     return allergies
   }
 
-  const secMatch = text.match(/(?:allerg(?:y|ies))\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*\n|medication|diagnos|vital|lab|assessment|plan|$))/i)
-  const searchText = secMatch ? secMatch[1] : ''
-  const lookIn = searchText || text
+  // ── Section-based extraction ──────────────────────────────────────────────
+  const secMatch = text.match(
+    /(?:allerg(?:y|ies)(?:\s*\/\s*(?:adverse\s*)?reactions?)?)\s*[:\-]?\s*([\s\S]*?)(?=(?:\n\s*(?:medication|diagnos|problem|vital|lab|assessment|plan|procedure|immuniz|surgical|current\s*(?:med|health|problem)|after\s*visit|follow)|\n\s*\n\s*\n|$))/i
+  )
 
+  if (secMatch) {
+    const lines = secMatch[1].split('\n')
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*]+/, '').trim()
+      if (!line || line.length < 2) continue
+      if (/^(allergy|allergen|reaction|severity|status|type|date|category|none|no\s)/i.test(line)) continue
+
+      // Parse reaction if present: "Penicillin - Rash" or "Penicillin (Hives)"
+      const reactionMatch = line.match(/^(.+?)\s*[\-\u2013\u2014]\s*(.+)$/) || line.match(/^(.+?)\s*\((.+?)\)\s*$/)
+      if (reactionMatch) {
+        const name = reactionMatch[1].trim()
+        const reaction = reactionMatch[2].trim()
+        const key = name.toLowerCase()
+        if (!seen.has(key)) {
+          allergies.push({ name, reaction, source: 'ocr' })
+          seen.add(key)
+        }
+      } else {
+        const key = line.toLowerCase()
+        if (!seen.has(key) && line.length <= 80) {
+          allergies.push({ name: line, source: 'ocr' })
+          seen.add(key)
+        }
+      }
+    }
+  }
+
+  // ── Known allergen keyword search (fallback) ────────────────────────────
+  const lookIn = secMatch ? secMatch[1] : text
   const allergens = [
     'penicillin','amoxicillin','sulfa','aspirin','ibuprofen','nsaid',
     'codeine','morphine','latex','contrast dye','iodine','shellfish',
@@ -658,7 +883,11 @@ function extractAllergies(text, upper) {
   ]
   for (const a of allergens) {
     if (lookIn.toLowerCase().includes(a)) {
-      allergies.push({ name: a.charAt(0).toUpperCase() + a.slice(1), source: 'ocr' })
+      const key = a.toLowerCase()
+      if (!seen.has(key)) {
+        allergies.push({ name: a.charAt(0).toUpperCase() + a.slice(1), source: 'ocr' })
+        seen.add(key)
+      }
     }
   }
   return allergies
@@ -744,7 +973,12 @@ function classifyDocumentType(text, upper, filename) {
   if (fn.includes('consent')) return 'Consent Form'
   if (fn.includes('referral')) return 'Referral'
   if (fn.includes('prescription') || fn.includes('rx')) return 'Prescription'
+  // Epic MyChart export: filename like "CSN_LASTNAME_FULLNAME_DATE.PDF"
+  if (/^\d{6,}[\-_]/.test(fn)) return 'Clinical Summary'
 
+  if (upper.includes('AFTER VISIT SUMMARY') || upper.includes('AFTER-VISIT SUMMARY')) return 'After Visit Summary'
+  if (upper.includes('CLINICAL SUMMARY')) return 'Clinical Summary'
+  if (upper.includes('MY CHART') || upper.includes('MYCHART') || upper.includes('MYHEALTH')) return 'Patient Portal Export'
   if (upper.includes('DISCHARGE SUMMARY') || upper.includes('DISCHARGE INSTRUCTIONS')) return 'Discharge Summary'
   if (upper.includes('OPERATIVE REPORT') || upper.includes('PROCEDURE NOTE')) return 'Operative Note'
   if (upper.includes('RADIOLOGY') || upper.includes('IMPRESSION:')) return 'Radiology Report'
@@ -755,6 +989,7 @@ function classifyDocumentType(text, upper, filename) {
   if (upper.includes('PATHOLOGY')) return 'Pathology Report'
   if (upper.includes('EMERGENCY') || upper.includes('ED NOTE')) return 'Emergency Note'
   if (upper.includes('IMMUNIZATION') || upper.includes('VACCINATION')) return 'Immunization Record'
+  if (upper.includes('MEDICATION') && upper.includes('ALLERG')) return 'Clinical Summary'
 
   return 'Clinical Document'
 }
