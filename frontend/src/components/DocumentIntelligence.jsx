@@ -29,6 +29,10 @@ import {
   getOpenAIConfig, saveOpenAIConfig, isOpenAIEnabled,
   analyzeWithOpenAI, testOpenAIConnection
 } from '../services/openAIClinicalParser'
+import {
+  getDocIntelConfig, saveDocIntelConfig, isDocIntelEnabled,
+  analyzeWithDocIntelligence, testDocIntelConnection
+} from '../services/azureDocIntelligence'
 
 // ─── Sample test PDFs bundled in public/sample-pdfs/ ─────────────────────────
 const SAMPLE_PDFS = [
@@ -77,10 +81,18 @@ export default function DocumentIntelligence() {
   const [openaiTestResult, setOpenaiTestResult] = useState(null)
   const [testingOpenAI, setTestingOpenAI] = useState(false)
 
+  // Azure Document Intelligence config (replaces local OCR)
+  const [docIntelConfig, setDocIntelConfig] = useState(() => getDocIntelConfig())
+  const [docIntelTestResult, setDocIntelTestResult] = useState(null)
+  const [testingDocIntel, setTestingDocIntel] = useState(false)
+
   const azureEnabled = aiConfig.enabled && aiConfig.endpoint && aiConfig.apiKey
   const openaiEnabled = openaiConfig.enabled && openaiConfig.apiKey
-  const aiEnabled = azureEnabled || openaiEnabled
-  const activeProvider = openaiEnabled ? 'openai' : azureEnabled ? 'azure' : 'local'
+  const docIntelEnabled = docIntelConfig.enabled && docIntelConfig.endpoint && docIntelConfig.apiKey
+  const aiEnabled = azureEnabled || openaiEnabled || docIntelEnabled
+  const activeProvider = docIntelEnabled
+    ? (openaiEnabled ? 'docintel+openai' : azureEnabled ? 'docintel+azure' : 'docintel')
+    : openaiEnabled ? 'openai' : azureEnabled ? 'azure' : 'local'
 
   const handleSaveAIConfig = (updates) => {
     const newConfig = { ...aiConfig, ...updates }
@@ -110,6 +122,20 @@ export default function DocumentIntelligence() {
     setTestingOpenAI(false)
   }
 
+  const handleSaveDocIntelConfig = (updates) => {
+    const newConfig = { ...docIntelConfig, ...updates }
+    setDocIntelConfig(newConfig)
+    saveDocIntelConfig(newConfig)
+    setDocIntelTestResult(null)
+  }
+
+  const handleTestDocIntel = async () => {
+    setTestingDocIntel(true)
+    const result = await testDocIntelConnection()
+    setDocIntelTestResult(result)
+    setTestingDocIntel(false)
+  }
+
   // Helper: Run AI enhancement on extracted text
   const enhanceWithAI = async (text, label, setProgressFn) => {
     // Priority: OpenAI > Azure > local
@@ -137,8 +163,35 @@ export default function DocumentIntelligence() {
     for (const file of files) {
       setProgress({ phase: 'starting', progress: 0, message: `Processing ${file.name}...` })
       try {
-        // Step 1: Always extract text using local OCR/PDF.js pipeline
-        const result = await processDocument(file, file.name, (p) => setProgress(p))
+        let result
+
+        // Step 1: Text Extraction — Azure Doc Intelligence (if enabled) > Local OCR
+        if (isDocIntelEnabled()) {
+          try {
+            setProgress({ phase: 'doc-intel-submit', progress: 0.05, message: `Uploading ${file.name} to Azure Document Intelligence...` })
+            const diResult = await analyzeWithDocIntelligence(file, (p) => setProgress(p))
+            // Build a result compatible with local OCR shape
+            const { parseClinicalText } = await import('../parsers/documentOCR')
+            const clinicalEntities = parseClinicalText(diResult.text, file.name)
+            result = {
+              text: diResult.text,
+              method: diResult.method || 'azure-doc-intelligence',
+              confidence: diResult.confidence || 95,
+              pageCount: diResult.pages || 1,
+              clinicalEntities,
+              tables: diResult.tables || [],
+              nlpStats: { expansions: 0, corrections: 0 },
+              metadata: { fileName: file.name, fileSize: file.size },
+            }
+          } catch (diErr) {
+            console.warn('[Doc Intel] Failed, falling back to local OCR:', diErr.message)
+          }
+        }
+
+        // Fallback to local OCR if Doc Intelligence not used or failed
+        if (!result) {
+          result = await processDocument(file, file.name, (p) => setProgress(p))
+        }
 
         // Step 2: If any AI provider is enabled, enhance extraction
         try {
@@ -147,12 +200,12 @@ export default function DocumentIntelligence() {
             result.clinicalEntities = mergeEntities(result.clinicalEntities, enhanced.entities)
             result.extractionMethod = enhanced.method
           } else {
-            result.extractionMethod = 'local-regex'
+            result.extractionMethod = result.method?.includes('azure-doc') ? 'azure-doc-intelligence' : 'local-regex'
           }
         } catch (aiErr) {
           console.warn('[AI] Enhancement failed, using local extraction:', aiErr.message)
           result.aiError = aiErr.message
-          result.extractionMethod = 'local-regex'
+          result.extractionMethod = result.method?.includes('azure-doc') ? 'azure-doc-intelligence' : 'local-regex'
         }
 
         newDocs.push({ filename: file.name, result })
@@ -194,7 +247,34 @@ export default function DocumentIntelligence() {
         const file = new File([blob], sample.name, { type: 'application/pdf' })
 
         setProgress({ phase: 'processing', progress: 0.1, message: `Processing ${sample.label}...` })
-        const result = await processDocument(file, sample.name, (p) => setProgress(p))
+        let result
+
+        // Use Azure Doc Intelligence if enabled
+        if (isDocIntelEnabled()) {
+          try {
+            setProgress({ phase: 'doc-intel-submit', progress: 0.1, message: `Azure AI reading ${sample.label}...` })
+            const diResult = await analyzeWithDocIntelligence(file, (p) => setProgress(p))
+            const { parseClinicalText } = await import('../parsers/documentOCR')
+            const clinicalEntities = parseClinicalText(diResult.text, sample.name)
+            result = {
+              text: diResult.text,
+              method: diResult.method || 'azure-doc-intelligence',
+              confidence: diResult.confidence || 95,
+              pageCount: diResult.pages || 1,
+              clinicalEntities,
+              tables: diResult.tables || [],
+              nlpStats: { expansions: 0, corrections: 0 },
+              metadata: { fileName: sample.name },
+            }
+          } catch (diErr) {
+            console.warn('[Doc Intel] Failed for sample, using local:', diErr.message)
+          }
+        }
+
+        // Fallback to local OCR
+        if (!result) {
+          result = await processDocument(file, sample.name, (p) => setProgress(p))
+        }
 
         // If any AI provider is enabled, enhance with AI
         try {
@@ -319,6 +399,12 @@ export default function DocumentIntelligence() {
         </div>
         <div className="flex items-center gap-2 mt-3 md:mt-0">
           {/* AI Mode Badge */}
+          {docIntelEnabled && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+              <ScanLine className="w-3.5 h-3.5" />
+              Azure Doc Intel
+            </span>
+          )}
           {openaiEnabled ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
               <Brain className="w-3.5 h-3.5" />
@@ -329,12 +415,12 @@ export default function DocumentIntelligence() {
               <CloudLightning className="w-3.5 h-3.5" />
               Azure AI Enabled
             </span>
-          ) : (
+          ) : !docIntelEnabled ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
               <Shield className="w-3.5 h-3.5" />
               100% Client-Side
             </span>
-          )}
+          ) : null}
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
             <FileBarChart className="w-3.5 h-3.5" />
             {ocrDocuments.length} Document{ocrDocuments.length !== 1 ? 's' : ''} Processed
@@ -363,69 +449,173 @@ export default function DocumentIntelligence() {
               AI Extraction Settings
             </h3>
             <span className="text-xs font-medium text-gray-500">
-              Active: {activeProvider === 'openai' ? 'OpenAI GPT' : activeProvider === 'azure' ? 'Azure AI' : 'Local Regex'}
+              Active: {
+                activeProvider === 'docintel+openai' ? 'Azure Doc Intel + OpenAI' :
+                activeProvider === 'docintel+azure' ? 'Azure Doc Intel + Azure Health' :
+                activeProvider === 'docintel' ? 'Azure Doc Intelligence' :
+                activeProvider === 'openai' ? 'OpenAI GPT' :
+                activeProvider === 'azure' ? 'Azure AI' :
+                'Local Regex'
+              }
             </span>
           </div>
 
-          {/* Three Mode Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Local */}
-            <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${activeProvider === 'local' ? 'border-green-400 bg-green-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
-              onClick={() => {
-                handleSaveAIConfig({ enabled: false })
-                handleSaveOpenAIConfig({ enabled: false })
-              }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <Shield className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-semibold text-gray-800">Local Extraction</span>
+          {/* Provider Selection Cards */}
+          <div className="space-y-3">
+            {/* Document Reading Layer */}
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Step 1 — Document Reading (OCR)</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Local OCR */}
+              <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${!docIntelEnabled ? 'border-green-400 bg-green-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
+                onClick={() => handleSaveDocIntelConfig({ enabled: false })}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-semibold text-gray-800">Local PDF Reader</span>
+                </div>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li className="flex items-center gap-1"><Lock className="w-3 h-3 text-green-500" /> 100% client-side (pdf.js + Tesseract)</li>
+                  <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-green-500" /> No API keys needed</li>
+                  <li className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> Basic text extraction</li>
+                </ul>
               </div>
-              <ul className="text-xs text-gray-600 space-y-1">
-                <li className="flex items-center gap-1"><Lock className="w-3 h-3 text-green-500" /> 100% client-side</li>
-                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-green-500" /> Regex + NLP dictionary</li>
-                <li className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> No API keys needed</li>
-              </ul>
+
+              {/* Azure Document Intelligence */}
+              <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${docIntelEnabled ? 'border-blue-400 bg-blue-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
+                onClick={() => handleSaveDocIntelConfig({ enabled: true })}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <ScanLine className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-semibold text-gray-800">Azure Document Intelligence</span>
+                  <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-blue-100 text-blue-700">BEST OCR</span>
+                </div>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li className="flex items-center gap-1"><ScanLine className="w-3 h-3 text-blue-500" /> AI-powered layout analysis</li>
+                  <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-blue-500" /> Tables, structure, multi-column</li>
+                  <li className="flex items-center gap-1"><Shield className="w-3 h-3 text-blue-500" /> HIPAA-compliant with BAA</li>
+                </ul>
+              </div>
             </div>
 
-            {/* OpenAI GPT */}
-            <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${activeProvider === 'openai' ? 'border-emerald-400 bg-emerald-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
-              onClick={() => {
-                handleSaveOpenAIConfig({ enabled: true })
-                handleSaveAIConfig({ enabled: false })
-                setAiProvider('openai')
-              }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <Brain className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm font-semibold text-gray-800">OpenAI GPT</span>
-                <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-100 text-emerald-700">BEST</span>
+            {/* Clinical NLP Layer */}
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-4">Step 2 — Clinical Entity Extraction (NLP)</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Local regex */}
+              <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${!openaiEnabled && !azureEnabled ? 'border-green-400 bg-green-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
+                onClick={() => {
+                  handleSaveAIConfig({ enabled: false })
+                  handleSaveOpenAIConfig({ enabled: false })
+                }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-semibold text-gray-800">Local Regex</span>
+                </div>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li className="flex items-center gap-1"><Lock className="w-3 h-3 text-green-500" /> 100% client-side</li>
+                  <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-green-500" /> Regex + NLP dictionary</li>
+                  <li className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> No API keys needed</li>
+                </ul>
               </div>
-              <ul className="text-xs text-gray-600 space-y-1">
-                <li className="flex items-center gap-1"><Brain className="w-3 h-3 text-emerald-500" /> GPT-4o-mini / GPT-4o</li>
-                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-emerald-500" /> Best unstructured text accuracy</li>
-                <li className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-emerald-500" /> Contextual ICD-10 mapping</li>
-              </ul>
-            </div>
 
-            {/* Azure */}
-            <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${activeProvider === 'azure' ? 'border-purple-400 bg-purple-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
-              onClick={() => {
-                handleSaveAIConfig({ enabled: true })
-                handleSaveOpenAIConfig({ enabled: false })
-                setAiProvider('azure')
-              }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <CloudLightning className="w-4 h-4 text-purple-600" />
-                <span className="text-sm font-semibold text-gray-800">Azure AI Health</span>
+              {/* OpenAI GPT */}
+              <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${openaiEnabled ? 'border-emerald-400 bg-emerald-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
+                onClick={() => {
+                  handleSaveOpenAIConfig({ enabled: true })
+                  handleSaveAIConfig({ enabled: false })
+                  setAiProvider('openai')
+                }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm font-semibold text-gray-800">OpenAI GPT</span>
+                  <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-100 text-emerald-700">BEST</span>
+                </div>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li className="flex items-center gap-1"><Brain className="w-3 h-3 text-emerald-500" /> GPT-4o-mini / GPT-4o</li>
+                  <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-emerald-500" /> Best unstructured text accuracy</li>
+                  <li className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-emerald-500" /> Contextual ICD-10 mapping</li>
+                </ul>
               </div>
-              <ul className="text-xs text-gray-600 space-y-1">
-                <li className="flex items-center gap-1"><Brain className="w-3 h-3 text-purple-500" /> Clinical entity recognition</li>
-                <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-purple-500" /> Auto SNOMED CT, LOINC, RxNorm</li>
-                <li className="flex items-center gap-1"><Shield className="w-3 h-3 text-purple-500" /> HIPAA-compliant with BAA</li>
-              </ul>
+
+              {/* Azure Health */}
+              <div className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${azureEnabled ? 'border-purple-400 bg-purple-50/50' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'}`}
+                onClick={() => {
+                  handleSaveAIConfig({ enabled: true })
+                  handleSaveOpenAIConfig({ enabled: false })
+                  setAiProvider('azure')
+                }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <CloudLightning className="w-4 h-4 text-purple-600" />
+                  <span className="text-sm font-semibold text-gray-800">Azure AI Health</span>
+                </div>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li className="flex items-center gap-1"><Brain className="w-3 h-3 text-purple-500" /> Clinical entity recognition</li>
+                  <li className="flex items-center gap-1"><Zap className="w-3 h-3 text-purple-500" /> Auto SNOMED CT, LOINC, RxNorm</li>
+                  <li className="flex items-center gap-1"><Shield className="w-3 h-3 text-purple-500" /> HIPAA-compliant with BAA</li>
+                </ul>
+              </div>
             </div>
           </div>
+
+          {/* Azure Document Intelligence Configuration */}
+          {docIntelConfig.enabled && (
+            <div className="space-y-3 pt-2 border-t border-blue-100">
+              <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <ScanLine className="w-4 h-4 text-blue-600" />
+                Azure Document Intelligence Configuration
+              </h4>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Document Intelligence Endpoint</label>
+                <input
+                  type="url"
+                  placeholder="https://your-resource.cognitiveservices.azure.com"
+                  value={docIntelConfig.endpoint || ''}
+                  onChange={(e) => handleSaveDocIntelConfig({ endpoint: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">API Key</label>
+                <input
+                  type="password"
+                  placeholder="Enter your Azure Document Intelligence API key"
+                  value={docIntelConfig.apiKey || ''}
+                  onChange={(e) => handleSaveDocIntelConfig({ apiKey: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleTestDocIntel}
+                  disabled={testingDocIntel || !docIntelConfig.endpoint || !docIntelConfig.apiKey}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {testingDocIntel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                  Test Connection
+                </button>
+                {docIntelTestResult && (
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium ${docIntelTestResult.ok ? 'text-green-600' : 'text-red-600'}`}>
+                    {docIntelTestResult.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                    {docIntelTestResult.message}
+                  </span>
+                )}
+              </div>
+              <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700 space-y-1">
+                <p className="font-semibold">How to get Azure Document Intelligence:</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Go to <a href="https://portal.azure.com" target="_blank" rel="noopener noreferrer" className="underline">Azure Portal</a></li>
+                  <li>Create a "Document Intelligence" resource (or "Form Recognizer")</li>
+                  <li>Copy the Endpoint and Key from "Keys and Endpoint"</li>
+                </ol>
+              </div>
+              <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                Raw PDF is sent to Azure for analysis. HIPAA-compliant with BAA. Microsoft does NOT store your documents.
+              </p>
+            </div>
+          )}
 
           {/* OpenAI Configuration */}
           {openaiConfig.enabled && (

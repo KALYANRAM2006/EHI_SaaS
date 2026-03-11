@@ -4,6 +4,7 @@ import { parseUploadedFiles } from '../parsers/epicTsvParser'
 import { processDocument, documentResultToAppRows, terminateOCR, PDFPasswordError } from '../parsers/documentOCR'
 import { isOpenAIEnabled, analyzeWithOpenAI } from '../services/openAIClinicalParser'
 import { isAzureHealthEnabled, analyzeWithAzureHealth } from '../services/azureHealthAI'
+import { isDocIntelEnabled, analyzeWithDocIntelligence } from '../services/azureDocIntelligence'
 import {
   secureMemoryWipe,
   encryptAndStore,
@@ -64,10 +65,41 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
   const filename = file.name
   console.log(`[Direct-OCR] Processing ${filename} directly (not via TSV parser)`)
 
-  // 1. Run OCR / PDF text extraction
-  const result = await processDocument(file, filename, (p) => {
-    onProgress({ phase: p.phase || 'ocr-page', ...p })
-  }, { password: options.password || null })
+  let result
+  let usedDocIntel = false
+
+  // ── Step 1: Text Extraction ─────────────────────────────────────────────
+  // Priority: Azure Document Intelligence (if enabled) > Local OCR (pdf.js / Tesseract)
+  if (isDocIntelEnabled()) {
+    try {
+      console.log(`[Direct-OCR] Azure Document Intelligence enabled — sending PDF binary`)
+      onProgress({ phase: 'doc-intel-submit', progress: 0.05, message: `Uploading ${filename} to Azure Document Intelligence...` })
+      const diResult = await analyzeWithDocIntelligence(file, onProgress)
+
+      // Build a result object compatible with the local OCR output shape
+      result = {
+        text: diResult.text,
+        method: diResult.method || 'azure-doc-intelligence',
+        confidence: diResult.confidence || 95,
+        pageCount: diResult.pages || 1,
+        clinicalEntities: null, // Will be filled by NLP step below
+        tables: diResult.tables || [],
+      }
+      usedDocIntel = true
+      console.log(`[Direct-OCR] ${filename}: Azure DI extracted ${result.text.length} chars, ${result.pageCount} pages, ${(diResult.tables || []).length} tables`)
+    } catch (diErr) {
+      console.warn(`[Direct-OCR] Azure Document Intelligence failed for ${filename}:`, diErr.message)
+      console.log(`[Direct-OCR] Falling back to local OCR...`)
+      // Fall through to local OCR
+    }
+  }
+
+  // If Doc Intelligence was not used or failed, fall back to local OCR
+  if (!result) {
+    result = await processDocument(file, filename, (p) => {
+      onProgress({ phase: p.phase || 'ocr-page', ...p })
+    }, { password: options.password || null })
+  }
 
   if (!result.text || result.text.length === 0) {
     console.warn(`[Direct-OCR] No text extracted from ${filename}`)
@@ -75,8 +107,16 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
     console.log(`[Direct-OCR] ${filename}: ${result.method}, ${result.text.length} chars, ${Math.round(result.confidence)}% confidence`)
   }
 
-  // 2. AI Enhancement (OpenAI GPT > Azure Health > local-only)
-  let extractionMethod = 'local-regex'
+  // If Doc Intelligence was used, run local regex parsing on the clean text it produced
+  if (usedDocIntel && result.text) {
+    const { parseClinicalText } = await import('../parsers/documentOCR')
+    result.clinicalEntities = parseClinicalText(result.text, filename)
+    console.log(`[Direct-OCR] ${filename}: local regex applied to Azure DI text`)
+  }
+
+  // ── Step 2: AI Clinical Entity Extraction ───────────────────────────────
+  // Priority: OpenAI GPT > Azure Health > local-only (already ran above)
+  let extractionMethod = usedDocIntel ? 'azure-doc-intelligence' : 'local-regex'
   if (result.text && result.text.length > 0) {
     try {
       if (isOpenAIEnabled()) {
@@ -84,7 +124,7 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
         const aiEntities = await analyzeWithOpenAI(result.text, onProgress)
         if (aiEntities) {
           result.clinicalEntities = mergeClinicalEntities(result.clinicalEntities, aiEntities)
-          extractionMethod = 'openai'
+          extractionMethod = usedDocIntel ? 'azure-doc-intel+openai' : 'openai'
           console.log(`[Direct-OCR] ${filename}: enhanced with OpenAI GPT`)
         }
       } else if (isAzureHealthEnabled()) {
@@ -92,7 +132,7 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
         const aiEntities = await analyzeWithAzureHealth(result.text, onProgress)
         if (aiEntities) {
           result.clinicalEntities = mergeClinicalEntities(result.clinicalEntities, aiEntities)
-          extractionMethod = 'azure-ai'
+          extractionMethod = usedDocIntel ? 'azure-doc-intel+azure-ai' : 'azure-ai'
           console.log(`[Direct-OCR] ${filename}: enhanced with Azure Health AI`)
         }
       }
@@ -102,8 +142,10 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
   }
   result.extractionMethod = extractionMethod
 
-  // 3. Terminate OCR worker to free memory
-  try { await terminateOCR() } catch { /* ignore */ }
+  // 3. Terminate OCR worker to free memory (only if local OCR was used)
+  if (!usedDocIntel) {
+    try { await terminateOCR() } catch { /* ignore */ }
+  }
   onProgress({ phase: 'ocr-complete', progress: 1, message: 'Document processing complete' })
 
   // 4. Convert to app rows
