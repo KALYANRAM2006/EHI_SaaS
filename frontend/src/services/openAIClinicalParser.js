@@ -48,7 +48,7 @@ export function isOpenAIEnabled() {
 
 // ─── System Prompt ──────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a medical data extraction AI. Given clinical document text (discharge summaries, lab reports, progress notes, etc.), extract ALL structured clinical entities.
+const SYSTEM_PROMPT = `You are an expert clinical data extraction AI trained in medical informatics. Read the ENTIRE document thoroughly — every page, section, table, and narrative — and extract ALL structured clinical entities.
 
 Return ONLY valid JSON with this exact structure (no markdown, no explanation):
 {
@@ -57,35 +57,117 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation):
     "dateOfBirth": "string or null",
     "mrn": "string or null",
     "age": "number or null",
-    "sex": "string or null"
+    "sex": "string or null",
+    "address": "string or null",
+    "phone": "string or null",
+    "ethnicity": "string or null",
+    "language": "string or null",
+    "maritalStatus": "string or null",
+    "insurancePlan": "string or null"
   },
   "medications": [
-    { "name": "medication name with dose", "dose": "dose", "route": "route", "frequency": "frequency", "indication": "indication if mentioned" }
+    {
+      "name": "generic drug name (brand name if different)",
+      "dose": "dose amount with unit (e.g. 10 mg)",
+      "route": "oral/IV/subcutaneous/topical/inhaled/etc",
+      "frequency": "daily/BID/TID/QID/PRN/weekly/etc",
+      "indication": "condition being treated",
+      "status": "Active/Discontinued/On Hold/Completed",
+      "prescriber": "prescribing provider name if mentioned",
+      "startDate": "date started if mentioned",
+      "rxcui": "RxNorm CUI code if identifiable",
+      "ndc": "NDC code if mentioned"
+    }
   ],
   "labResults": [
-    { "name": "test name", "value": "numeric value as string", "unit": "unit", "flag": "HIGH/LOW/Normal/CRITICAL if determinable", "referenceRange": "range if mentioned" }
+    {
+      "name": "standard test name",
+      "value": "numeric value as string",
+      "unit": "unit of measurement",
+      "flag": "HIGH/LOW/NORMAL/CRITICAL",
+      "referenceRange": "normal range if mentioned",
+      "date": "collection date if mentioned",
+      "loinc": "LOINC code if identifiable"
+    }
   ],
   "diagnoses": [
-    { "name": "condition name", "icd10": "ICD-10 code if identifiable", "status": "Active/Resolved/Historical", "severity": "severity if mentioned" }
+    {
+      "name": "condition name — use standard medical terminology",
+      "icd10": "ICD-10-CM code (e.g. E11.65, I10, J45.20)",
+      "status": "Active/Resolved/Historical",
+      "severity": "Mild/Moderate/Severe/Chronic/Acute",
+      "onsetDate": "date first noted if mentioned",
+      "chronic": true
+    }
   ],
   "vitals": [
-    { "name": "vital sign name", "value": "value with unit" }
+    { "name": "vital sign name (standard: Blood Pressure, Heart Rate, Temperature, SpO2, Respiratory Rate, Weight, Height, BMI, Pain Level)", "value": "value with unit", "date": "date if mentioned" }
   ],
   "allergies": [
-    { "name": "allergen", "reaction": "reaction type", "severity": "severity if mentioned" }
+    { "name": "allergen name", "reaction": "specific reaction type (e.g. Rash, Anaphylaxis, Hives)", "severity": "Mild/Moderate/Severe/Life-threatening" }
   ],
   "procedures": [
-    { "name": "procedure name" }
+    { "name": "procedure name", "date": "date if mentioned", "cpt": "CPT code if identifiable", "provider": "performing provider if mentioned", "result": "outcome/findings if mentioned" }
+  ],
+  "immunizations": [
+    {
+      "name": "vaccine name (include formulation if given)",
+      "date": "administration date",
+      "dose": "dose amount (e.g. 0.5 mL)",
+      "route": "Intramuscular/Subcutaneous/Oral/Intranasal",
+      "site": "Left Deltoid/Right Deltoid/Left Thigh/etc",
+      "manufacturer": "vaccine manufacturer if mentioned",
+      "lotNumber": "lot number if mentioned",
+      "cvx": "CVX code if identifiable (e.g. 208 for Pfizer COVID-19)",
+      "ndc": "NDC code if mentioned"
+    }
+  ],
+  "encounters": [
+    {
+      "type": "Office Visit/Telehealth/Emergency/Inpatient/Outpatient/Urgent Care/Procedure",
+      "date": "visit date",
+      "department": "department or clinic name",
+      "provider": "provider name with credentials",
+      "reasonForVisit": "chief complaint or reason",
+      "diagnosis": "primary diagnosis for this visit",
+      "disposition": "outcome/discharge/follow-up instructions"
+    }
+  ],
+  "careTeam": [
+    {
+      "name": "provider name with credentials",
+      "role": "PCP/Specialist/Surgeon/Nurse/etc",
+      "specialty": "medical specialty",
+      "phone": "phone number if mentioned",
+      "npi": "NPI number if mentioned"
+    }
+  ],
+  "clinicalNotes": [
+    {
+      "type": "Progress Note/Discharge Summary/Consultation/H&P/Operative Note/After Visit Summary",
+      "date": "note date",
+      "author": "note author with credentials",
+      "content": "brief summary of note content (max 200 chars)",
+      "department": "department if mentioned"
+    }
   ]
 }
 
 Rules:
-- Extract EVERY medication, lab result, diagnosis, vital sign, allergy, and procedure mentioned
-- For lab results, capture ALL values from tables and narrative text
-- Include the flag (HIGH/LOW/Normal) when reference ranges are available
-- Map diagnoses to ICD-10 codes when you can identify them
-- If a field is not mentioned, use null or empty array
-- Do NOT hallucinate or infer data not present in the text
+- READ THE ENTIRE DOCUMENT — every page, every section, every table, every paragraph
+- Extract EVERY medication as DISCRETE values — name, dose, route, and frequency must be SEPARATE fields
+- For "Lisinopril 10mg oral daily", extract: name="Lisinopril", dose="10 mg", route="oral", frequency="daily"
+- Extract ALL encounters/visits mentioned — even if only a date and department are given
+- Extract ALL immunizations/vaccines with administration details (date, dose, site, route, lot, manufacturer)
+- Map diagnoses to ICD-10-CM codes — use your medical knowledge to identify the correct code
+- Map immunizations to CVX codes — e.g. COVID-19 Pfizer=208, Moderna=207, Influenza=141, Tdap=115
+- Map procedures to CPT codes when identifiable
+- For lab results, always include the flag (HIGH/LOW/NORMAL) based on the reference range
+- Extract visit/encounter information from EVERY section — Kaiser "After Visit Summary" has encounter details throughout
+- Look for visit dates, departments, providers in headers, footers, and throughout the document
+- Extract clinical notes: progress notes, summaries, discharge instructions, consultation notes
+- If "No Known Drug Allergies" or "NKDA" appears, return allergies: [{ name: "NKDA", reaction: "No Known Drug Allergies" }]
+- Do NOT hallucinate or infer data not present — only extract what is explicitly stated
 - Return ONLY the JSON object, no other text`
 
 // ─── Main Analysis Function ──────────────────────────────────────────────────
@@ -167,6 +249,10 @@ function normalizeOpenAIResponse(parsed) {
     vitals: [],
     allergies: [],
     procedures: [],
+    immunizations: [],
+    encounters: [],
+    careTeam: [],
+    clinicalNotes: [],
     dates: [],
   }
 
@@ -179,17 +265,28 @@ function normalizeOpenAIResponse(parsed) {
     if (d.mrn) entities.demographics.mrn = d.mrn
     if (d.age) entities.demographics.age = parseInt(d.age) || null
     if (d.sex) entities.demographics.sex = d.sex
+    if (d.address) entities.demographics.address = d.address
+    if (d.phone) entities.demographics.phone = d.phone
+    if (d.ethnicity) entities.demographics.ethnicity = d.ethnicity
+    if (d.language) entities.demographics.language = d.language
+    if (d.maritalStatus) entities.demographics.maritalStatus = d.maritalStatus
+    if (d.insurancePlan) entities.demographics.insurancePlan = d.insurancePlan
     if (Object.keys(entities.demographics).length === 0) entities.demographics = null
   }
 
-  // Medications
+  // Medications — now DISCRETE fields
   if (Array.isArray(parsed.medications)) {
     entities.medications = parsed.medications.map(m => ({
-      name: buildMedName(m),
+      name: m.name || 'Unknown',
       dose: m.dose || '',
       route: m.route || '',
       frequency: m.frequency || '',
       indication: m.indication || '',
+      status: m.status || 'Active',
+      prescriber: m.prescriber || '',
+      startDate: m.startDate || '',
+      rxcui: m.rxcui || '',
+      ndc: m.ndc || '',
       source: 'openai',
       confidence: 'high',
     }))
@@ -203,6 +300,8 @@ function normalizeOpenAIResponse(parsed) {
       unit: l.unit || '',
       flag: l.flag || '',
       referenceRange: l.referenceRange || '',
+      date: l.date || '',
+      loinc: l.loinc || '',
       source: 'openai',
     }))
   }
@@ -216,6 +315,8 @@ function normalizeOpenAIResponse(parsed) {
       icd10: d.icd10 || '',
       status: d.status || 'Active',
       severity: d.severity || '',
+      onsetDate: d.onsetDate || '',
+      chronic: d.chronic || false,
       source: 'openai',
       confidence: 'high',
     }))
@@ -226,6 +327,7 @@ function normalizeOpenAIResponse(parsed) {
     entities.vitals = parsed.vitals.map(v => ({
       name: v.name || 'Unknown',
       value: v.value || '',
+      date: v.date || '',
       source: 'openai',
     }))
   }
@@ -244,6 +346,67 @@ function normalizeOpenAIResponse(parsed) {
   if (Array.isArray(parsed.procedures)) {
     entities.procedures = parsed.procedures.map(p => ({
       name: p.name || 'Unknown',
+      date: p.date || '',
+      cptCode: p.cpt || '',
+      provider: p.provider || '',
+      result: p.result || '',
+      source: 'openai',
+    }))
+  }
+
+  // Immunizations
+  if (Array.isArray(parsed.immunizations)) {
+    entities.immunizations = parsed.immunizations.map(imm => ({
+      name: imm.name || 'Unknown',
+      date: imm.date || '',
+      dose: imm.dose || '',
+      route: imm.route || '',
+      site: imm.site || '',
+      manufacturer: imm.manufacturer || '',
+      lotNumber: imm.lotNumber || '',
+      cvx: imm.cvx || '',
+      ndc: imm.ndc || '',
+      source: 'openai',
+      confidence: 'high',
+    }))
+  }
+
+  // Encounters / Visits
+  if (Array.isArray(parsed.encounters)) {
+    entities.encounters = parsed.encounters.map(enc => ({
+      type: enc.type || 'Office Visit',
+      date: enc.date || '',
+      department: enc.department || '',
+      provider: enc.provider || '',
+      reasonForVisit: enc.reasonForVisit || '',
+      diagnosis: enc.diagnosis || '',
+      disposition: enc.disposition || '',
+      source: 'openai',
+    }))
+  }
+
+  // Care Team
+  if (Array.isArray(parsed.careTeam)) {
+    entities.careTeam = parsed.careTeam.map(ct => ({
+      name: ct.name || 'Unknown',
+      role: ct.role || '',
+      relationship: ct.role || '',
+      specialty: ct.specialty || '',
+      phone: ct.phone || '',
+      identifier: ct.npi || '',
+      source: 'openai',
+      status: 'Active',
+    }))
+  }
+
+  // Clinical Notes
+  if (Array.isArray(parsed.clinicalNotes)) {
+    entities.clinicalNotes = parsed.clinicalNotes.map(note => ({
+      type: note.type || 'Clinical Note',
+      date: note.date || '',
+      author: note.author || '',
+      content: note.content || '',
+      department: note.department || '',
       source: 'openai',
     }))
   }

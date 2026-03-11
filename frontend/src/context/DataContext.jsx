@@ -5,6 +5,7 @@ import { processDocument, documentResultToAppRows, terminateOCR, PDFPasswordErro
 import { isOpenAIEnabled, analyzeWithOpenAI } from '../services/openAIClinicalParser'
 import { isAzureHealthEnabled, analyzeWithAzureHealth } from '../services/azureHealthAI'
 import { isDocIntelEnabled, analyzeWithDocIntelligence } from '../services/azureDocIntelligence'
+import { validateAndEnrichCodes } from '../services/codeValidationService'
 import {
   secureMemoryWipe,
   encryptAndStore,
@@ -30,7 +31,7 @@ import {
 const DataContext = createContext()
 
 // All clinical data categories that records can belong to
-const ALL_CATEGORIES = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations', 'vitals', 'documents', 'careTeam']
+const ALL_CATEGORIES = ['medications', 'encounters', 'allergies', 'results', 'orders', 'conditions', 'immunizations', 'vitals', 'documents', 'careTeam', 'clinicalNotes']
 
 // File extensions that should route directly to OCR (bypass TSV parser)
 const DIRECT_OCR_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'bmp', 'gif', 'dcm', 'rtf', 'doc', 'docx'])
@@ -44,7 +45,7 @@ function mergeClinicalEntities(local, ai) {
   if (ai.demographics && Object.keys(ai.demographics).length > 0) {
     merged.demographics = { ...(local.demographics || {}), ...ai.demographics }
   }
-  const listKeys = ['medications', 'diagnoses', 'labResults', 'vitals', 'allergies', 'procedures', 'immunizations', 'careTeam']
+  const listKeys = ['medications', 'diagnoses', 'labResults', 'vitals', 'allergies', 'procedures', 'immunizations', 'careTeam', 'encounters', 'clinicalNotes']
   for (const key of listKeys) {
     const aiItems = ai[key] || []
     const localItems = local[key] || []
@@ -142,6 +143,18 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
   }
   result.extractionMethod = extractionMethod
 
+  // ── Step 2b: Online Code Validation (RxNorm, ICD-10, CVX) ──────────────
+  // Uses FREE NIH NLM APIs — only medical codes sent, never PHI
+  if (result.clinicalEntities) {
+    try {
+      onProgress({ phase: 'code-validation', progress: 0.85, message: 'Validating medical codes online (NIH NLM)...' })
+      result.clinicalEntities = await validateAndEnrichCodes(result.clinicalEntities)
+      console.log(`[Direct-OCR] ${filename}: medical codes validated via NIH NLM APIs`)
+    } catch (valErr) {
+      console.warn(`[Direct-OCR] Code validation failed for ${filename}:`, valErr.message)
+    }
+  }
+
   // 3. Terminate OCR worker to free memory (only if local OCR was used)
   if (!usedDocIntel) {
     try { await terminateOCR() } catch { /* ignore */ }
@@ -183,7 +196,7 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
   const patient = patientRows[0]
   const selectedPatient = {
     ...patient,
-    encounters: [],
+    encounters: rows.encounters || [],
     orders: rows.orders || [],
     results: rows.results || [],
     conditions: rows.conditions || [],
@@ -193,8 +206,9 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
     immunizations: rows.immunizations || [],
     vitals: rows.vitals || [],
     careTeam: rows.careTeam || [],
+    clinicalNotes: rows.clinicalNotes || [],
     documents: rows.documentRow ? [rows.documentRow] : [],
-    encounterCount: 0,
+    encounterCount: (rows.encounters || []).length,
     orderCount: (rows.orders || []).length,
     resultCount: (rows.results || []).length,
     conditionCount: (rows.conditions || []).length,
@@ -204,12 +218,12 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
   const totalRecords = (rows.medications?.length || 0) + (rows.conditions?.length || 0) +
     (rows.allergies?.length || 0) + (rows.results?.length || 0) + (rows.orders?.length || 0) +
     (rows.vitals?.length || 0) + (rows.immunizations?.length || 0) +
-    (rows.careTeam?.length || 0)
+    (rows.careTeam?.length || 0) + (rows.encounters?.length || 0) + (rows.clinicalNotes?.length || 0)
 
   const parsedData = {
     patients: [selectedPatient],
     selectedPatient,
-    encounters: [],
+    encounters: rows.encounters || [],
     orders: rows.orders || [],
     results: rows.results || [],
     medications: rows.medications || [],
@@ -218,6 +232,7 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
     immunizations: rows.immunizations || [],
     vitals: rows.vitals || [],
     careTeam: rows.careTeam || [],
+    clinicalNotes: rows.clinicalNotes || [],
     documents: rows.documentRow ? [rows.documentRow] : [],
     providers: {},
     totalRecords,
@@ -481,6 +496,8 @@ export function DataProvider({ children }) {
     const alrg = isSingle ? (data.allergies || []) : (data.allergies || []).filter(a => a.patId === pid)
     const immn = isSingle ? (data.immunizations || []) : (data.immunizations || []).filter(i => i.patId === pid)
     const care = isSingle ? (data.careTeam || []) : (data.careTeam || []).filter(c => c.patId === pid)
+    const notes = isSingle ? (data.clinicalNotes || []) : (data.clinicalNotes || []).filter(n => n.patId === pid)
+    const vtls = isSingle ? (data.vitals || []) : (data.vitals || []).filter(v => v.patId === pid)
 
     // Separate unique records (shown everywhere) from duplicates (shown in lineage only)
     const filteredMeds = meds.filter(m => !m._duplicate)
@@ -491,6 +508,8 @@ export function DataProvider({ children }) {
     const filteredEnc  = enc.filter(e => !e._duplicate)
     const filteredImmn = immn.filter(i => !i._duplicate)
     const filteredCare = care.filter(c => !c._duplicate)
+    const filteredNotes = notes.filter(n => !n._duplicate)
+    const filteredVtls = vtls.filter(v => !v._duplicate)
     const abnormal = filteredRes.filter(r => r.flag && r.flag !== 'Normal')
 
     // Keep ALL records (including duplicates) for lineage view
@@ -502,6 +521,8 @@ export function DataProvider({ children }) {
     const allEnc  = enc
     const allImmn = immn
     const allCare = care
+    const allNotes = notes
+    const allVtls = vtls
 
     return {
       ...patient,
@@ -509,7 +530,8 @@ export function DataProvider({ children }) {
       // Primary views get deduplicated (smart-merged) records
       results: filteredRes, conditions: filteredCond,
       medications: filteredMeds, allergies: filteredAlrg,
-      immunizations: filteredImmn, careTeam: filteredCare, abnormalResults: abnormal,
+      immunizations: filteredImmn, careTeam: filteredCare,
+      clinicalNotes: filteredNotes, vitals: filteredVtls, abnormalResults: abnormal,
       encounterCount: filteredEnc.length, orderCount: filteredOrd.length,
       resultCount: filteredRes.length, conditionCount: filteredCond.length,
       medicationCount: filteredMeds.length,
@@ -517,6 +539,7 @@ export function DataProvider({ children }) {
       _allMedications: allMeds, _allResults: allRes,
       _allConditions: allCond, _allAllergies: allAlrg,
       _allOrders: allOrd, _allEncounters: allEnc, _allImmunizations: allImmn, _allCareTeam: allCare,
+      _allClinicalNotes: allNotes, _allVitals: allVtls,
       // Dedup stats
       _rawMedCount: meds.length, _rawResCount: res.length,
       _dedupedMeds: meds.filter(m => m._duplicate).length,

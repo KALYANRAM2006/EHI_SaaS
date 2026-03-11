@@ -36,6 +36,7 @@ import {
   Heart,
   Users,
   ClipboardList,
+  StickyNote,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { generateAISummary, providers } from '../data/sampleData'
@@ -98,6 +99,7 @@ export default function Dashboard() {
     orders:        { icon: ClipboardList,  label: 'Orders',        gradient: 'from-cyan-500 to-cyan-600',    bg: 'bg-cyan-50',   shadow: 'rgba(6,182,212,0.2)',  border: 'border-cyan-200',   ring: 'ring-cyan-500',   text: 'text-cyan-700', bgPill: 'bg-cyan-100', countLabel: 'Total' },
     documents:     { icon: FileBarChart,   label: 'Documents',     gradient: 'from-gray-500 to-gray-600',    bg: 'bg-gray-50',   shadow: 'rgba(107,114,128,0.2)', border: 'border-gray-200',  ring: 'ring-gray-500',  text: 'text-gray-700', bgPill: 'bg-gray-100', countLabel: 'Files' },
     procedures:    { icon: Activity,       label: 'Procedures',    gradient: 'from-teal-500 to-teal-600',    bg: 'bg-teal-50',   shadow: 'rgba(20,184,166,0.2)', border: 'border-teal-200',   ring: 'ring-teal-500',   text: 'text-teal-700', bgPill: 'bg-teal-100', countLabel: 'Total' },
+    clinicalNotes: { icon: StickyNote,     label: 'Clinical Notes', gradient: 'from-violet-500 to-violet-600', bg: 'bg-violet-50', shadow: 'rgba(139,92,246,0.2)', border: 'border-violet-200', ring: 'ring-violet-500', text: 'text-violet-700', bgPill: 'bg-violet-100', countLabel: 'Notes' },
   }), [])
 
   // Default metadata for unknown categories discovered dynamically
@@ -126,7 +128,7 @@ export default function Dashboard() {
   const categoryCards = useMemo(() => {
     if (!stats) return []
     // Priority order for display
-    const priorityOrder = ['conditions', 'medications', 'immunizations', 'allergies', 'results', 'encounters', 'vitals', 'careTeam', 'orders', 'documents', 'procedures']
+    const priorityOrder = ['conditions', 'medications', 'immunizations', 'allergies', 'results', 'encounters', 'vitals', 'careTeam', 'clinicalNotes', 'orders', 'documents', 'procedures']
     // Detect all array categories
     const detected = []
     for (const [key, val] of Object.entries(stats)) {
@@ -995,7 +997,7 @@ export default function Dashboard() {
         {/* ===== DYNAMIC RECORDS VIEW ===== */}
         {(activeView === 'records' || activeView === 'medications' || activeView === 'conditions' || activeView === 'labs' || activeView === 'encounters' || activeView === 'procedures' || activeView === 'trends') && (() => {
           // Detect all categories with data
-          const priorityOrder = ['conditions', 'medications', 'immunizations', 'allergies', 'results', 'encounters', 'vitals', 'careTeam', 'orders', 'documents', 'procedures']
+          const priorityOrder = ['conditions', 'medications', 'immunizations', 'allergies', 'results', 'encounters', 'vitals', 'careTeam', 'clinicalNotes', 'orders', 'documents', 'procedures']
           const detectedCats = Object.entries(stats)
             .filter(([k, v]) => Array.isArray(v) && v.length > 0 && !k.startsWith('_') && k !== 'abnormalResults')
             .map(([k]) => k)

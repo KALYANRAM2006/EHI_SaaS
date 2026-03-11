@@ -426,10 +426,12 @@ export function parseClinicalText(text, filename = '') {
   entities.allergies = extractAllergies(text, upper, sections)
   entities.procedures = extractProcedures(text, upper)
   entities.careTeam = extractCareTeam(text, upper, sections)
+  entities.encounters = extractEncounters(text, upper, sections)
+  entities.clinicalNotes = extractClinicalNotes(text, upper, sections)
   entities.documentType = classifyDocumentType(text, upper, filename)
   entities.fullText = text
 
-  console.log(`[OCR] parseClinicalText results: meds=${entities.medications.length}, dx=${entities.diagnoses.length}, imm=${entities.immunizations.length}, vitals=${entities.vitals.length}, labs=${entities.labResults.length}, allergies=${entities.allergies.length}, procs=${entities.procedures.length}, docType=${entities.documentType}`)
+  console.log(`[OCR] parseClinicalText results: meds=${entities.medications.length}, dx=${entities.diagnoses.length}, imm=${entities.immunizations.length}, vitals=${entities.vitals.length}, labs=${entities.labResults.length}, allergies=${entities.allergies.length}, procs=${entities.procedures.length}, enc=${entities.encounters.length}, notes=${entities.clinicalNotes.length}, docType=${entities.documentType}`)
 
   return entities
 }
@@ -470,6 +472,10 @@ function splitIntoSections(text) {
     { pattern: /^ppd|^tb\s+(?:skin|test)|^tuberculin/i, section: 'labs' },
     // Questionnaire (noise reduction)
     { pattern: /^questionnaire\b/i, section: 'questionnaire' },
+    // Encounters / Visits
+    { pattern: /^(?:visit|encounter)s?\s*(?:information|details?|history|summary|list)?|^(?:appointment|office\s+visit)s?|^visit\s+(?:date|type|reason)|^encounter\s+(?:date|type)|^(?:outpatient|inpatient)\s+visits?|^admission|^(?:ed|emergency)\s+visits?|^telehealth|^telemedicine/i, section: 'encounters' },
+    // Clinical Notes / Summaries
+    { pattern: /^(?:clinical|progress|visit|consultation|consult)\s*notes?|^(?:discharge|after[\s\-]?visit)\s+(?:summary|notes?)|^(?:history\s+(?:and|&)\s+physical|h\s*&\s*p)|^(?:operative|procedure|surgical)\s+(?:note|report)|^(?:nursing|physician|provider)\s+notes?|^assessment\s+(?:and|&)\s+plan|^a\s*\/\s*p\b|^plan\s*:|^subjective|^objective|^interval\s+history/i, section: 'clinical_notes' },
     // Instructions / Education
     { pattern: /^(?:patient\s+)?(?:instructions?|education)|^(?:after[\s\-]?visit|discharge)\s+(?:summary|instructions?)|^follow[\s\-]?up|^appointments?|^next\s+(?:visit|appointment)|^what\s+(?:to\s+do|we\s+discussed)/i, section: 'instructions' },
     // Family / Social
@@ -550,7 +556,7 @@ function createEmptyClinicalEntities() {
   return {
     demographics: null, dates: [], medications: [], diagnoses: [],
     vitals: [], labResults: [], allergies: [], procedures: [],
-    immunizations: [], careTeam: [],
+    immunizations: [], careTeam: [], encounters: [], clinicalNotes: [],
     documentType: 'Unknown', fullText: '',
   }
 }
@@ -658,6 +664,75 @@ function extractMedications(text, upper, sections = {}) {
   const searchText = sectionText || (secMatch ? secMatch[1] : text)
   const hasMedSection = !!(sectionText || secMatch)
 
+  // ── Helper: parse a medication line into discrete fields ────────────────
+  function parseMedLine(rawLine) {
+    const line = rawLine.trim()
+    if (!line || line.length < 3) return null
+
+    let name = '', dose = '', route = '', frequency = '', status = 'Active'
+
+    // Route keywords
+    const ROUTES = /\b(oral(?:ly)?|by\s+mouth|po|iv|intravenous|im|intramuscular|sq|subq|subcutaneous|topical|inhaled|nasal|intranasal|rectal|sublingual|transdermal|ophthalmic|otic|vaginal|patch|injection)\b/i
+    // Frequency keywords
+    const FREQS = /\b(daily|once\s+daily|twice\s+daily|bid|tid|qid|prn|q\d+h|qhs|qam|qpm|q\.?a\.?m|q\.?p\.?m|every\s+\d+\s+hours?|every\s+morning|every\s+evening|every\s+night|at\s+bedtime|once\s+weekly|weekly|monthly|as\s+needed|once|twice|three\s+times|four\s+times|(?:once|twice|three|four)\s+a\s+day|q\.\s*d\.|b\.?\s*i\.?\s*d|t\.?\s*i\.?\s*d|q\.?\s*i\.?\s*d|with\s+meals?|before\s+meals?|after\s+meals?)\b/i
+    // Dose pattern
+    const DOSE_PAT = /(\d+(?:\.\d+)?(?:\s*[-\/]\s*\d+(?:\.\d+)?)?\s*(?:mg|mcg|ml|g|gm|units?|iu|meq|%|patch|spray|puff|drop|tablet|capsule|cap|tab)s?)/i
+
+    // Extract dose
+    const doseM = line.match(DOSE_PAT)
+    if (doseM) dose = doseM[1].trim()
+
+    // Extract route
+    const routeM = line.match(ROUTES)
+    if (routeM) {
+      route = routeM[1].trim()
+      // Normalize common abbreviations
+      if (/^po$/i.test(route)) route = 'Oral'
+      else if (/^iv$/i.test(route)) route = 'Intravenous'
+      else if (/^im$/i.test(route)) route = 'Intramuscular'
+      else if (/^sq$|^subq$/i.test(route)) route = 'Subcutaneous'
+      else if (/by\s+mouth/i.test(route)) route = 'Oral'
+      else if (/oral/i.test(route)) route = 'Oral'
+      else route = route.charAt(0).toUpperCase() + route.slice(1).toLowerCase()
+    }
+
+    // Extract frequency
+    const freqM = line.match(FREQS)
+    if (freqM) {
+      frequency = freqM[1].trim()
+      // Normalize
+      if (/^bid$/i.test(frequency)) frequency = 'Twice daily'
+      else if (/^tid$/i.test(frequency)) frequency = 'Three times daily'
+      else if (/^qid$/i.test(frequency)) frequency = 'Four times daily'
+      else if (/^prn$/i.test(frequency)) frequency = 'As needed'
+      else if (/^qhs$/i.test(frequency)) frequency = 'At bedtime'
+      else if (/^qam|q\.?\s*a\.?\s*m/i.test(frequency)) frequency = 'Every morning'
+      else if (/^qpm|q\.?\s*p\.?\s*m/i.test(frequency)) frequency = 'Every evening'
+      else frequency = frequency.charAt(0).toUpperCase() + frequency.slice(1).toLowerCase()
+    }
+
+    // Extract drug name — everything before dose/route/frequency, or the first word group
+    name = line
+      .replace(DOSE_PAT, ' ')
+      .replace(ROUTES, ' ')
+      .replace(FREQS, ' ')
+      .replace(/\b(?:take|inject|inhale|apply|instill|insert|chew|use)\b/gi, ' ')
+      .replace(/\b(?:tablet|capsule|cap|tab|solution|suspension|cream|ointment|gel|drops?|syrup|liquid|elixir|injection|vial|pen|patch|inhaler|spray|powder|film)\b/gi, ' ')
+      .replace(/[,;.\-\u2013\u2014]+$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+
+    // If name is too short or looks like noise, use the original line
+    if (name.length < 2) name = line.substring(0, 60)
+
+    // Clean up: remove leading/trailing generic words
+    name = name.replace(/^\s*(medication|drug|rx|prescription|#\d+)\s*/i, '').trim()
+    // Capitalize first letter
+    if (name) name = name.charAt(0).toUpperCase() + name.slice(1)
+
+    return { name, dose, route, frequency, status }
+  }
+
   // Strategy 1: Line-by-line parsing within the medication section
   if (hasMedSection) {
     const medText = sectionText || secMatch[1]
@@ -668,18 +743,15 @@ function extractMedications(text, upper, sections = {}) {
       // Skip sub-headers
       if (/^(medication|drug|name|dose|frequency|route|status|refill|prescribed|taking|stop)/i.test(line)) continue
 
-      // Match: "DrugName 123 mg, instructions..." or "DrugName 123mg tablet..."
-      const medLine = line.match(
-        /^([A-Za-z][A-Za-z\-\/\s]{1,40}?)\s+(\d+(?:\.\d+)?\s*(?:mg|mcg|ml|units?|iu|meq|gm?|%|patch|spray|puff|drop)s?\b.*)/i
-      )
-      if (medLine) {
-        const name = medLine[1].trim()
-        const rest = medLine[2].trim()
-        const fullName = `${name} ${rest}`.substring(0, 100)
-        const key = name.toLowerCase().replace(/\s+/g, '')
-        if (!seenNames.has(key) && name.length > 2) {
-          meds.push({ name: fullName, source: 'ocr', confidence: 'high' })
-          seenNames.add(key)
+      // Check for dosage unit or known instruction
+      if (/\d+\s*(?:mg|mcg|ml|units?|iu|meq|gm?|%|patch|spray|puff|drop)\b/i.test(line) || /\b(?:take|inject|inhale|apply|instill|insert|chew)\b/i.test(line)) {
+        const parsed = parseMedLine(line)
+        if (parsed && parsed.name.length > 2) {
+          const key = parsed.name.toLowerCase().replace(/\s+/g, '')
+          if (!seenNames.has(key)) {
+            meds.push({ ...parsed, source: 'ocr', confidence: 'high' })
+            seenNames.add(key)
+          }
         }
         continue
       }
@@ -689,34 +761,26 @@ function extractMedications(text, upper, sections = {}) {
         /^([A-Za-z][A-Za-z\-\/\s]{1,40}?)\s*[\(\-]\s*(\d+(?:\.\d+)?\s*(?:mg|mcg|ml|units?|iu|meq|gm?|%).*)/i
       )
       if (medParen) {
-        const name = medParen[1].trim()
-        const dose = medParen[2].replace(/\)$/, '').trim()
-        const key = name.toLowerCase().replace(/\s+/g, '')
-        if (!seenNames.has(key) && name.length > 2) {
-          meds.push({ name: `${name} ${dose}`, source: 'ocr', confidence: 'high' })
-          seenNames.add(key)
+        const parsed = parseMedLine(line)
+        if (parsed && parsed.name.length > 2) {
+          const key = parsed.name.toLowerCase().replace(/\s+/g, '')
+          if (!seenNames.has(key)) {
+            meds.push({ ...parsed, source: 'ocr', confidence: 'high' })
+            seenNames.add(key)
+          }
         }
         continue
       }
 
-      // Match: any line that contains "Take X by mouth" or "Inject" patterns (the line IS a med)
-      if (/\b(?:take|inject|inhale|apply|instill|insert|chew)\b/i.test(line)) {
-        const name = line.substring(0, 80).trim()
-        const key = name.toLowerCase().replace(/\s+/g, '').substring(0, 20)
-        if (!seenNames.has(key)) {
-          meds.push({ name, source: 'ocr', confidence: 'medium' })
-          seenNames.add(key)
-        }
-        continue
-      }
-
-      // Match: line with dosage units anywhere in it (probably a medication line)
-      if (/\d+\s*(?:mg|mcg|ml|units?|iu|meq)\b/i.test(line) && line.length < 120) {
-        const name = line.substring(0, 100).trim()
-        const key = name.toLowerCase().replace(/\s+/g, '').substring(0, 20)
-        if (!seenNames.has(key)) {
-          meds.push({ name, source: 'ocr', confidence: 'medium' })
-          seenNames.add(key)
+      // Any remaining line in the med section with enough characters → try to parse
+      if (line.length >= 5 && line.length <= 120 && /[A-Za-z]{3,}/.test(line)) {
+        const parsed = parseMedLine(line)
+        if (parsed && parsed.name.length > 2) {
+          const key = parsed.name.toLowerCase().replace(/\s+/g, '')
+          if (!seenNames.has(key)) {
+            meds.push({ ...parsed, source: 'ocr', confidence: 'medium' })
+            seenNames.add(key)
+          }
         }
       }
     }
@@ -724,25 +788,34 @@ function extractMedications(text, upper, sections = {}) {
 
   // Strategy 2: Known medication name search (works even without section headers)
   for (const med of COMMON_MEDS) {
-    const regex = new RegExp(`\\b${med}\\b(?:\\s+(?:\\d+\\s*(?:mg|mcg|ml|units?|iu))?)?(?:\\s+(?:daily|BID|TID|QID|PRN|QHS|QAM|QPM|once|twice|q\\d+h))?`, 'gi')
+    const regex = new RegExp(`\\b${med}\\b[^\\n]{0,80}`, 'gi')
     const match = searchText.match(regex)
     if (match) {
       const key = med.toLowerCase()
       if (!seenNames.has(key)) {
-        meds.push({ name: match[0].trim(), source: 'ocr', confidence: 'medium' })
-        seenNames.add(key)
+        const parsed = parseMedLine(match[0])
+        if (parsed) {
+          // Ensure the drug name is clean
+          if (!parsed.name || parsed.name.length < 3) parsed.name = med.charAt(0).toUpperCase() + med.slice(1)
+          meds.push({ ...parsed, source: 'ocr', confidence: 'medium' })
+          seenNames.add(key)
+        }
       }
     }
   }
 
   // Strategy 3: Generic suffix pattern for drug names not in COMMON_MEDS
-  const genericPat = /\b([A-Z][a-z]+(?:ol|in|ine|ide|ate|one|pam|lam|cin|xin|mab|nib|tid|zol|pine|pril|tan|lol|fen|lin|min|dine|zine|done|sone|mide|azole|oxin|mycin|statin|sartan|dipine))\s+(\d+\s*(?:mg|mcg|ml|units?|iu))/gi
+  const genericPat = /\b([A-Z][a-z]+(?:ol|in|ine|ide|ate|one|pam|lam|cin|xin|mab|nib|tid|zol|pine|pril|tan|lol|fen|lin|min|dine|zine|done|sone|mide|azole|oxin|mycin|statin|sartan|dipine))\s+(\d+\s*(?:mg|mcg|ml|units?|iu)[^\n]{0,60})/gi
   let m
   while ((m = genericPat.exec(searchText))) {
     const name = m[1].toLowerCase()
     if (!seenNames.has(name)) {
-      meds.push({ name: `${m[1]} ${m[2]}`.trim(), source: 'ocr', confidence: 'low' })
-      seenNames.add(name)
+      const parsed = parseMedLine(`${m[1]} ${m[2]}`)
+      if (parsed) {
+        if (!parsed.name || parsed.name.length < 3) parsed.name = m[1]
+        meds.push({ ...parsed, source: 'ocr', confidence: 'low' })
+        seenNames.add(name)
+      }
     }
   }
   return meds
@@ -1391,6 +1464,259 @@ function extractCareTeam(text, upper, sections = {}) {
   return team
 }
 
+// ─── Encounters / Visits ────────────────────────────────────────────────────
+
+/**
+ * Extract encounters/visits from clinical text.
+ * Handles multiple formats:
+ *   - Kaiser/Epic "After Visit Summary" with visit header info
+ *   - "Date: MM/DD/YYYY  Department: Internal Medicine  Provider: Dr. Smith"
+ *   - Visit tables: Date | Type | Provider | Department | Reason
+ *   - Inline references: "seen on 01/15/2025 in Cardiology by Dr. Jones"
+ */
+function extractEncounters(text, upper, sections = {}) {
+  const encounters = []
+  const seenKeys = new Set()
+
+  // ── Strategy 1: Encounter section text ──────────────────────────────────
+  const sectionText = sections.encounters || ''
+  if (sectionText) {
+    const lines = sectionText.split('\n')
+    let currentEnc = null
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/^[\s\-\u2022\u2023\u25E6\u25CF\u25CB\u2013\u2014•·*]+/, '').trim()
+      if (!line || line.length < 3) continue
+      if (/^(encounter|visit|date|type|provider|department|reason|status|#)\s*$/i.test(line)) continue
+
+      // Date-starting line: "01/15/2025 Office Visit Internal Medicine Dr. Smith"
+      const dateStart = line.match(/^(\d{1,2}\/\d{1,2}\/\d{4})\s+(.*)/)
+      if (dateStart) {
+        if (currentEnc) { encounters.push(currentEnc); seenKeys.add(currentEnc._key) }
+        const rest = dateStart[2]
+        currentEnc = { date: dateStart[1], type: 'Office Visit', source: 'ocr', _key: dateStart[1] }
+        // Try to parse type, department, provider from the rest
+        const typeM = rest.match(/^(Office\s+Visit|Telehealth|Emergency|Inpatient|Outpatient|Urgent\s+Care|Procedure|Follow[\-\s]?up|New\s+Patient|Return\s+Visit|Phone\s+Call|Lab\s+Visit)/i)
+        if (typeM) currentEnc.type = typeM[1]
+        const provM = rest.match(/(?:Dr\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?|[A-Z][a-z]+,\s+[A-Z][a-z]+(?:\s+[A-Z]\.?)?(?:\s*\([A-Z.]+\))?)/i)
+        if (provM) currentEnc.provider = provM[0]
+        continue
+      }
+
+      // Key-value pairs: "Date: ...", "Provider: ...", "Department: ...", "Reason: ..."
+      const kvMatch = line.match(/^(date|type|provider|department|clinic|location|reason|chief\s*complaint|visit\s*type|encounter\s*type|disposition|status)\s*:\s*(.+)/i)
+      if (kvMatch) {
+        const key = kvMatch[1].toLowerCase().replace(/\s+/g, '')
+        const val = kvMatch[2].trim()
+        if (!currentEnc) currentEnc = { type: 'Office Visit', source: 'ocr', _key: '' }
+        if (key === 'date') { currentEnc.date = val; currentEnc._key = val }
+        else if (key === 'type' || key === 'visittype' || key === 'encountertype') currentEnc.type = val
+        else if (key === 'provider') currentEnc.provider = val
+        else if (key === 'department' || key === 'clinic' || key === 'location') currentEnc.department = val
+        else if (key === 'reason' || key === 'chiefcomplaint') currentEnc.reasonForVisit = val
+        else if (key === 'disposition' || key === 'status') currentEnc.disposition = val
+        continue
+      }
+
+      // Remaining text in current encounter might be reason/notes
+      if (currentEnc && !currentEnc.reasonForVisit && line.length > 5 && line.length < 200) {
+        currentEnc.reasonForVisit = line
+      }
+    }
+    if (currentEnc) encounters.push(currentEnc)
+  }
+
+  // ── Strategy 2: Extract from document header/metadata ───────────────────
+  // Kaiser/Epic "After Visit Summary" often has visit info at the top:
+  // "Visit date: 03/05/2026  Provider: Siy, James (M.D.)  Status: Signed"
+  const visitDateM = text.match(/(?:visit|encounter|appointment)\s*date\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)
+  const visitProvM = text.match(/(?:visit|encounter|seen\s+by|attending)\s*(?:provider|physician|doctor)?\s*:\s*([A-Z][a-z]+(?:,?\s+[A-Z][a-z]+)*(?:\s*\([A-Z.\s]+\))?)/i)
+  const visitDeptM = text.match(/(?:department|clinic|location|facility)\s*:\s*([A-Za-z][A-Za-z\s\-\/]{2,40})/i)
+  const visitTypeM = text.match(/(?:visit|encounter)\s*type\s*:\s*([A-Za-z\s\-]{3,30})/i)
+  const visitReasonM = text.match(/(?:reason\s+for\s+visit|chief\s*complaint|presenting\s*complaint)\s*:\s*(.{3,100})/i)
+
+  if (visitDateM) {
+    const key = visitDateM[1]
+    if (!seenKeys.has(key)) {
+      encounters.push({
+        date: visitDateM[1],
+        type: visitTypeM ? visitTypeM[1].trim() : 'Office Visit',
+        provider: visitProvM ? visitProvM[1].trim() : '',
+        department: visitDeptM ? visitDeptM[1].trim() : '',
+        reasonForVisit: visitReasonM ? visitReasonM[1].trim() : '',
+        source: 'ocr',
+      })
+      seenKeys.add(key)
+    }
+  }
+
+  // ── Strategy 3: Detect "After Visit Summary" as an encounter ────────────
+  if (upper.includes('AFTER VISIT SUMMARY') || upper.includes('AFTER-VISIT SUMMARY')) {
+    // The whole document IS a visit record — extract header info
+    const anyDateM = text.match(/(?:date|printed|generated)\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)
+    if (anyDateM && !seenKeys.has(anyDateM[1])) {
+      encounters.push({
+        date: anyDateM[1],
+        type: 'After Visit Summary',
+        provider: visitProvM ? visitProvM[1].trim() : '',
+        department: visitDeptM ? visitDeptM[1].trim() : '',
+        reasonForVisit: visitReasonM ? visitReasonM[1].trim() : '',
+        source: 'ocr',
+      })
+      seenKeys.add(anyDateM[1])
+    }
+  }
+
+  // ── Strategy 4: In-text visit references ────────────────────────────────
+  // "seen on 01/15/2025 in Cardiology" or "visit on 03/05/2026 with Dr. Smith"
+  const inlineVisits = text.matchAll(/(?:seen|visit(?:ed)?|appointment|encounter)\s+(?:on\s+)?(\d{1,2}\/\d{1,2}\/\d{4})(?:\s+(?:in|at|with)\s+([A-Z][A-Za-z\s,.\-()]{3,60}))?/gi)
+  for (const m of inlineVisits) {
+    const date = m[1]
+    if (!seenKeys.has(date)) {
+      const detail = m[2] ? m[2].trim() : ''
+      const isProvider = /^(?:dr|md|do|np|pa)\b/i.test(detail) || /\b(?:m\.?d|d\.?o|n\.?p|p\.?a)\b/i.test(detail)
+      encounters.push({
+        date,
+        type: 'Office Visit',
+        provider: isProvider ? detail : '',
+        department: !isProvider ? detail : '',
+        source: 'ocr',
+      })
+      seenKeys.add(date)
+    }
+  }
+
+  // ── Strategy 5: Instruction-section follow-up appointments ──────────────
+  const instrText = sections.instructions || ''
+  if (instrText) {
+    const followUpM = instrText.match(/(?:follow[\s\-]?up|return|next)\s+(?:appointment|visit)\s*(?:on|:)?\s*(\d{1,2}\/\d{1,2}\/\d{4})(?:\s+(?:with|at)\s+([^.\n]{3,60}))?/i)
+    if (followUpM && !seenKeys.has(followUpM[1])) {
+      encounters.push({
+        date: followUpM[1],
+        type: 'Follow-up',
+        provider: followUpM[2] ? followUpM[2].trim() : '',
+        department: '',
+        source: 'ocr',
+      })
+      seenKeys.add(followUpM[1])
+    }
+  }
+
+  // Clean up internal keys
+  return encounters.map(e => { const { _key, ...rest } = e; return rest })
+}
+
+// ─── Clinical Notes / Summaries ─────────────────────────────────────────────
+
+/**
+ * Extract clinical notes, progress notes, discharge summaries, and other 
+ * narrative documentation from extracted text.
+ */
+function extractClinicalNotes(text, upper, sections = {}) {
+  const notes = []
+
+  // ── Strategy 1: Extract from clinical_notes section ─────────────────────
+  const noteSectionText = sections.clinical_notes || ''
+  if (noteSectionText && noteSectionText.trim().length > 20) {
+    notes.push({
+      type: 'Clinical Note',
+      content: noteSectionText.trim().substring(0, 500),
+      source: 'ocr',
+    })
+  }
+
+  // ── Strategy 2: Detect specific note types from document structure ──────
+  // After Visit Summary → entire document is a note
+  if (upper.includes('AFTER VISIT SUMMARY') || upper.includes('AFTER-VISIT SUMMARY')) {
+    const dateM = text.match(/(?:date|printed|visit\s+date)\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)
+    const provM = text.match(/(?:provider|physician|authored\s+by)\s*:\s*([A-Z][a-z]+(?:,?\s+[A-Z][a-z]+)*(?:\s*\([A-Z.\s]+\))?)/i)
+    notes.push({
+      type: 'After Visit Summary',
+      date: dateM ? dateM[1] : '',
+      author: provM ? provM[1].trim() : '',
+      content: text.substring(0, 500).replace(/\n/g, ' ').trim(),
+      source: 'ocr',
+    })
+  }
+
+  if (upper.includes('DISCHARGE SUMMARY') || upper.includes('DISCHARGE INSTRUCTIONS')) {
+    const dateM = text.match(/(?:discharge|date)\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)
+    notes.push({
+      type: 'Discharge Summary',
+      date: dateM ? dateM[1] : '',
+      content: text.substring(0, 500).replace(/\n/g, ' ').trim(),
+      source: 'ocr',
+    })
+  }
+
+  if (upper.includes('PROGRESS NOTE') || upper.includes('OFFICE NOTE')) {
+    const dateM = text.match(/(?:note\s+)?date\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)
+    const provM = text.match(/(?:author|provider|physician)\s*:\s*([A-Z][a-z]+(?:,?\s+[A-Z][a-z]+)*)/i)
+    notes.push({
+      type: 'Progress Note',
+      date: dateM ? dateM[1] : '',
+      author: provM ? provM[1].trim() : '',
+      content: text.substring(0, 500).replace(/\n/g, ' ').trim(),
+      source: 'ocr',
+    })
+  }
+
+  if (upper.includes('HISTORY AND PHYSICAL') || upper.includes('H&P') || upper.includes('H & P')) {
+    notes.push({
+      type: 'History & Physical',
+      content: text.substring(0, 500).replace(/\n/g, ' ').trim(),
+      source: 'ocr',
+    })
+  }
+
+  if (upper.includes('CONSULTATION') || upper.includes('CONSULT NOTE')) {
+    notes.push({
+      type: 'Consultation Note',
+      content: text.substring(0, 500).replace(/\n/g, ' ').trim(),
+      source: 'ocr',
+    })
+  }
+
+  if (upper.includes('OPERATIVE REPORT') || upper.includes('PROCEDURE NOTE')) {
+    notes.push({
+      type: 'Operative Note',
+      content: text.substring(0, 500).replace(/\n/g, ' ').trim(),
+      source: 'ocr',
+    })
+  }
+
+  // ── Strategy 3: Extract from instructions section (patient education) ───
+  const instrText = sections.instructions || ''
+  if (instrText && instrText.trim().length > 30) {
+    notes.push({
+      type: 'Patient Instructions',
+      content: instrText.trim().substring(0, 500),
+      source: 'ocr',
+    })
+  }
+
+  // ── Strategy 4: Extract Assessment & Plan if present ────────────────────
+  const apMatch = text.match(/(?:assessment\s+(?:and|&)\s+plan|a\s*\/\s*p)\s*[:\-]?\s*([\s\S]{20,500}?)(?=\n\s*(?:[A-Z]{3,}|medication|allerg|vital|lab|immuniz|procedure|follow|instruction|$))/i)
+  if (apMatch) {
+    notes.push({
+      type: 'Assessment & Plan',
+      content: apMatch[1].trim().substring(0, 500),
+      source: 'ocr',
+    })
+  }
+
+  // ── Strategy 5: Family / Social history as notes ────────────────────────
+  const famSocText = sections.family_social || ''
+  if (famSocText && famSocText.trim().length > 10) {
+    notes.push({
+      type: 'Social/Family History',
+      content: famSocText.trim().substring(0, 500),
+      source: 'ocr',
+    })
+  }
+
+  return notes
+}
+
 // ─── Document Classification ────────────────────────────────────────────────
 
 function classifyDocumentType(text, upper, filename) {
@@ -1435,7 +1761,7 @@ export function documentResultToAppRows(docResult, filename) {
   const { clinicalEntities, text, method, confidence, metadata } = docResult
   const now = new Date().toISOString()
 
-  const rows = { medications: [], conditions: [], allergies: [], vitals: [], results: [], orders: [], immunizations: [], careTeam: [], documentRow: null }
+  const rows = { medications: [], conditions: [], allergies: [], vitals: [], results: [], orders: [], immunizations: [], careTeam: [], encounters: [], clinicalNotes: [], documentRow: null }
 
   if (!clinicalEntities) return rows
 
@@ -1444,10 +1770,14 @@ export function documentResultToAppRows(docResult, filename) {
     name: med.name,
     originalName: med.originalName || med.name,
     dose: med.dose || '', route: med.route || '', frequency: med.frequency || '',
-    rxcui: med.rxcui || '', drugClass: med.drugClass || '', brand: med.brand || '',
-    startDate: now, endDate: '', status: 'Active',
+    indication: med.indication || '',
+    prescriber: med.prescriber || '',
+    rxcui: med.rxcui || '', rxnormName: med.rxnormName || '',
+    ndc: med.ndc || '', drugClass: med.drugClass || '', brand: med.brand || '',
+    startDate: med.startDate || now, endDate: '', status: med.status || 'Active',
     _source: 'ocr', _ocrConfidence: med.confidence, _sourceFile: filename,
     _extractionSource: med.source || 'local-regex',
+    _validated: med._validated || false,
   }))
 
   rows.conditions = clinicalEntities.diagnoses.map((dx, i) => ({
@@ -1525,12 +1855,42 @@ export function documentResultToAppRows(docResult, filename) {
     patId: '', careTeamId: `OCR-CT-${Date.now()}-${i}`,
     name: ct.name,
     identifier: ct.identifier || '',
-    relationship: ct.relationship || '',
+    relationship: ct.relationship || ct.role || '',
+    specialty: ct.specialty || '',
     phone: ct.phone || '',
     startDate: ct.startDate || '',
     status: ct.status || 'Active',
     _source: 'ocr', _sourceFile: filename,
     _extractionSource: ct.source || 'local-regex',
+  }))
+
+  rows.encounters = (clinicalEntities.encounters || []).map((enc, i) => ({
+    patId: '', csnId: `OCR-ENC-${Date.now()}-${i}`,
+    encounterId: `OCR-ENC-${Date.now()}-${i}`,
+    type: enc.type || 'Office Visit',
+    contactDate: enc.date || clinicalEntities.dates[0] || now,
+    date: enc.date || clinicalEntities.dates[0] || now,
+    department: enc.department || '',
+    visitProvider: enc.provider || '',
+    provider: enc.provider || '',
+    reasonForVisit: enc.reasonForVisit || '',
+    diagnosis: enc.diagnosis || '',
+    disposition: enc.disposition || '',
+    status: 'Completed',
+    _source: 'ocr', _sourceFile: filename,
+    _extractionSource: enc.source || 'local-regex',
+  }))
+
+  rows.clinicalNotes = (clinicalEntities.clinicalNotes || []).map((note, i) => ({
+    patId: '', noteId: `OCR-NOTE-${Date.now()}-${i}`,
+    type: note.type || 'Clinical Note',
+    date: note.date || clinicalEntities.dates[0] || now,
+    author: note.author || '',
+    content: note.content || '',
+    department: note.department || '',
+    status: 'Final',
+    _source: 'ocr', _sourceFile: filename,
+    _extractionSource: note.source || 'local-regex',
   }))
 
   rows.documentRow = {
@@ -1552,6 +1912,8 @@ export function documentResultToAppRows(docResult, filename) {
       procedures: (clinicalEntities.procedures || []).length,
       immunizations: (clinicalEntities.immunizations || []).length,
       careTeam: (clinicalEntities.careTeam || []).length,
+      encounters: (clinicalEntities.encounters || []).length,
+      clinicalNotes: (clinicalEntities.clinicalNotes || []).length,
     },
     _source: 'ocr', _sourceFile: filename,
     _extractionSource: method === 'openai' ? 'openai' : method === 'azure' ? 'azure-ai' : 'local-regex',
