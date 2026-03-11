@@ -60,7 +60,7 @@ export const AI_MODES = {
 
 // ─── Storage for AI configuration ───────────────────────────────────────────
 
-const AI_CONFIG_KEY = 'healthlens_ai_config'
+const AI_CONFIG_KEY = 'clinquilt_ai_config'
 
 export function getAIConfig() {
   try {
@@ -82,14 +82,14 @@ export function saveAIConfig(config) {
   const safeConfig = { ...config }
   if (config.azureApiKey) {
     // Store only in sessionStorage (cleared on tab close)
-    sessionStorage.setItem('healthlens_azure_key', config.azureApiKey)
+    sessionStorage.setItem('clinquilt_azure_key', config.azureApiKey)
     safeConfig.azureApiKey = '***'
   }
   localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(safeConfig))
 }
 
 function getAzureKey() {
-  return sessionStorage.getItem('healthlens_azure_key') || ''
+  return sessionStorage.getItem('clinquilt_azure_key') || ''
 }
 
 
@@ -573,7 +573,7 @@ export async function sendCloudChatQuery(userQuery, patient, overrideConfig = nu
       messages: [
         {
           role: 'system',
-          content: `You are a clinical health assistant embedded in a patient health records viewer called HealthLens. Answer the patient's questions about their health data clearly and empathetically. Use markdown **bold** for emphasis. Never invent data. If unsure, say so.\n\nPatient Context (de-identified):\n${contextPrompt}`,
+          content: `You are a clinical health assistant embedded in a patient health records viewer called ClinQuilt. Answer the patient's questions about their health data clearly and empathetically. Use markdown **bold** for emphasis. Never invent data. If unsure, say so.\n\nPatient Context (de-identified):\n${contextPrompt}`,
         },
         {
           role: 'user',

@@ -80,14 +80,14 @@ export default function LandingPage({ onDemoReady }) {
       <header className="backdrop-blur-md bg-white/70 border-b border-gray-200/50 sticky top-0 z-50" data-tour="landing-header">
         <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}>
-              <Sparkles className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}>
+              <img src="/clinquilt.svg" alt="ClinQuilt" className="w-10 h-10" />
             </div>
             <div>
               <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                HealthLens
+                ClinQuilt
               </span>
-              <p className="text-xs text-gray-500 -mt-1">EHI Ignite Challenge</p>
+              <p className="text-xs text-gray-500 -mt-1">Weaving health data into insight</p>
             </div>
           </div>
           <div className="hidden sm:flex gap-3">
@@ -477,7 +477,7 @@ export default function LandingPage({ onDemoReady }) {
 
           {/* Version Footer */}
           <div className="flex justify-center">
-            <span className="text-xs text-gray-400">HealthLens v{APP_VERSION} — HIPAA-Ready Architecture</span>
+            <span className="text-xs text-gray-400">ClinQuilt v{APP_VERSION} — HIPAA-Ready Architecture</span>
           </div>
         </div>
       </div>

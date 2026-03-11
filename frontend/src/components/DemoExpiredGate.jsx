@@ -22,7 +22,7 @@ export default function DemoExpiredGate() {
         <div className="space-y-3">
           <h1 className="text-3xl font-bold text-gray-900">Demo Period Expired</h1>
           <p className="text-lg text-gray-600">
-            This HealthLens demonstration expired on <span className="font-semibold text-gray-900">{formatExpiryDate()}</span>.
+            This ClinQuilt demonstration expired on <span className="font-semibold text-gray-900">{formatExpiryDate()}</span>.
           </p>
         </div>
 
@@ -33,12 +33,12 @@ export default function DemoExpiredGate() {
           </div>
 
           <p className="text-sm text-gray-500 leading-relaxed">
-            Thank you for evaluating HealthLens! To request an extended demo or provide feedback, please reach out.
+            Thank you for evaluating ClinQuilt! To request an extended demo or provide feedback, please reach out.
           </p>
 
           <div className="flex justify-center">
             <a
-              href="mailto:kalyanram2006@gmail.com?subject=HealthLens%20Demo%20Extension%20Request"
+              href="mailto:kalyanram2006@gmail.com?subject=ClinQuilt%20Demo%20Extension%20Request"
               className="px-6 py-3 text-sm font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg"
               style={{ boxShadow: '0 4px 14px rgba(59,130,246,0.3)' }}
             >
@@ -50,7 +50,7 @@ export default function DemoExpiredGate() {
         {/* Trust indicators */}
         <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
           <ShieldCheck className="w-4 h-4" />
-          <span>HealthLens v{APP_VERSION} — All session data has been cleared</span>
+          <span>ClinQuilt v{APP_VERSION} — All session data has been cleared</span>
         </div>
       </div>
     </div>
@@ -79,7 +79,7 @@ export function DemoExpiryBanner() {
           : `Demo expires in ${days} days (${formatExpiryDate()})`
       }
       <span className="mx-2 text-gray-300">|</span>
-      <a href="mailto:kalyanram2006@gmail.com?subject=HealthLens%20Demo%20Feedback" className="underline hover:no-underline">
+      <a href="mailto:kalyanram2006@gmail.com?subject=ClinQuilt%20Demo%20Feedback" className="underline hover:no-underline">
         Contact: kalyanram2006@gmail.com
       </a>
     </div>

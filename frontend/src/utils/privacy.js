@@ -37,7 +37,7 @@ export async function computeSHA256(text) {
  * @returns {Promise<{verified: boolean, files: Array<{filename: string, hash: string, status: string}>}>}
  */
 export async function verifyRuleIntegrity(ruleFiles) {
-  const STORAGE_KEY = 'healthlens_rule_hashes'
+  const STORAGE_KEY = 'clinquilt_rule_hashes'
   const results = []
   let allVerified = true
 
@@ -78,7 +78,7 @@ export async function verifyRuleIntegrity(ruleFiles) {
 
 // ─── Encrypted IndexedDB Persistence ─────────────────────────────────────────
 
-const DB_NAME = 'healthlens_secure'
+const DB_NAME = 'clinquilt_secure'
 const DB_VERSION = 1
 const STORE_NAME = 'encrypted_data'
 
@@ -87,7 +87,7 @@ const STORE_NAME = 'encrypted_data'
  * The key is derived per-session and stored in sessionStorage.
  */
 async function getEncryptionKey() {
-  const KEY_STORAGE = 'healthlens_session_key'
+  const KEY_STORAGE = 'clinquilt_session_key'
   let rawKey = sessionStorage.getItem(KEY_STORAGE)
 
   if (!rawKey) {
@@ -234,7 +234,7 @@ export async function deleteDatabase() {
 export async function secureMemoryWipe() {
   // Clear all web storage
   try { sessionStorage.clear() } catch { /* ignore */ }
-  try { localStorage.removeItem('healthlens_persist_enabled') } catch { /* ignore */ }
+  try { localStorage.removeItem('clinquilt_persist_enabled') } catch { /* ignore */ }
 
   // Purge IndexedDB
   await deleteDatabase()
@@ -252,7 +252,7 @@ export async function secureMemoryWipe() {
  * @returns {{ sessionOnly: boolean, persistEnabled: boolean, dataStored: boolean }}
  */
 export function getPrivacyStatus() {
-  const persistEnabled = localStorage.getItem('healthlens_persist_enabled') === 'true'
+  const persistEnabled = localStorage.getItem('clinquilt_persist_enabled') === 'true'
   return {
     sessionOnly: !persistEnabled,
     persistEnabled,
@@ -266,9 +266,9 @@ export function getPrivacyStatus() {
  */
 export function setPersistenceEnabled(enabled) {
   if (enabled) {
-    localStorage.setItem('healthlens_persist_enabled', 'true')
+    localStorage.setItem('clinquilt_persist_enabled', 'true')
   } else {
-    localStorage.removeItem('healthlens_persist_enabled')
+    localStorage.removeItem('clinquilt_persist_enabled')
   }
 }
 
@@ -276,5 +276,5 @@ export function setPersistenceEnabled(enabled) {
  * Check if local persistence is enabled.
  */
 export function isPersistenceEnabled() {
-  return localStorage.getItem('healthlens_persist_enabled') === 'true'
+  return localStorage.getItem('clinquilt_persist_enabled') === 'true'
 }

@@ -1,4 +1,4 @@
-// Sample data derived from EHIgnite Challenge sample_data/epic_tsv/
+// Sample data derived from EHI export sample_data/epic_tsv/
 // This provides a realistic demo experience without requiring file upload
 
 export const samplePatients = [
@@ -346,8 +346,8 @@ export function generateAISummary(patient) {
   const activeConditions = patient.conditions.filter(c => c.status === 'Active')
   const conditionNames = activeConditions.map(c => c.name)
 
-  const lastEncounter = patient.encounters.sort((a, b) =>
-    new Date(b.contactDate) - new Date(a.contactDate)
+  const lastEncounter = [...(patient.encounters || [])].sort((a, b) =>
+    new Date(b.contactDate || b.date || 0) - new Date(a.contactDate || a.date || 0)
   )[0]
 
   const providerName = lastEncounter ? providers[lastEncounter.visitProvider]?.name || 'your provider' : 'your provider'
@@ -360,7 +360,7 @@ export function generateAISummary(patient) {
         id: 'overall',
         title: 'Overall Health Story',
         icon: '📖',
-        content: `Your health records show a well-managed journey with ${activeConditions.length} active health condition${activeConditions.length !== 1 ? 's' : ''} since the earliest records. ${patient.firstName} ${patient.lastName}, a ${patient.age}-year-old ${(patient.sex || 'individual').toLowerCase()}, is currently taking ${patient.medicationCount} medication${patient.medicationCount !== 1 ? 's' : ''} as part of an ongoing treatment plan.\n\nThe medical record indicates active management of ${conditionNames.length > 0 ? conditionNames.map(n => `**${(n || '').toLowerCase()}**`).join(' and ') : 'general health'}. Recent clinical encounters demonstrate consistent monitoring and appropriate therapeutic interventions.${lastEncounter ? `\n\nThe most recent healthcare interaction occurred on **${new Date(lastEncounter.contactDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}** for ${(lastEncounter.encType || 'visit').toLowerCase()} with ${providerName}. This ${lastEncounter.chiefComplaint ? `showed ${(lastEncounter.diagnosis || '').toLowerCase()}` : 'was a routine follow-up'}.` : ''}`,
+        content: `Your health records show a well-managed journey with ${activeConditions.length} active health condition${activeConditions.length !== 1 ? 's' : ''} since the earliest records. ${patient.firstName} ${patient.lastName}${patient.age ? `, a ${patient.age}-year-old ${(patient.sex || 'individual').toLowerCase()},` : ''} is currently taking ${patient.medicationCount} medication${patient.medicationCount !== 1 ? 's' : ''} as part of an ongoing treatment plan.\n\nThe medical record indicates active management of ${conditionNames.length > 0 ? conditionNames.map(n => `**${(n || '').toLowerCase()}**`).join(' and ') : 'general health'}. Recent clinical encounters demonstrate consistent monitoring and appropriate therapeutic interventions.${lastEncounter ? `\n\nThe most recent healthcare interaction occurred on **${new Date(lastEncounter.contactDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}** for ${(lastEncounter.encType || lastEncounter.type || 'visit').toLowerCase()} with ${providerName}. This ${lastEncounter.chiefComplaint ? `showed ${(lastEncounter.diagnosis || '').toLowerCase()}` : 'was a routine follow-up'}.` : ''}`,
       },
       {
         id: 'medications',

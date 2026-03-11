@@ -72,8 +72,8 @@ export const TOUR_STEPS = [
 
   {
     target: '[data-tour="landing-hero"]',
-    title: 'Welcome to HealthLens',
-    content: 'HealthLens transforms complex Electronic Health Information (EHI) export files into beautiful, AI-powered visualizations that patients and providers can actually understand. No medical expertise needed — just upload your data.',
+    title: 'Welcome to ClinQuilt',
+    content: 'ClinQuilt transforms complex Electronic Health Information (EHI) export files into beautiful, AI-powered visualizations that patients and providers can actually understand. No medical expertise needed — just upload your data.',
     placement: 'bottom',
   },
   {
@@ -91,7 +91,7 @@ export const TOUR_STEPS = [
   {
     target: '[data-tour="landing-formats"]',
     title: 'Supported File Formats',
-    content: 'C-CDA (.xml): The standard hospital discharge and clinical summary format. FHIR (.json): Modern health data interchange format used by most EHRs. Epic TSV (.tsv): Tab-separated files from Epic MyChart exports. HealthLens auto-detects the format — just upload the file.',
+    content: 'C-CDA (.xml): The standard hospital discharge and clinical summary format. FHIR (.json): Modern health data interchange format used by most EHRs. Epic TSV (.tsv): Tab-separated files from Epic MyChart exports. ClinQuilt auto-detects the format — just upload the file.',
     placement: 'top',
   },
   {
@@ -125,7 +125,7 @@ export const TOUR_STEPS = [
   {
     target: '[data-tour="patient-header"]',
     title: 'Patient Overview & Multi-Source Merge',
-    content: 'This header shows merged patient demographics from all uploaded sources. When multiple files are loaded, HealthLens automatically deduplicates records (e.g., same medication from two hospitals appears once). The total record count and date range reflect the combined data.',
+    content: 'This header shows merged patient demographics from all uploaded sources. When multiple files are loaded, ClinQuilt automatically deduplicates records (e.g., same medication from two hospitals appears once). The total record count and date range reflect the combined data.',
     placement: 'bottom',
   },
   {

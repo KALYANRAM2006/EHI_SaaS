@@ -615,6 +615,15 @@ function extractDemographics(text) {
   const ageMatch = text.match(/\bage\s*[:\-]\s*(\d{1,3})\s*(?:y(?:ears?|rs?)?)?/i)
   if (ageMatch) d.age = parseInt(ageMatch[1])
 
+  // If no explicit age found but we have DOB, compute it
+  if (!d.age && d.dateOfBirth) {
+    const dob = new Date(d.dateOfBirth)
+    if (!isNaN(dob.getTime())) {
+      const computed = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+      if (computed >= 0 && computed < 150) d.age = computed
+    }
+  }
+
   return Object.keys(d).length > 0 ? d : null
 }
 

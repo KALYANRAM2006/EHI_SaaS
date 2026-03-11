@@ -167,14 +167,25 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
   // 5. Build patient from demographics
   const demo = result.clinicalEntities?.demographics
   const patientRows = []
+  
+  // Helper: compute age from DOB string when age is missing
+  function ageFromDOB(dob) {
+    if (!dob) return null
+    const d = new Date(dob)
+    if (isNaN(d.getTime())) return null
+    const age = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+    return age >= 0 && age < 150 ? age : null
+  }
+
   if (demo) {
     const nameParts = (demo.name || '').split(/\s+/)
+    const computedAge = demo.age || ageFromDOB(demo.dateOfBirth) || null
     patientRows.push({
       patId: demo.mrn || `OCR-${Date.now()}`,
       name: demo.name || 'Unknown Patient',
       firstName: nameParts[0] || 'Unknown',
       lastName: nameParts.length > 1 ? nameParts[nameParts.length - 1] : 'Patient',
-      age: demo.age || 0,
+      age: computedAge,
       city: '', state: '', zip: '',
       birthDate: demo.dateOfBirth || '',
       sex: demo.sex || 'Unknown',
@@ -184,7 +195,7 @@ async function parseDocumentDirectly(file, onProgress = () => {}, options = {}) 
   } else {
     patientRows.push({
       patId: `OCR-${Date.now()}`, name: 'Unknown Patient',
-      firstName: 'Unknown', lastName: 'Patient', age: 0,
+      firstName: 'Unknown', lastName: 'Patient', age: null,
       city: '', state: '', zip: '', birthDate: '', sex: 'Unknown',
       ethnicGroup: '', language: '', maritalStatus: '',
       _source: 'ocr',
@@ -309,7 +320,7 @@ export function DataProvider({ children }) {
       if (!isPersistenceEnabled()) {
         sessionStorage.clear()
         // Can't async in beforeunload, so we do sync cleanup
-        try { localStorage.removeItem('healthlens_persist_enabled') } catch { /* */ }
+        try { localStorage.removeItem('clinquilt_persist_enabled') } catch { /* */ }
       }
     }
 

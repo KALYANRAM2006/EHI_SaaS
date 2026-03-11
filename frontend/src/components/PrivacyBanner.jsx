@@ -70,7 +70,7 @@ export function PrivacyPanel({ isOpen, onClose }) {
               <div>
                 <h3 className="font-semibold text-green-900">Zero PHI Server Guarantee</h3>
                 <p className="text-sm text-green-700 mt-1">
-                  HealthLens processes all health records entirely in your browser.
+                  ClinQuilt processes all health records entirely in your browser.
                   <strong> No data is ever sent to any server.</strong> Your files are parsed
                   by our client-side YAML rule engine — the network tab stays silent.
                 </p>

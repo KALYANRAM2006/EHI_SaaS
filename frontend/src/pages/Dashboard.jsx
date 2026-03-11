@@ -362,11 +362,11 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-8">
               <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg" style={{boxShadow:'0 4px 14px rgba(59,130,246,0.3)'}}>
-                  <Sparkles className="w-6 h-6 text-white" />
+                <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg" style={{boxShadow:'0 4px 14px rgba(59,130,246,0.3)'}}>
+                  <img src="/clinquilt.svg" alt="ClinQuilt" className="w-10 h-10" />
                 </div>
                 <div>
-                  <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">HealthLens</span>
+                  <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">ClinQuilt</span>
                   <p className="text-xs text-gray-500 -mt-1">Dashboard</p>
                 </div>
               </div>

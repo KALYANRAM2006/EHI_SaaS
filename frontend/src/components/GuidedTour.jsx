@@ -139,7 +139,7 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
                 <Play className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Welcome to HealthLens Demo</h2>
+                <h2 className="text-lg font-bold text-white">Welcome to ClinQuilt Demo</h2>
                 <p className="text-white/80 text-sm">Interactive product walkthrough</p>
               </div>
             </div>
@@ -148,7 +148,7 @@ export default function GuidedTour({ active, onEnd, onStepAction }) {
           {/* Body */}
           <div className="px-6 py-5 space-y-4">
             <p className="text-gray-600 text-sm leading-relaxed">
-              HealthLens transforms complex health records (EHI exports) into beautiful,
+              ClinQuilt transforms complex health records (EHI exports) into beautiful,
               AI-powered visualizations. This demo will show you how it works.
             </p>
             <div className="text-gray-500 text-xs space-y-1">

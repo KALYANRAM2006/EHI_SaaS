@@ -1,0 +1,48 @@
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="100" height="100" rx="22" fill="url(#bg)"/>
+  <!-- 4x4 Quilt patches -->
+  <rect x="14" y="14" width="16" height="16" rx="3" fill="white" opacity="0.25"/>
+  <rect x="33" y="14" width="16" height="16" rx="3" fill="white" opacity="0.45"/>
+  <rect x="52" y="14" width="16" height="16" rx="3" fill="white" opacity="0.30"/>
+  <rect x="71" y="14" width="16" height="16" rx="3" fill="#fbbf24" opacity="0.50"/>
+  <rect x="14" y="33" width="16" height="16" rx="3" fill="white" opacity="0.40"/>
+  <rect x="33" y="33" width="16" height="16" rx="3" fill="white" opacity="0.90"/>
+  <rect x="52" y="33" width="16" height="16" rx="3" fill="white" opacity="0.85"/>
+  <rect x="71" y="33" width="16" height="16" rx="3" fill="white" opacity="0.35"/>
+  <rect x="14" y="52" width="16" height="16" rx="3" fill="white" opacity="0.35"/>
+  <rect x="33" y="52" width="16" height="16" rx="3" fill="white" opacity="0.80"/>
+  <rect x="52" y="52" width="16" height="16" rx="3" fill="white" opacity="0.45"/>
+  <rect x="71" y="52" width="16" height="16" rx="3" fill="white" opacity="0.25"/>
+  <rect x="14" y="71" width="16" height="16" rx="3" fill="#fbbf24" opacity="0.45"/>
+  <rect x="33" y="71" width="16" height="16" rx="3" fill="white" opacity="0.30"/>
+  <rect x="52" y="71" width="16" height="16" rx="3" fill="white" opacity="0.40"/>
+  <rect x="71" y="71" width="16" height="16" rx="3" fill="white" opacity="0.55"/>
+  <!-- Clinical items in center patches instead of cross -->
+  <!-- Heartbeat/pulse line (center-left patch) -->
+  <polyline points="35,41 38,41 39,37 41,45 43,39 45,41 47,41" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Pill capsule (center-right patch) -->
+  <rect x="55" y="38" width="10" height="5" rx="2.5" fill="white" opacity="0.9"/>
+  <line x1="60" y1="38" x2="60" y2="43" stroke="#6366f1" stroke-width="0.8" opacity="0.5"/>
+  <!-- Stethoscope (bottom-center-left patch) -->
+  <circle cx="41" cy="57" r="3.5" stroke="white" stroke-width="1.3" fill="none"/>
+  <path d="M41 53.5 L41 55.5" stroke="white" stroke-width="1.3" stroke-linecap="round"/>
+  <path d="M38 54 Q38 52 41 52 Q44 52 44 54" stroke="white" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+  <!-- Lab flask / beaker (bottom-center-right patch) -->
+  <path d="M56 55 L56 59 L54 63 L62 63 L60 59 L60 55Z" stroke="white" stroke-width="1.2" fill="white" fill-opacity="0.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="56" y1="55" x2="60" y2="55" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+  <circle cx="57" cy="60" r="1" fill="white" opacity="0.7"/>
+  <circle cx="59" cy="61" r="0.7" fill="white" opacity="0.5"/>
+  <!-- Doc lines in top-left patch -->
+  <line x1="17" y1="18" x2="25" y2="18" stroke="#3b82f6" stroke-width="1.2" opacity="0.5"/>
+  <line x1="17" y1="21" x2="23" y2="21" stroke="#3b82f6" stroke-width="1.2" opacity="0.5"/>
+  <line x1="17" y1="24" x2="25" y2="24" stroke="#3b82f6" stroke-width="1.2" opacity="0.5"/>
+  <!-- AI sparkle in gold patch -->
+  <path d="M76 18 L77.5 22 L81.5 23.5 L77.5 25 L76 29 L74.5 25 L70.5 23.5 L74.5 22Z" fill="#fbbf24"/>
+</svg>
