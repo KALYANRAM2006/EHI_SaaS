@@ -31,6 +31,11 @@ export function PrivacyPanel({ isOpen, onClose }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [activeTab, setActiveTab] = useState('privacy') // 'privacy' or 'redaction'
 
+  // Debug logging
+  console.log('[PrivacyPanel] activeTab:', activeTab)
+  console.log('[PrivacyPanel] selectedPatient:', selectedPatient)
+  console.log('[PrivacyPanel] parsedData:', parsedData)
+
   const handleWipe = async () => {
     setWiping(true)
     await secureWipe()
@@ -277,9 +282,10 @@ export function PrivacyPanel({ isOpen, onClose }) {
           )}
 
           {/* Data Redaction Tab */}
-          {activeTab === 'redaction' && (
-            <RedactionPanel patientData={selectedPatient} onClose={onClose} />
-          )}
+          {activeTab === 'redaction' && (() => {
+            console.log('[PrivacyPanel] Rendering RedactionPanel with:', selectedPatient)
+            return <RedactionPanel patientData={selectedPatient} onClose={onClose} />
+          })()}
         </div>
       </div>
     </div>
