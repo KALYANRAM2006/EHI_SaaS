@@ -26,7 +26,7 @@ export function PrivacyBadge({ onClick }) {
 }
 
 export function PrivacyPanel({ isOpen, onClose }) {
-  const { secureWipe, persistEnabled, togglePersistence, memoryCleared, parsedData } = useData()
+  const { secureWipe, persistEnabled, togglePersistence, memoryCleared, parsedData, selectedPatient } = useData()
   const [wiping, setWiping] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [activeTab, setActiveTab] = useState('privacy') // 'privacy' or 'redaction'
@@ -278,7 +278,7 @@ export function PrivacyPanel({ isOpen, onClose }) {
 
           {/* Data Redaction Tab */}
           {activeTab === 'redaction' && (
-            <RedactionPanel patientData={parsedData} onClose={onClose} />
+            <RedactionPanel patientData={selectedPatient} onClose={onClose} />
           )}
         </div>
       </div>
