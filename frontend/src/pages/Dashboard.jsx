@@ -48,6 +48,13 @@ import DataLineageView from '../components/DataLineageView'
 import DocumentIntelligence from '../components/DocumentIntelligence'
 import PayerToolsView from '../components/PayerToolsView'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
+import {
+  generateSchemaDescriptions,
+  getFieldDescription,
+  getNestedFieldDescription,
+  clearSchemaDescriptionCache,
+  getDescriptionStatus,
+} from '../services/schemaDescriptionService'
 import { getRuleIntegrity } from '../parsers/ruleEngine'
 import { isDemo } from '../config/demo'
 
@@ -65,6 +72,10 @@ export default function Dashboard() {
   const [expandedExplorer, setExpandedExplorer] = useState({ patient: true })
   const [recordsCategory, setRecordsCategory] = useState(null)
   const [privacyOpen, setPrivacyOpen] = useState(false)
+  const [schemaDescriptions, setSchemaDescriptions] = useState(null)
+  const [generatingDescriptions, setGeneratingDescriptions] = useState(false)
+  const [descriptionProgress, setDescriptionProgress] = useState(null)
+  const [showTooltip, setShowTooltip] = useState(null)
   const demoMode = isDemo()
 
   // Listen for tour view-switch events from App-level GuidedTour
@@ -1204,18 +1215,44 @@ export default function Dashboard() {
               }
 
               if (isObject || isArray) {
+                // Get description for this field
+                const fieldDescription = schemaDescriptions ? (
+                  path ? getNestedFieldDescription(currentPath, value, schemaDescriptions) : getFieldDescription(key, schemaDescriptions)
+                ) : null
+
                 return (
                   <div key={currentPath} className="border-l-2 border-gray-200 pl-4 ml-2 my-2">
-                    <button
-                      onClick={() => setExpandedExplorer(prev => ({ ...prev, [currentPath]: !prev[currentPath] }))}
-                      className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded w-full text-left"
-                    >
-                      {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                      <span className="font-mono font-semibold text-sm">{key}:</span>
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-gray-300 text-gray-600 bg-white">
-                        {isArray ? `Array[${value.length}]` : 'Object'}
-                      </span>
-                    </button>
+                    <div className="relative group">
+                      <button
+                        onClick={() => setExpandedExplorer(prev => ({ ...prev, [currentPath]: !prev[currentPath] }))}
+                        className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded w-full text-left"
+                        onMouseEnter={() => fieldDescription && setShowTooltip(currentPath)}
+                        onMouseLeave={() => setShowTooltip(null)}
+                      >
+                        {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                        <span className="font-mono font-semibold text-sm">{key}:</span>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-gray-300 text-gray-600 bg-white">
+                          {isArray ? `Array[${value.length}]` : 'Object'}
+                        </span>
+                        {schemaDescriptions && fieldDescription && (
+                          <HelpCircle className="w-3.5 h-3.5 text-purple-500 ml-1 opacity-60" />
+                        )}
+                      </button>
+                      {/* Tooltip */}
+                      {showTooltip === currentPath && fieldDescription && (
+                        <div className="absolute left-full top-0 ml-2 z-50 w-64 p-3 bg-purple-900 text-white text-xs rounded-lg shadow-xl border border-purple-700">
+                          <div className="flex items-start gap-2">
+                            <Info className="w-3.5 h-3.5 text-purple-300 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <div className="font-semibold text-purple-100 mb-1">{key}</div>
+                              <div className="text-purple-200">{fieldDescription}</div>
+                            </div>
+                          </div>
+                          {/* Arrow pointer */}
+                          <div className="absolute left-0 top-3 transform -translate-x-1/2 rotate-45 w-2 h-2 bg-purple-900 border-l border-t border-purple-700" />
+                        </div>
+                      )}
+                    </div>
                     {isExpanded && (
                       <div className="mt-2">
                         {isArray ? (
@@ -1242,27 +1279,139 @@ export default function Dashboard() {
                   </div>
                 )
               }
+              // Get description for simple fields too
+              const simpleFieldDescription = schemaDescriptions ? (
+                path ? getNestedFieldDescription(currentPath, value, schemaDescriptions) : getFieldDescription(key, schemaDescriptions)
+              ) : null
+
               return (
                 <div key={currentPath} className="border-l-2 border-gray-200 pl-4 ml-2 my-2">
-                  <div className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded">
-                    <span className="font-mono font-semibold text-sm">{key}:</span>
-                    <span className="font-mono text-sm">{renderValue(value)}</span>
+                  <div className="relative group">
+                    <div
+                      className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded"
+                      onMouseEnter={() => simpleFieldDescription && setShowTooltip(currentPath)}
+                      onMouseLeave={() => setShowTooltip(null)}
+                    >
+                      <span className="font-mono font-semibold text-sm">{key}:</span>
+                      <span className="font-mono text-sm">{renderValue(value)}</span>
+                      {schemaDescriptions && simpleFieldDescription && (
+                        <HelpCircle className="w-3 h-3 text-purple-500 opacity-60" />
+                      )}
+                    </div>
+                    {/* Tooltip */}
+                    {showTooltip === currentPath && simpleFieldDescription && (
+                      <div className="absolute left-full top-0 ml-2 z-50 w-64 p-3 bg-purple-900 text-white text-xs rounded-lg shadow-xl border border-purple-700">
+                        <div className="flex items-start gap-2">
+                          <Info className="w-3.5 h-3.5 text-purple-300 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <div className="font-semibold text-purple-100 mb-1">{key}</div>
+                            <div className="text-purple-200">{simpleFieldDescription}</div>
+                          </div>
+                        </div>
+                        {/* Arrow pointer */}
+                        <div className="absolute left-0 top-3 transform -translate-x-1/2 rotate-45 w-2 h-2 bg-purple-900 border-l border-t border-purple-700" />
+                      </div>
+                    )}
                   </div>
                 </div>
               )
             }).filter(Boolean)
           }
 
+          // Handler for generating schema descriptions
+          const handleGenerateDescriptions = async () => {
+            setGeneratingDescriptions(true)
+            setDescriptionProgress({ completed: 0, total: 0, percentage: 0 })
+
+            try {
+              const descriptions = await generateSchemaDescriptions(explorerData, (progress) => {
+                setDescriptionProgress(progress)
+              })
+              setSchemaDescriptions(descriptions)
+              console.log('[Dashboard] Schema descriptions generated:', descriptions)
+            } catch (error) {
+              console.error('[Dashboard] Error generating descriptions:', error)
+              alert('Failed to generate AI descriptions. Please ensure AI mode is enabled in settings.')
+            } finally {
+              setGeneratingDescriptions(false)
+              setDescriptionProgress(null)
+            }
+          }
+
+          // Handler for clearing description cache
+          const handleClearDescriptionCache = () => {
+            clearSchemaDescriptionCache()
+            setSchemaDescriptions(null)
+            console.log('[Dashboard] Description cache cleared')
+          }
+
+          // Get description status
+          const descStatus = getDescriptionStatus()
+
           return (
           <div className="space-y-6">
             {/* Raw Data Explorer Card — matches Figma */}
             <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
               <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2 mb-1">
-                  <Database className="w-5 h-5 text-gray-700" />
-                  <h2 className="text-lg font-bold text-gray-900">Raw Data Explorer</h2>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-5 h-5 text-gray-700" />
+                    <h2 className="text-lg font-bold text-gray-900">Raw Data Explorer</h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {schemaDescriptions && (
+                      <button
+                        onClick={handleClearDescriptionCache}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                        title="Clear cached descriptions"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Clear Cache
+                      </button>
+                    )}
+                    <button
+                      onClick={handleGenerateDescriptions}
+                      disabled={generatingDescriptions || !descStatus.available}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl text-sm font-medium shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{boxShadow:'0 4px 14px rgba(139,92,246,0.3)'}}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      {generatingDescriptions ? 'Generating...' : schemaDescriptions ? 'Regenerate Descriptions' : 'Generate AI Descriptions'}
+                    </button>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-500">Browse and search through the complete structured health data</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-500">Browse and search through the complete structured health data</p>
+                  {schemaDescriptions && (
+                    <p className="text-xs text-purple-600 font-medium">✨ AI descriptions active - hover over field names</p>
+                  )}
+                </div>
+                {generatingDescriptions && descriptionProgress && (
+                  <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-purple-900">Generating AI descriptions...</span>
+                      <span className="text-sm text-purple-700">{descriptionProgress.percentage}%</span>
+                    </div>
+                    <div className="w-full bg-purple-200 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-purple-600 to-indigo-600 h-full transition-all duration-300"
+                        style={{ width: `${descriptionProgress.percentage}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-purple-600 mt-1">
+                      {descriptionProgress.completed} / {descriptionProgress.total} fields ({descriptionProgress.current})
+                    </p>
+                  </div>
+                )}
+                {!descStatus.available && (
+                  <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200 flex items-start gap-2">
+                    <Info className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm text-amber-900 font-medium">AI Descriptions Unavailable</p>
+                      <p className="text-xs text-amber-700 mt-1">{descStatus.message}. Enable Cloud AI mode in Settings to use this feature.</p>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="p-6 space-y-6">
                 {/* Search bar — full width */}
