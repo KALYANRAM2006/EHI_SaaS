@@ -47,6 +47,7 @@ import AIChatView from '../components/AIChatView'
 import DataLineageView from '../components/DataLineageView'
 import DocumentIntelligence from '../components/DocumentIntelligence'
 import PayerToolsView from '../components/PayerToolsView'
+import RelationshipGraph from '../components/RelationshipGraph'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 import {
   generateSchemaDescriptions,
@@ -1707,7 +1708,10 @@ export default function Dashboard() {
 
         {/* ===== DATA LINEAGE VIEW ===== */}
         {activeView === 'data-lineage' && (
-          <DataLineageView />
+          <div className="space-y-6">
+            <DataLineageView />
+            <RelationshipGraph patientData={patientData} />
+          </div>
         )}
 
         {/* ===== DOCUMENT INTELLIGENCE VIEW ===== */}

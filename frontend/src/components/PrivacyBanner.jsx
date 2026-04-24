@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { Shield, ShieldCheck, X, Lock, Trash2, Database, Eye, EyeOff, CheckCircle2, AlertTriangle, FileText, CheckCircle, XCircle } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
+import RedactionPanel from './RedactionPanel'
 
 export function PrivacyBadge({ onClick }) {
   return (
@@ -28,6 +29,7 @@ export function PrivacyPanel({ isOpen, onClose }) {
   const { secureWipe, persistEnabled, togglePersistence, memoryCleared, parsedData } = useData()
   const [wiping, setWiping] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [activeTab, setActiveTab] = useState('privacy') // 'privacy' or 'redaction'
 
   const handleWipe = async () => {
     setWiping(true)
@@ -46,7 +48,7 @@ export function PrivacyPanel({ isOpen, onClose }) {
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-5 text-white">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
                 <Shield className="w-6 h-6" />
@@ -60,9 +62,36 @@ export function PrivacyPanel({ isOpen, onClose }) {
               <X className="w-5 h-5" />
             </button>
           </div>
+
+          {/* Tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('privacy')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'privacy'
+                  ? 'bg-white text-green-700'
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}
+            >
+              Privacy Settings
+            </button>
+            <button
+              onClick={() => setActiveTab('redaction')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'redaction'
+                  ? 'bg-white text-green-700'
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}
+            >
+              Data Redaction
+            </button>
+          </div>
         </div>
 
         <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+          {/* Privacy Settings Tab */}
+          {activeTab === 'privacy' && (
+            <>
           {/* Zero PHI Server Guarantee */}
           <div className="bg-green-50 border border-green-200 rounded-xl p-4">
             <div className="flex items-start gap-3">
@@ -244,6 +273,13 @@ export function PrivacyPanel({ isOpen, onClose }) {
               </div>
             </div>
           </div>
+            </>
+          )}
+
+          {/* Data Redaction Tab */}
+          {activeTab === 'redaction' && (
+            <RedactionPanel patientData={parsedData} onClose={onClose} />
+          )}
         </div>
       </div>
     </div>
