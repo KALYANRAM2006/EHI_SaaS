@@ -20,7 +20,15 @@ export default function RedactionPanel({ patientData, onClose }) {
   const [validationResult, setValidationResult] = useState(null)
   const [showPreview, setShowPreview] = useState(false)
 
+  // Debug: Log what we receive
+  console.log('[RedactionPanel] Received patientData:', patientData)
+
   const handleRedact = () => {
+    if (!patientData) {
+      alert('No patient data available to redact.')
+      return
+    }
+
     setRedacting(true)
     try {
       const redacted = redactPatientData(patientData, {
@@ -47,6 +55,25 @@ export default function RedactionPanel({ patientData, onClose }) {
   }
 
   const summary = redactedData ? getRedactionSummary(patientData, redactedData) : null
+
+  // Show loading/error state if no patient data
+  if (!patientData) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-amber-900">
+              <p className="font-semibold mb-1">No Patient Data Available</p>
+              <p className="text-amber-700">
+                Please load patient data first before using the data redaction feature.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
