@@ -46,6 +46,7 @@ import AISettingsPanel from '../components/AISettingsPanel'
 import AIChatView from '../components/AIChatView'
 import DataLineageView from '../components/DataLineageView'
 import DocumentIntelligence from '../components/DocumentIntelligence'
+import PayerToolsView from '../components/PayerToolsView'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 import { getRuleIntegrity } from '../parsers/ruleEngine'
 import { isDemo } from '../config/demo'
@@ -210,6 +211,7 @@ export default function Dashboard() {
       { id: 'insights', label: 'Insights' },
       { id: 'data-explorer', label: 'Data Explorer' },
       { id: 'ai-assistant', label: 'AI Assistant' },
+      { id: 'payer-tools', label: 'Payer Tools' },
       { id: 'data-lineage', label: 'Data Lineage' },
       { id: 'documents', label: 'Documents' },
     ]
@@ -1547,6 +1549,11 @@ export default function Dashboard() {
         {/* ===== AI ASSISTANT VIEW ===== */}
         {activeView === 'ai-assistant' && (
           <AIChatView selectedPatient={selectedPatient} stats={stats} />
+        )}
+
+        {/* ===== PAYER TOOLS VIEW ===== */}
+        {activeView === 'payer-tools' && (
+          <PayerToolsView selectedPatient={selectedPatient} stats={stats} />
         )}
 
         {/* ===== DATA LINEAGE VIEW ===== */}
