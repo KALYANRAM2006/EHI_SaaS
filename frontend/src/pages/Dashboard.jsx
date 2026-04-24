@@ -1710,7 +1710,7 @@ export default function Dashboard() {
         {activeView === 'data-lineage' && (
           <div className="space-y-6">
             <DataLineageView />
-            <RelationshipGraph patientData={patientData} />
+            <RelationshipGraph patientData={selectedPatient} />
           </div>
         )}
 
