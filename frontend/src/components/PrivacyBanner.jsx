@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react'
-import { Shield, ShieldCheck, X, Lock, Trash2, Database, Eye, EyeOff, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Shield, ShieldCheck, X, Lock, Trash2, Database, Eye, EyeOff, CheckCircle2, AlertTriangle, FileText, CheckCircle, XCircle } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 
@@ -77,6 +77,62 @@ export function PrivacyPanel({ isOpen, onClose }) {
                 <div className="flex items-center gap-2 mt-3">
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                   <span className="text-xs font-medium text-green-700">Active — Zero network requests for PHI</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* EHI Data Scope */}
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <FileText className="w-6 h-6 text-purple-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-purple-900">Electronic Health Information (EHI) Scope</h3>
+                <p className="text-sm text-purple-700 mt-1 mb-3">
+                  ClinQuilt complies with the 21st Century Cures Act (45 CFR Part 171) and processes only appropriate health data.
+                </p>
+
+                {/* What We Process */}
+                <div className="mb-3">
+                  <h4 className="text-xs font-semibold text-purple-800 uppercase mb-2">What ClinQuilt Processes</h4>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                      <span className="text-xs text-purple-900">Clinical records, medications, lab results, diagnoses</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                      <span className="text-xs text-purple-900">Insurance coverage, prior authorization, cost data</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                      <span className="text-xs text-purple-900">Encounters, procedures, immunizations, vital signs</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* What We Don't Process */}
+                <div>
+                  <h4 className="text-xs font-semibold text-purple-800 uppercase mb-2">What ClinQuilt Does NOT Process</h4>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                      <span className="text-xs text-purple-900">Psychotherapy notes (45 CFR 164.501)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                      <span className="text-xs text-purple-900">Legal documents, FERPA education records</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                      <span className="text-xs text-purple-900">Employment records, deceased &gt;50 years</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-purple-200">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
+                  <span className="text-xs text-purple-700 font-medium">Full compliance documentation available</span>
                 </div>
               </div>
             </div>
