@@ -201,8 +201,43 @@ export const sampleEncounters = [
     csnId: '100020', patId: 'Z2345678', contactDate: '2026-02-14',
     encType: 'Office Visit', visitProvider: 'E23456',
     status: 'Completed', patientClass: 'Outpatient',
-    chiefComplaint: 'Blood pressure check', diagnosis: 'Essential Hypertension, Borderline High Cholesterol',
+    chiefComplaint: 'Blood pressure check', diagnosis: 'Essential Hypertension, Hyperlipidemia',
     checkinTime: '2026-02-14 09:00:00', checkoutTime: '2026-02-14 09:45:00',
+  },
+  {
+    csnId: '100021', patId: 'Z2345678', contactDate: '2026-01-15',
+    encType: 'Office Visit', visitProvider: 'E23456',
+    status: 'Completed', patientClass: 'Outpatient',
+    chiefComplaint: 'Annual physical exam', diagnosis: 'Health Maintenance',
+    checkinTime: '2026-01-15 10:00:00', checkoutTime: '2026-01-15 11:00:00',
+  },
+  {
+    csnId: '100022', patId: 'Z2345678', contactDate: '2025-12-10',
+    encType: 'Specialist Visit', visitProvider: 'E67890',
+    status: 'Completed', patientClass: 'Outpatient',
+    chiefComplaint: 'Joint pain and swelling', diagnosis: 'Rheumatoid Arthritis',
+    checkinTime: '2025-12-10 14:00:00', checkoutTime: '2025-12-10 15:00:00',
+  },
+  {
+    csnId: '100023', patId: 'Z2345678', contactDate: '2025-11-20',
+    encType: 'Specialist Visit', visitProvider: 'E45678',
+    status: 'Completed', patientClass: 'Outpatient',
+    chiefComplaint: 'Irregular heartbeat', diagnosis: 'Atrial Fibrillation',
+    checkinTime: '2025-11-20 09:30:00', checkoutTime: '2025-11-20 10:30:00',
+  },
+  {
+    csnId: '100024', patId: 'Z2345678', contactDate: '2025-10-05',
+    encType: 'Office Visit', visitProvider: 'E23456',
+    status: 'Completed', patientClass: 'Outpatient',
+    chiefComplaint: 'Diabetes management follow-up', diagnosis: 'Type 2 Diabetes Mellitus',
+    checkinTime: '2025-10-05 11:00:00', checkoutTime: '2025-10-05 11:45:00',
+  },
+  {
+    csnId: '100025', patId: 'Z2345678', contactDate: '2026-03-01',
+    encType: 'Imaging Center Visit', visitProvider: 'E78901',
+    status: 'Scheduled', patientClass: 'Outpatient',
+    chiefComplaint: 'MRI Brain - headache workup', diagnosis: 'Headaches, rule out neurological causes',
+    checkinTime: '2026-03-01 08:00:00', checkoutTime: null,
   },
 ]
 
@@ -247,6 +282,22 @@ export const sampleOrders = [
     orderDate: '2026-02-14', status: 'Completed',
     procName: 'Comprehensive Metabolic Panel', procCode: '80053',
   },
+  // High-cost procedures requiring prior authorization
+  {
+    orderId: '1012', orderType: 'Imaging', patId: 'Z2345678', csnId: '100020',
+    orderDate: '2026-03-01', status: 'Scheduled', description: 'MRI Brain with Contrast',
+    procName: 'MRI Brain with Contrast', procCode: '70553',
+  },
+  {
+    orderId: '1013', orderType: 'Procedure', patId: 'Z2345678', csnId: '100020',
+    orderDate: '2025-06-01', status: 'Completed', description: 'Biologic Infusion Therapy - Humira',
+    procName: 'Biologic Infusion Therapy', procCode: 'J0135',
+  },
+  {
+    orderId: '1014', orderType: 'Imaging', patId: 'Z1234567', csnId: '100001',
+    orderDate: '2026-02-16', status: 'Scheduled', description: 'PET Scan for cardiac evaluation',
+    procName: 'PET Scan', procCode: '78459',
+  },
 ]
 
 export const sampleResults = [
@@ -278,16 +329,21 @@ export const sampleResults = [
 export const sampleConditions = {
   Z2345678: [
     { name: 'Essential Hypertension', onset: '2023-06-15', status: 'Active', severity: 'Moderate' },
-    { name: 'Borderline High Cholesterol', onset: '2024-01-10', status: 'Active', severity: 'Mild' },
+    { name: 'Hyperlipidemia', onset: '2024-01-10', status: 'Active', severity: 'Moderate' },
+    { name: 'Rheumatoid Arthritis', onset: '2025-05-15', status: 'Active', severity: 'Moderate' },
+    { name: 'Atrial Fibrillation', onset: '2024-08-10', status: 'Active', severity: 'Moderate' },
+    { name: 'Type 2 Diabetes Mellitus', onset: '2025-03-05', status: 'Active', severity: 'Mild' },
   ],
   Z1234567: [
     { name: 'Acute Myocardial Infarction', onset: '2026-02-15', status: 'Resolved', severity: 'Severe' },
     { name: 'Essential Hypertension', onset: '2020-03-15', status: 'Active', severity: 'Moderate' },
-    { name: 'Hyperlipidemia', onset: '2019-11-10', status: 'Active', severity: 'Mild' },
+    { name: 'Hyperlipidemia', onset: '2019-11-10', status: 'Active', severity: 'Moderate' },
+    { name: 'Coronary Artery Disease', onset: '2026-02-15', status: 'Active', severity: 'Moderate' },
   ],
   Z4567890: [
     { name: 'Type 2 Diabetes Mellitus', onset: '2022-07-22', status: 'Active', severity: 'Moderate' },
     { name: 'Osteoarthritis of left knee', onset: '2025-08-01', status: 'Active', severity: 'Mild' },
+    { name: 'Gastroesophageal Reflux Disease (GERD)', onset: '2023-05-10', status: 'Active', severity: 'Mild' },
   ],
   Z3456789: [
     { name: 'Hyperlipidemia', onset: '2024-06-20', status: 'Active', severity: 'Moderate' },
@@ -299,26 +355,32 @@ export const providers = {
   E12345: { name: 'Dr. James Wilson', specialty: 'Internal Medicine' },
   E23456: { name: 'Dr. Emily Chan', specialty: 'Family Medicine' },
   E34567: { name: 'Dr. Robert Kim', specialty: 'Internal Medicine' },
-  E45678: { name: 'Dr. Sarah Mitchell', specialty: 'Endocrinology' },
+  E45678: { name: 'Dr. Sarah Mitchell', specialty: 'Cardiology' },
   E56789: { name: 'Dr. David Park', specialty: 'Emergency Medicine' },
-  E67890: { name: 'Dr. Anna Torres', specialty: 'OB/GYN' },
+  E67890: { name: 'Dr. Robert Martinez', specialty: 'Rheumatology' },
+  E78901: { name: 'Dr. Lisa Chen', specialty: 'Radiology' },
 }
 
 // Active medications per patient
 export const sampleMedications = {
   Z2345678: [
     { name: 'Lisinopril 10mg', dosage: '1 tablet daily', prescriber: 'Dr. Emily Chan', startDate: '2023-06-15', purpose: 'Blood pressure management' },
-    { name: 'Atorvastatin 20mg', dosage: '1 tablet at bedtime', prescriber: 'Dr. Emily Chan', startDate: '2024-01-10', purpose: 'Cholesterol management' },
+    { name: 'Lipitor 20mg', dosage: '1 tablet at bedtime', prescriber: 'Dr. Emily Chan', startDate: '2024-01-10', purpose: 'Cholesterol management' },
+    { name: 'Humira (Adalimumab) 40mg', dosage: '1 injection every 2 weeks', prescriber: 'Dr. Robert Martinez', startDate: '2025-06-01', purpose: 'Rheumatoid arthritis treatment' },
+    { name: 'Eliquis (Apixaban) 5mg', dosage: '1 tablet twice daily', prescriber: 'Dr. Emily Chan', startDate: '2024-08-15', purpose: 'Blood clot prevention' },
+    { name: 'Ozempic (Semaglutide) 0.5mg', dosage: '1 injection weekly', prescriber: 'Dr. Emily Chan', startDate: '2025-03-20', purpose: 'Type 2 diabetes management' },
   ],
   Z1234567: [
     { name: 'Aspirin 81mg', dosage: '1 tablet daily', prescriber: 'Dr. James Wilson', startDate: '2026-02-15', purpose: 'Heart attack prevention' },
     { name: 'Metoprolol 50mg', dosage: '1 tablet twice daily', prescriber: 'Dr. James Wilson', startDate: '2026-02-15', purpose: 'Heart rate control' },
     { name: 'Lisinopril 20mg', dosage: '1 tablet daily', prescriber: 'Dr. James Wilson', startDate: '2020-03-15', purpose: 'Blood pressure management' },
-    { name: 'Atorvastatin 40mg', dosage: '1 tablet at bedtime', prescriber: 'Dr. James Wilson', startDate: '2019-11-10', purpose: 'Cholesterol management' },
+    { name: 'Lipitor 40mg', dosage: '1 tablet at bedtime', prescriber: 'Dr. James Wilson', startDate: '2019-11-10', purpose: 'Cholesterol management' },
+    { name: 'Plavix (Clopidogrel) 75mg', dosage: '1 tablet daily', prescriber: 'Dr. James Wilson', startDate: '2026-02-15', purpose: 'Blood clot prevention after heart attack' },
   ],
   Z4567890: [
     { name: 'Metformin 500mg', dosage: '1 tablet twice daily', prescriber: 'Dr. Sarah Mitchell', startDate: '2022-07-22', purpose: 'Diabetes management' },
     { name: 'Ibuprofen 400mg', dosage: 'As needed', prescriber: 'Dr. Sarah Mitchell', startDate: '2026-02-28', purpose: 'Knee pain relief' },
+    { name: 'Nexium 40mg', dosage: '1 capsule daily', prescriber: 'Dr. Sarah Mitchell', startDate: '2023-05-10', purpose: 'Acid reflux treatment' },
   ],
 }
 
