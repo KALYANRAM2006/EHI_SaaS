@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   CreditCard,
   FileText,
@@ -13,6 +13,9 @@ import {
   BarChart3,
   ArrowRight,
   Package,
+  RefreshCw,
+  ExternalLink,
+  Clock,
 } from 'lucide-react'
 import {
   getCoverageSummary,
@@ -22,6 +25,13 @@ import {
   analyzeCosts,
   findMedicationSavings,
 } from '../services/payerService'
+import {
+  isCMSApiConfigured,
+  getCMSApiStatus,
+  getPatientPriorAuths,
+  getMockPriorAuths,
+  PA_STATUS,
+} from '../services/cmsApiService'
 import { formatCurrency, formatCoverageDates } from '../utils/insuranceParser'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts'
 
@@ -39,6 +49,41 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
  */
 export default function PayerToolsView({ selectedPatient, stats }) {
   const [expandedPA, setExpandedPA] = useState({})
+  const [cmsAuths, setCmsAuths] = useState([])
+  const [loadingCMS, setLoadingCMS] = useState(false)
+  const [cmsApiStatus, setCmsApiStatus] = useState(null)
+
+  // Check CMS API status on mount
+  useEffect(() => {
+    const status = getCMSApiStatus()
+    setCmsApiStatus(status)
+
+    // Load prior auths (real or mock)
+    if (selectedPatient) {
+      loadCMSPriorAuths()
+    }
+  }, [selectedPatient])
+
+  const loadCMSPriorAuths = async () => {
+    setLoadingCMS(true)
+    try {
+      if (isCMSApiConfigured()) {
+        // Try to fetch real data from CMS API
+        const auths = await getPatientPriorAuths(selectedPatient.patId || selectedPatient.id)
+        setCmsAuths(auths)
+      } else {
+        // Use mock data for demo
+        const mockAuths = getMockPriorAuths()
+        setCmsAuths(mockAuths)
+      }
+    } catch (error) {
+      console.error('[PayerTools] Error loading CMS prior auths:', error)
+      // Fallback to mock data on error
+      setCmsAuths(getMockPriorAuths())
+    } finally {
+      setLoadingCMS(false)
+    }
+  }
 
   // Get coverage summary
   const coverageSummary = useMemo(() => {
@@ -178,6 +223,139 @@ export default function PayerToolsView({ selectedPatient, stats }) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* CMS Prior Authorization Status */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-purple-600" />
+              <h3 className="text-lg font-semibold text-gray-900">CMS Prior Authorization Status</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {cmsApiStatus?.configured ? (
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-green-100 text-green-700 text-sm rounded-full">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  API Connected
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 text-sm rounded-full">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Demo Mode
+                </span>
+              )}
+              <button
+                onClick={loadCMSPriorAuths}
+                disabled={loadingCMS}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 text-gray-600 ${loadingCMS ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {loadingCMS ? (
+            <div className="text-center py-8">
+              <RefreshCw className="w-8 h-8 mx-auto text-purple-600 animate-spin mb-3" />
+              <p className="text-gray-600">Loading prior authorizations...</p>
+            </div>
+          ) : cmsAuths.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-500" />
+              <p className="font-medium">No prior authorizations on record</p>
+              <p className="text-sm mt-1">You don't have any active or pending prior authorizations</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {cmsAuths.map((auth) => {
+                const statusColor =
+                  auth.status === PA_STATUS.APPROVED ? 'green' :
+                  auth.status === PA_STATUS.DENIED ? 'red' :
+                  auth.status === PA_STATUS.PENDING ? 'blue' :
+                  auth.status === PA_STATUS.NEEDS_INFO ? 'amber' :
+                  'gray'
+
+                return (
+                  <div key={auth.id} className={`border-2 border-${statusColor}-200 rounded-lg p-4 bg-${statusColor}-50/30`}>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-semibold text-gray-900">{auth.service}</h4>
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full bg-${statusColor}-100 text-${statusColor}-700`}>
+                            {auth.status.toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">Request ID: {auth.id}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">Requested</p>
+                        <p className="text-sm font-medium">{new Date(auth.requestDate).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-gray-500">Diagnosis</p>
+                        <p className="font-medium text-gray-900">{auth.diagnosis || auth.reason}</p>
+                      </div>
+                      {auth.reviewDate && (
+                        <div>
+                          <p className="text-gray-500">Reviewed</p>
+                          <p className="font-medium text-gray-900">{new Date(auth.reviewDate).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {auth.notes && (
+                      <div className="mt-3 p-2 bg-white rounded border border-gray-200">
+                        <p className="text-xs text-gray-500 mb-1">Notes from Reviewer</p>
+                        <p className="text-sm text-gray-700">{auth.notes}</p>
+                      </div>
+                    )}
+
+                    <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        <span>Reviewed by {auth.reviewedBy || 'Pending'}</span>
+                      </div>
+                      {auth.serviceCode && (
+                        <div className="flex items-center gap-1">
+                          <span>Code: {auth.serviceCode}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {!cmsApiStatus?.configured && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-900">
+                  <p className="font-semibold mb-1">Demo Mode Active</p>
+                  <p className="text-blue-700">
+                    Showing sample data. To connect to real CMS API, configure credentials in .env file.
+                  </p>
+                  <a
+                    href="https://www.cms.gov/apis"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 mt-2 text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Get CMS API Credentials
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Two-column layout */}
