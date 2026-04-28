@@ -48,6 +48,7 @@ import DataLineageView from '../components/DataLineageView'
 import DocumentIntelligence from '../components/DocumentIntelligence'
 import PayerToolsView from '../components/PayerToolsView'
 import RelationshipGraph from '../components/RelationshipGraph'
+import SettingsView from '../components/SettingsView'
 import { APP_VERSION, RULE_ENGINE_VERSION } from '../utils/privacy'
 import {
   generateSchemaDescriptions,
@@ -226,6 +227,7 @@ export default function Dashboard() {
       { id: 'payer-tools', label: 'Payer Tools' },
       { id: 'data-lineage', label: 'Data Lineage' },
       { id: 'documents', label: 'Documents' },
+      { id: 'settings', label: 'Settings' },
     ]
     return base
   }, [])
@@ -1717,6 +1719,11 @@ export default function Dashboard() {
         {/* ===== DOCUMENT INTELLIGENCE VIEW ===== */}
         {activeView === 'documents' && (
           <DocumentIntelligence />
+        )}
+
+        {/* ===== SETTINGS VIEW ===== */}
+        {activeView === 'settings' && (
+          <SettingsView />
         )}
       </main>
 

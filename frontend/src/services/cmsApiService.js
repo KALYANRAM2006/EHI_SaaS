@@ -8,25 +8,24 @@
  * Standard: FHIR R4 (HL7 Fast Healthcare Interoperability Resources)
  */
 
+import { getCMSApiConfig } from './configService'
+
 /**
- * CMS API Configuration
+ * Get CMS API Configuration from localStorage
+ * This supports SaaS model where each user configures their own credentials
  */
-const CMS_API_CONFIG = {
-  // Base URL for CMS Prior Authorization API (FHIR endpoint)
-  baseUrl: import.meta.env.VITE_CMS_API_URL || 'https://api.cms.gov/fhir/v1',
+function getCMSConfig() {
+  const config = getCMSApiConfig()
 
-  // OAuth 2.0 token endpoint
-  tokenUrl: import.meta.env.VITE_CMS_TOKEN_URL || 'https://api.cms.gov/oauth2/token',
-
-  // Client credentials (store in .env file)
-  clientId: import.meta.env.VITE_CMS_CLIENT_ID,
-  clientSecret: import.meta.env.VITE_CMS_CLIENT_SECRET,
-
-  // API version
-  version: 'v1',
-
-  // Timeout for API requests (30 seconds)
-  timeout: 30000,
+  return {
+    baseUrl: config.baseUrl || 'https://api.cms.gov/fhir/v1',
+    tokenUrl: config.tokenUrl || 'https://api.cms.gov/oauth2/token',
+    clientId: config.clientId || '',
+    clientSecret: config.clientSecret || '',
+    enabled: config.enabled || false,
+    version: 'v1',
+    timeout: 30000,
+  }
 }
 
 /**
@@ -46,15 +45,15 @@ export const PA_STATUS = {
  */
 async function getAccessToken() {
   try {
-    const response = await fetch(CMS_API_CONFIG.tokenUrl, {
+    const response = await fetch(getCMSConfig().tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
         grant_type: 'client_credentials',
-        client_id: CMS_API_CONFIG.clientId,
-        client_secret: CMS_API_CONFIG.clientSecret,
+        client_id: getCMSConfig().clientId,
+        client_secret: getCMSConfig().clientSecret,
         scope: 'patient/ServiceRequest.read patient/ServiceRequest.write',
       }),
     })
@@ -82,7 +81,7 @@ export async function checkPriorAuthStatus(authId) {
     const token = await getAccessToken()
 
     const response = await fetch(
-      `${CMS_API_CONFIG.baseUrl}/ServiceRequest/${authId}`,
+      `${getCMSConfig().baseUrl}/ServiceRequest/${authId}`,
       {
         method: 'GET',
         headers: {
@@ -90,7 +89,7 @@ export async function checkPriorAuthStatus(authId) {
           'Accept': 'application/fhir+json',
           'Content-Type': 'application/fhir+json',
         },
-        signal: AbortSignal.timeout(CMS_API_CONFIG.timeout),
+        signal: AbortSignal.timeout(getCMSConfig().timeout),
       }
     )
 
@@ -125,7 +124,7 @@ export async function submitPriorAuthRequest(request) {
     const fhirRequest = buildFHIRServiceRequest(request)
 
     const response = await fetch(
-      `${CMS_API_CONFIG.baseUrl}/ServiceRequest`,
+      `${getCMSConfig().baseUrl}/ServiceRequest`,
       {
         method: 'POST',
         headers: {
@@ -134,7 +133,7 @@ export async function submitPriorAuthRequest(request) {
           'Content-Type': 'application/fhir+json',
         },
         body: JSON.stringify(fhirRequest),
-        signal: AbortSignal.timeout(CMS_API_CONFIG.timeout),
+        signal: AbortSignal.timeout(getCMSConfig().timeout),
       }
     )
 
@@ -161,14 +160,14 @@ export async function getPatientPriorAuths(patientId) {
     const token = await getAccessToken()
 
     const response = await fetch(
-      `${CMS_API_CONFIG.baseUrl}/ServiceRequest?patient=${patientId}&category=prior-auth`,
+      `${getCMSConfig().baseUrl}/ServiceRequest?patient=${patientId}&category=prior-auth`,
       {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/fhir+json',
         },
-        signal: AbortSignal.timeout(CMS_API_CONFIG.timeout),
+        signal: AbortSignal.timeout(getCMSConfig().timeout),
       }
     )
 
@@ -210,7 +209,7 @@ export async function cancelPriorAuth(authId) {
     })
 
     const response = await fetch(
-      `${CMS_API_CONFIG.baseUrl}/ServiceRequest/${authId}`,
+      `${getCMSConfig().baseUrl}/ServiceRequest/${authId}`,
       {
         method: 'PUT',
         headers: {
@@ -219,7 +218,7 @@ export async function cancelPriorAuth(authId) {
           'Content-Type': 'application/fhir+json',
         },
         body: JSON.stringify(fhirRequest),
-        signal: AbortSignal.timeout(CMS_API_CONFIG.timeout),
+        signal: AbortSignal.timeout(getCMSConfig().timeout),
       }
     )
 
@@ -306,18 +305,21 @@ function buildFHIRServiceRequest(request) {
  * Check if CMS API is configured
  */
 export function isCMSApiConfigured() {
-  return !!(CMS_API_CONFIG.clientId && CMS_API_CONFIG.clientSecret)
+  const config = getCMSConfig()
+  return config.enabled && !!config.clientId && !!config.clientSecret
 }
 
 /**
  * Get API configuration status
  */
 export function getCMSApiStatus() {
+  const config = getCMSConfig()
   return {
     configured: isCMSApiConfigured(),
-    baseUrl: CMS_API_CONFIG.baseUrl,
-    hasCredentials: !!(CMS_API_CONFIG.clientId && CMS_API_CONFIG.clientSecret),
-    version: CMS_API_CONFIG.version,
+    enabled: config.enabled,
+    baseUrl: config.baseUrl,
+    hasCredentials: !!config.clientId && !!config.clientSecret,
+    version: config.version,
   }
 }
 
