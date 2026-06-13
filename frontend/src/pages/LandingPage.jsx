@@ -35,6 +35,12 @@ export default function LandingPage({ onDemoReady }) {
   const [privacyOpen, setPrivacyOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [signInOpen, setSignInOpen] = useState(false)
+  const [signInEmail, setSignInEmail] = useState('')
+  const [signInPassword, setSignInPassword] = useState('')
+  const [signInError, setSignInError] = useState('')
+  const [signInLoading, setSignInLoading] = useState(false)
+  const [signedInUser, setSignedInUser] = useState('')
 
   // Trigger demo tour auto-start when landing page mounts in demo mode
   useEffect(() => {
@@ -42,6 +48,13 @@ export default function LandingPage({ onDemoReady }) {
       onDemoReady()
     }
   }, [onDemoReady])
+
+  useEffect(() => {
+    const existingUser = localStorage.getItem('clinquilt_user_email')
+    if (existingUser) {
+      setSignedInUser(existingUser)
+    }
+  }, [])
 
   const hasSources = dataSources.length > 0
 
@@ -71,7 +84,7 @@ export default function LandingPage({ onDemoReady }) {
     setShowUpload(true)
   }
 
-  const handleSignIn = () => {
+  const continueAfterAuth = () => {
     if (hasSources || uploadedFiles.length > 0) {
       navigate('/dashboard')
       return
@@ -84,6 +97,53 @@ export default function LandingPage({ onDemoReady }) {
 
     setShowUpload(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleSignIn = () => {
+    if (signedInUser) {
+      continueAfterAuth()
+      return
+    }
+    setSignInError('')
+    setSignInPassword('')
+    setSignInOpen(true)
+  }
+
+  const handleSignInSubmit = (e) => {
+    e.preventDefault()
+    setSignInError('')
+
+    const email = signInEmail.trim().toLowerCase()
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+    if (!emailPattern.test(email)) {
+      setSignInError('Please enter a valid email address.')
+      return
+    }
+
+    if (signInPassword.length < 8) {
+      setSignInError('Password must be at least 8 characters long.')
+      return
+    }
+
+    setSignInLoading(true)
+    setTimeout(() => {
+      localStorage.setItem('clinquilt_user_email', email)
+      localStorage.setItem('clinquilt_auth_ts', String(Date.now()))
+      setSignedInUser(email)
+      setSignInOpen(false)
+      setSignInLoading(false)
+      continueAfterAuth()
+    }, 450)
+  }
+
+  const handleSignOut = () => {
+    localStorage.removeItem('clinquilt_user_email')
+    localStorage.removeItem('clinquilt_auth_ts')
+    setSignedInUser('')
+    setSignInEmail('')
+    setSignInPassword('')
+    setSignInError('')
   }
 
   return (
@@ -124,8 +184,16 @@ export default function LandingPage({ onDemoReady }) {
               onClick={handleSignIn}
               className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              Sign In
+              {signedInUser ? 'Open App' : 'Sign In'}
             </button>
+            {signedInUser && (
+              <button
+                onClick={handleSignOut}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Sign Out
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -516,6 +584,80 @@ export default function LandingPage({ onDemoReady }) {
 
       {/* Privacy Panel Modal */}
       <PrivacyPanel isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+
+      {/* Sign In Modal */}
+      {signInOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-between">
+              <h2 className="text-white font-semibold text-lg">Sign In to ClinQuilt</h2>
+              <button
+                onClick={() => setSignInOpen(false)}
+                className="text-white/90 hover:text-white transition-colors"
+                aria-label="Close sign in dialog"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSignInSubmit} className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-600">
+                Sign in to continue. This environment currently uses client-side session storage.
+              </p>
+
+              <div>
+                <label htmlFor="signin-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  id="signin-email"
+                  type="email"
+                  value={signInEmail}
+                  onChange={(e) => setSignInEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="you@clinquilt.com"
+                  autoComplete="email"
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="signin-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input
+                  id="signin-password"
+                  type="password"
+                  value={signInPassword}
+                  onChange={(e) => setSignInPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+
+              {signInError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {signInError}
+                </p>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSignInOpen(false)}
+                  className="flex-1 px-4 py-2 text-sm font-semibold rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={signInLoading}
+                  className="flex-1 px-4 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-60"
+                >
+                  {signInLoading ? 'Signing In...' : 'Sign In'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* About Modal */}
       {aboutOpen && (
