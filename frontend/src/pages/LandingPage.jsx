@@ -544,8 +544,19 @@ export default function LandingPage({ onDemoReady }) {
             </button>
           </div>
 
-          {/* Privacy Trust Indicators */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+          {/* Privacy Trust Indicators — badges on mobile, cards on desktop */}
+          <div className="flex flex-wrap justify-center gap-2 md:hidden">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
+              <ShieldCheck className="w-3.5 h-3.5 text-green-600" />Zero Server Contact
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
+              <Lock className="w-3.5 h-3.5 text-blue-600" />AES-256 Encryption
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
+              <Eye className="w-3.5 h-3.5 text-purple-600" />Session-Only Mode
+            </span>
+          </div>
+          <div className="hidden md:grid grid-cols-3 gap-4 max-w-3xl mx-auto">
             <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 p-4">
               <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <ShieldCheck className="w-5 h-5 text-green-600" />
