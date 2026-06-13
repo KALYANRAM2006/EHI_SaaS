@@ -33,6 +33,8 @@ export default function LandingPage({ onDemoReady }) {
   const [loadingSample, setLoadingSample] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // Trigger demo tour auto-start when landing page mounts in demo mode
   useEffect(() => {
@@ -69,6 +71,21 @@ export default function LandingPage({ onDemoReady }) {
     setShowUpload(true)
   }
 
+  const handleSignIn = () => {
+    if (hasSources || uploadedFiles.length > 0) {
+      navigate('/dashboard')
+      return
+    }
+
+    if (isDemo()) {
+      handleTrySampleData()
+      return
+    }
+
+    setShowUpload(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 relative overflow-hidden">
       {/* Background Gradient Orbs */}
@@ -91,9 +108,24 @@ export default function LandingPage({ onDemoReady }) {
             </div>
           </div>
           <div className="hidden sm:flex gap-3">
-            <button className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">About</button>
-            <button className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">Help</button>
-            <button className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Sign In</button>
+            <button
+              onClick={() => setAboutOpen(true)}
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              About
+            </button>
+            <button
+              onClick={() => setHelpOpen(true)}
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Help
+            </button>
+            <button
+              onClick={handleSignIn}
+              className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Sign In
+            </button>
           </div>
         </div>
       </header>
@@ -484,6 +516,87 @@ export default function LandingPage({ onDemoReady }) {
 
       {/* Privacy Panel Modal */}
       <PrivacyPanel isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+
+      {/* About Modal */}
+      {aboutOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-between">
+              <h2 className="text-white font-semibold text-lg">About ClinQuilt</h2>
+              <button
+                onClick={() => setAboutOpen(false)}
+                className="text-white/90 hover:text-white transition-colors"
+                aria-label="Close about dialog"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <p className="text-sm text-gray-700">
+                ClinQuilt helps patients and families understand health records through clear visual narratives and AI-supported insights.
+              </p>
+              <p className="text-sm text-gray-700">
+                The app is designed with privacy-first principles: your uploaded records are processed in-browser and are not sent to a server.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    setAboutOpen(false)
+                    setPrivacyOpen(true)
+                  }}
+                  className="px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  View Privacy Details
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Help Modal */}
+      {helpOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 flex items-center justify-between">
+              <h2 className="text-white font-semibold text-lg">Help</h2>
+              <button
+                onClick={() => setHelpOpen(false)}
+                className="text-white/90 hover:text-white transition-colors"
+                aria-label="Close help dialog"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-700">Choose one of these quick actions:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={() => {
+                    setHelpOpen(false)
+                    setShowUpload(true)
+                  }}
+                  className="px-4 py-3 text-sm font-semibold rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Upload My Records
+                </button>
+                <button
+                  onClick={() => {
+                    setHelpOpen(false)
+                    handleTrySampleData()
+                  }}
+                  className="px-4 py-3 text-sm font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition-all"
+                >
+                  Try Sample Data
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Sign In currently takes you to the dashboard flow: existing data goes straight to dashboard, demo mode loads sample data, and otherwise it opens file upload.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
