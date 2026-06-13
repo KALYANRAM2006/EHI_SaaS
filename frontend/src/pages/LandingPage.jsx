@@ -504,20 +504,23 @@ export default function LandingPage({ onDemoReady }) {
             )}
           </div>
 
-          {/* Feature Cards Grid — chips on mobile, 4-col cards on desktop */}
-          <div className="flex flex-wrap justify-center gap-2 md:hidden" data-tour="landing-features">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
-              <Database className="w-3.5 h-3.5 text-blue-600" />Multi-EHR Support
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />AI Summaries
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
-              <TrendingUp className="w-3.5 h-3.5 text-green-600" />Timeline View
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
-              <Shield className="w-3.5 h-3.5 text-red-600" />Secure & Private
-            </span>
+          {/* Feature chips — app features, mobile only */}
+          <div className="md:hidden" data-tour="landing-features">
+            <p className="text-center text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">App Features</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-medium text-blue-700">
+                <Database className="w-3.5 h-3.5" />Multi-EHR Support
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-full text-xs font-medium text-purple-700">
+                <Sparkles className="w-3.5 h-3.5" />AI Summaries
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 rounded-full text-xs font-medium text-green-700">
+                <TrendingUp className="w-3.5 h-3.5" />Timeline View
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-full text-xs font-medium text-red-700">
+                <Shield className="w-3.5 h-3.5" />Secure & Private
+              </span>
+            </div>
           </div>
           <div className="hidden md:grid grid-cols-4 gap-6" data-tour="landing-features-desktop">
             <div className="group relative bg-white rounded-2xl p-3 md:p-6 border border-gray-200 hover:border-blue-300 transition-all hover:shadow-xl flex flex-col items-center" style={{['--tw-shadow-color']: 'rgba(59,130,246,0.1)'}}>
@@ -566,16 +569,19 @@ export default function LandingPage({ onDemoReady }) {
           </div>
 
           {/* Privacy Trust Indicators — badges on mobile, cards on desktop */}
-          <div className="flex flex-wrap justify-center gap-2 md:hidden">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
-              <ShieldCheck className="w-3.5 h-3.5 text-green-600" />Zero Server Contact
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
-              <Lock className="w-3.5 h-3.5 text-blue-600" />AES-256 Encryption
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
-              <Eye className="w-3.5 h-3.5 text-purple-600" />Session-Only Mode
-            </span>
+          <div className="md:hidden">
+            <p className="text-center text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">Privacy Guarantees</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-600">
+                <ShieldCheck className="w-3.5 h-3.5 text-green-600" />Zero Server Contact
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-600">
+                <Lock className="w-3.5 h-3.5 text-blue-600" />AES-256 Encryption
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-600">
+                <Eye className="w-3.5 h-3.5 text-purple-600" />Session-Only Mode
+              </span>
+            </div>
           </div>
           <div className="hidden md:grid grid-cols-3 gap-4 max-w-3xl mx-auto">
             <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 p-4">
