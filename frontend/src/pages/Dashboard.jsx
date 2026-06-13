@@ -428,16 +428,30 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Tab Navigation — Gradient pill style matching Figma */}
+      {/* Tab Navigation — dropdown on mobile, pill tabs on desktop */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 sm:pt-8" data-tour="tab-nav">
-        <div className="overflow-x-auto pb-1" style={{WebkitOverflowScrolling:'touch',scrollbarWidth:'none',msOverflowStyle:'none'}}>
-          <div className="inline-flex bg-white/80 backdrop-blur-sm border border-gray-200 p-1.5 rounded-2xl shadow-lg" style={{boxShadow:'0 4px 14px rgba(148,163,184,0.15)',minWidth:'max-content'}}>
+        {/* Mobile: native select dropdown */}
+        <div className="sm:hidden">
+          <select
+            value={activeView}
+            onChange={(e) => setActiveView(e.target.value)}
+            className="w-full px-4 py-3 rounded-2xl border border-gray-200 bg-white/80 backdrop-blur-sm shadow-lg text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+            style={{backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,backgroundRepeat:'no-repeat',backgroundPosition:'right 12px center',paddingRight:'36px'}}
+          >
+            {tabItems.map((tab) => (
+              <option key={tab.id} value={tab.id}>{tab.label}</option>
+            ))}
+          </select>
+        </div>
+        {/* Desktop: pill tab bar */}
+        <div className="hidden sm:block">
+          <div className="inline-flex bg-white/80 backdrop-blur-sm border border-gray-200 p-1.5 rounded-2xl shadow-lg" style={{boxShadow:'0 4px 14px rgba(148,163,184,0.15)'}}>
             {tabItems.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveView(tab.id)}
                 data-tour={`tab-${tab.id}`}
-                className={`px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-6 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
                   activeView === tab.id
                     ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
