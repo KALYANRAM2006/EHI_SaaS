@@ -199,10 +199,10 @@ export default function LandingPage({ onDemoReady }) {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-6 py-16 relative z-10">
-        <div className="max-w-5xl w-full space-y-16">
-          {/* Hero Section */}
-          <div className="text-center space-y-6" data-tour="landing-hero">
+      <div className="flex-1 flex items-center justify-center px-4 py-4 md:px-6 md:py-16 relative z-10">
+        <div className="max-w-5xl w-full space-y-4 md:space-y-16">
+          {/* Hero Section — hidden on mobile to save space */}
+          <div className="hidden md:block text-center space-y-6" data-tour="landing-hero">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full mb-4">
               <Zap className="w-4 h-4" />
               <span className="text-sm font-semibold">AI-Powered Health Insights</span>
@@ -413,7 +413,7 @@ export default function LandingPage({ onDemoReady }) {
 
             {!showUpload && !hasSources ? (
               <div
-                className={`relative p-16 text-center transition-all duration-300 bg-white ${
+                className={`relative p-5 md:p-16 text-center transition-all duration-300 bg-white ${
                   isDragging ? 'bg-gradient-to-br from-blue-50 to-indigo-50' : ''
                 }`}
                 onDrop={handleDrop}
@@ -425,28 +425,35 @@ export default function LandingPage({ onDemoReady }) {
                 <div className="absolute bottom-0 right-0 w-40 h-40 bg-gradient-to-tl from-indigo-400/10 to-transparent rounded-full translate-x-1/2 translate-y-1/2" />
 
                 <div className="relative z-10">
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl hover:scale-110 transition-transform cursor-pointer" style={{boxShadow: '0 10px 25px rgba(59,130,246,0.3)'}}>
-                    <Upload className="w-10 h-10 text-white" />
+                  <div className="w-12 h-12 md:w-20 md:h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3 md:mb-6 shadow-xl hover:scale-110 transition-transform cursor-pointer" style={{boxShadow: '0 10px 25px rgba(59,130,246,0.3)'}}>
+                    <Upload className="w-6 h-6 md:w-10 md:h-10 text-white" />
                   </div>
 
-                  <p className="text-xl font-semibold text-gray-900 mb-2">Drop your EHI file here</p>
-                  <p className="text-gray-500 mb-8">or click to browse files</p>
+                  <p className="text-base md:text-xl font-semibold text-gray-900 mb-1 md:mb-2">Drop your EHI file here</p>
+                  <p className="text-sm text-gray-500 mb-3 md:mb-8">or click to browse files</p>
 
-                  {/* Supported Formats */}
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 mb-8 max-w-md mx-auto border border-blue-100" data-tour="landing-formats">
-                    <p className="font-semibold text-gray-900 mb-3">Supported formats:</p>
-                    <div className="grid grid-cols-3 gap-3 text-sm">
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="font-semibold text-blue-600">C-CDA</p>
-                        <p className="text-xs text-gray-500">.xml</p>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="font-semibold text-indigo-600">FHIR</p>
-                        <p className="text-xs text-gray-500">.json</p>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="font-semibold text-purple-600">Epic TSV</p>
-                        <p className="text-xs text-gray-500">.tsv</p>
+                  {/* Supported Formats — compact on mobile */}
+                  <div className="mb-3 md:mb-8 max-w-md mx-auto" data-tour="landing-formats">
+                    <div className="md:hidden flex items-center justify-center gap-2 text-xs text-gray-500">
+                      <span className="font-semibold text-blue-600">C-CDA</span><span>·</span>
+                      <span className="font-semibold text-indigo-600">FHIR</span><span>·</span>
+                      <span className="font-semibold text-purple-600">Epic TSV</span>
+                    </div>
+                    <div className="hidden md:block bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
+                      <p className="font-semibold text-gray-900 mb-3">Supported formats:</p>
+                      <div className="grid grid-cols-3 gap-3 text-sm">
+                        <div className="bg-white rounded-lg p-3 border border-gray-200">
+                          <p className="font-semibold text-blue-600">C-CDA</p>
+                          <p className="text-xs text-gray-500">.xml</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-gray-200">
+                          <p className="font-semibold text-indigo-600">FHIR</p>
+                          <p className="text-xs text-gray-500">.json</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-gray-200">
+                          <p className="font-semibold text-purple-600">Epic TSV</p>
+                          <p className="text-xs text-gray-500">.tsv</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -536,10 +543,10 @@ export default function LandingPage({ onDemoReady }) {
           <div className="flex justify-center" data-tour="landing-privacy">
             <button
               onClick={() => setPrivacyOpen(true)}
-              className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-full hover:shadow-lg hover:border-green-300 transition-all group cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 md:px-6 md:py-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-full hover:shadow-lg hover:border-green-300 transition-all group cursor-pointer"
             >
-              <ShieldCheck className="w-5 h-5 text-green-600 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-semibold text-green-900">🔒 Your data never leaves your device</span>
+              <ShieldCheck className="w-4 h-4 md:w-5 md:h-5 text-green-600 group-hover:scale-110 transition-transform" />
+              <span className="text-xs md:text-sm font-semibold text-green-900">🔒 Your data never leaves your device</span>
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             </button>
           </div>
