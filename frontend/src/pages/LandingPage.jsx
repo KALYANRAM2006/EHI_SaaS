@@ -504,8 +504,22 @@ export default function LandingPage({ onDemoReady }) {
             )}
           </div>
 
-          {/* Feature Cards Grid — 2x2 on mobile, 4-col on desktop */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6" data-tour="landing-features">
+          {/* Feature Cards Grid — chips on mobile, 4-col cards on desktop */}
+          <div className="flex flex-wrap justify-center gap-2 md:hidden" data-tour="landing-features">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
+              <Database className="w-3.5 h-3.5 text-blue-600" />Multi-EHR Support
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />AI Summaries
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
+              <TrendingUp className="w-3.5 h-3.5 text-green-600" />Timeline View
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/80 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
+              <Shield className="w-3.5 h-3.5 text-red-600" />Secure & Private
+            </span>
+          </div>
+          <div className="hidden md:grid grid-cols-4 gap-6" data-tour="landing-features-desktop">
             <div className="group relative bg-white rounded-2xl p-3 md:p-6 border border-gray-200 hover:border-blue-300 transition-all hover:shadow-xl flex flex-col items-center" style={{['--tw-shadow-color']: 'rgba(59,130,246,0.1)'}}>
               <div className="w-10 h-10 md:w-14 md:h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mb-2 md:mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}>
                 <Database className="w-5 h-5 md:w-7 md:h-7 text-white" />
