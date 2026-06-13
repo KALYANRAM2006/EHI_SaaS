@@ -497,38 +497,38 @@ export default function LandingPage({ onDemoReady }) {
             )}
           </div>
 
-          {/* Feature Cards Grid — Matches Figma exactly */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6" data-tour="landing-features">
-            <div className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:border-blue-300 transition-all hover:shadow-xl" style={{['--tw-shadow-color']: 'rgba(59,130,246,0.1)'}}>
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}>
-                <Database className="w-7 h-7 text-white" />
+          {/* Feature Cards Grid — 2x2 on mobile, 4-col on desktop */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6" data-tour="landing-features">
+            <div className="group relative bg-white rounded-2xl p-3 md:p-6 border border-gray-200 hover:border-blue-300 transition-all hover:shadow-xl flex flex-col items-center" style={{['--tw-shadow-color']: 'rgba(59,130,246,0.1)'}}>
+              <div className="w-10 h-10 md:w-14 md:h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mb-2 md:mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}>
+                <Database className="w-5 h-5 md:w-7 md:h-7 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2 text-center">Multi-EHR Support</h3>
-              <p className="text-sm text-gray-600 text-center">Works with all major formats</p>
+              <h3 className="font-semibold text-gray-900 text-xs md:text-base text-center leading-tight">Multi-EHR Support</h3>
+              <p className="hidden md:block text-sm text-gray-600 text-center mt-2">Works with all major formats</p>
             </div>
 
-            <div className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:border-purple-300 transition-all hover:shadow-xl" style={{['--tw-shadow-color']: 'rgba(168,85,247,0.1)'}}>
-              <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(168,85,247,0.3)'}}>
-                <Sparkles className="w-7 h-7 text-white" />
+            <div className="group relative bg-white rounded-2xl p-3 md:p-6 border border-gray-200 hover:border-purple-300 transition-all hover:shadow-xl flex flex-col items-center" style={{['--tw-shadow-color']: 'rgba(168,85,247,0.1)'}}>
+              <div className="w-10 h-10 md:w-14 md:h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mb-2 md:mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(168,85,247,0.3)'}}>
+                <Sparkles className="w-5 h-5 md:w-7 md:h-7 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2 text-center">AI Summaries</h3>
-              <p className="text-sm text-gray-600 text-center">Understand your health story</p>
+              <h3 className="font-semibold text-gray-900 text-xs md:text-base text-center leading-tight">AI Summaries</h3>
+              <p className="hidden md:block text-sm text-gray-600 text-center mt-2">Understand your health story</p>
             </div>
 
-            <div className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:border-green-300 transition-all hover:shadow-xl" style={{['--tw-shadow-color']: 'rgba(34,197,94,0.1)'}}>
-              <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(34,197,94,0.3)'}}>
-                <TrendingUp className="w-7 h-7 text-white" />
+            <div className="group relative bg-white rounded-2xl p-3 md:p-6 border border-gray-200 hover:border-green-300 transition-all hover:shadow-xl flex flex-col items-center" style={{['--tw-shadow-color']: 'rgba(34,197,94,0.1)'}}>
+              <div className="w-10 h-10 md:w-14 md:h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center mb-2 md:mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(34,197,94,0.3)'}}>
+                <TrendingUp className="w-5 h-5 md:w-7 md:h-7 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2 text-center">Timeline View</h3>
-              <p className="text-sm text-gray-600 text-center">See your health journey</p>
+              <h3 className="font-semibold text-gray-900 text-xs md:text-base text-center leading-tight">Timeline View</h3>
+              <p className="hidden md:block text-sm text-gray-600 text-center mt-2">See your health journey</p>
             </div>
 
-            <div className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:border-red-300 transition-all hover:shadow-xl" style={{['--tw-shadow-color']: 'rgba(239,68,68,0.1)'}}>
-              <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(239,68,68,0.3)'}}>
-                <Shield className="w-7 h-7 text-white" />
+            <div className="group relative bg-white rounded-2xl p-3 md:p-6 border border-gray-200 hover:border-red-300 transition-all hover:shadow-xl flex flex-col items-center" style={{['--tw-shadow-color']: 'rgba(239,68,68,0.1)'}}>
+              <div className="w-10 h-10 md:w-14 md:h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center mb-2 md:mb-4 shadow-lg group-hover:scale-110 transition-transform" style={{boxShadow: '0 4px 14px rgba(239,68,68,0.3)'}}>
+                <Shield className="w-5 h-5 md:w-7 md:h-7 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2 text-center">Secure & Private</h3>
-              <p className="text-sm text-gray-600 text-center">Data never leaves device</p>
+              <h3 className="font-semibold text-gray-900 text-xs md:text-base text-center leading-tight">Secure & Private</h3>
+              <p className="hidden md:block text-sm text-gray-600 text-center mt-2">Data never leaves device</p>
             </div>
           </div>
 
