@@ -61,7 +61,7 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/312/api/FHIR/R4',
     authUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/326/oauth2/authorize',
     tokenUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/326/oauth2/token',
-    scopes: 'openid fhirUser',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
     id: 'kaiser-scal',
@@ -74,7 +74,7 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/212/api/FHIR/R4',
     authUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/226/oauth2/authorize',
     tokenUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/226/oauth2/token',
-    scopes: 'openid fhirUser',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
     id: 'kaiser-wa',
@@ -85,7 +85,7 @@ export const FHIR_ENDPOINTS = [
     category: 'health-system',
     exportUrl: 'https://healthy.kaiserpermanente.org/health/secure/personal-health-record',
     fhirBase: 'https://fhir.kp.org/Interconnect-FHIR-PRD/api/FHIR/R4',
-    scopes: 'openid fhirUser',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
     id: 'kaiser-midatlantic',
@@ -98,7 +98,7 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/170/api/FHIR/R4',
     authUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/170/oauth2/authorize',
     tokenUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/170/oauth2/token',
-    scopes: 'openid fhirUser',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
     id: 'kaiser-nw',
@@ -111,7 +111,7 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/190/api/FHIR/R4',
     authUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/190/oauth2/authorize',
     tokenUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/190/oauth2/token',
-    scopes: 'openid fhirUser',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
     id: 'kaiser-co',
@@ -124,7 +124,7 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/140/api/FHIR/R4',
     authUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/140/oauth2/authorize',
     tokenUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/140/oauth2/token',
-    scopes: 'openid fhirUser',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
     id: 'kaiser-ga',
@@ -137,7 +137,7 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/200/api/FHIR/R4',
     authUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/200/oauth2/authorize',
     tokenUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/200/oauth2/token',
-    scopes: 'openid fhirUser',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
     id: 'kaiser-hawaii',
@@ -150,7 +150,7 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/130/api/FHIR/R4',
     authUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/130/oauth2/authorize',
     tokenUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/130/oauth2/token',
-    scopes: 'openid fhirUser',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
     id: 'cleveland-clinic',

@@ -23,13 +23,6 @@ export default function FHIRConnect({ onClose }) {
   const [kpExportEndpoint, setKpExportEndpoint] = useState(null)
 
   const handleConnect = useCallback(async (endpoint) => {
-    // KP hasn't approved ClinQuilt in their Epic instance yet — OAuth redirects
-    // to KP login but never returns. Show manual export as primary option.
-    if (endpoint.exportUrl && endpoint.id?.startsWith('kaiser-')) {
-      setKpExportEndpoint(endpoint)
-      return
-    }
-
     setSelected(endpoint)
     setConnecting(true)
     setDiscoverError('')
