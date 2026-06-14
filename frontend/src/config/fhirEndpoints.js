@@ -59,7 +59,7 @@ export const FHIR_ENDPOINTS = [
     category: 'health-system',
     manualExport: true,
     exportUrl: 'https://healthy.kaiserpermanente.org/health/secure/personal-health-record',
-    fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/326/api/FHIR/R4',
+    fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/312/api/FHIR/R4',
     scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
