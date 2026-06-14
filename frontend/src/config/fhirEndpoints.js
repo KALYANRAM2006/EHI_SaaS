@@ -32,8 +32,7 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4',
     authUrl: 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize',
     tokenUrl: 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token',
-    // Epic open.epic.com non-production client_id (no registration needed for sandbox)
-    defaultClientId: 'd45049c3-3441-40ef-ab4d-02f7a5a6841f',
+    // Uses VITE_FHIR_CLIENT_ID_NONPROD (your registered non-production client ID)
     scopes: 'launch/patient openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
 
