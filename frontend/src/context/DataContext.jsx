@@ -1043,12 +1043,13 @@ export function DataProvider({ children }) {
 
     const patient = finalData.patients?.[0]
     if (patient) {
-      setSelectedPatient(patient)
+      const rebuiltPatient = rebuildSelectedPatient(finalData, patient.patId) || patient
+      setSelectedPatient(rebuiltPatient)
       try {
-        const summary = await generateAIHealthSummary(patient, aiConfig)
+        const summary = await generateAIHealthSummary(rebuiltPatient, aiConfig)
         setAiSummary(summary)
       } catch {
-        setAiSummary(generateAISummary(patient))
+        setAiSummary(generateAISummary(rebuiltPatient))
       }
     }
   }, [aiConfig])
