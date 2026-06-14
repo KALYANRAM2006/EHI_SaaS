@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Search, Building2, Wifi, ChevronRight, X, AlertCircle, TestTube, Star, ExternalLink, Loader2, Download, FileText } from 'lucide-react'
+import { Search, Building2, Wifi, ChevronRight, X, AlertCircle, TestTube, Star, ExternalLink, Loader2 } from 'lucide-react'
 import { FHIR_ENDPOINTS, searchEndpoints, getClientId } from '../config/fhirEndpoints'
 import { initiateSmartAuth, discoverSmartConfig } from '../services/smartAuth'
 
@@ -23,15 +23,10 @@ export default function FHIRConnect({ onClose }) {
   const [kpExportEndpoint, setKpExportEndpoint] = useState(null)
 
   const handleConnect = useCallback(async (endpoint) => {
-    // KP uses a staff-only OAuth portal — guide user to manual FHIR export instead
-    if (endpoint.manualExport) {
-      setKpExportEndpoint(endpoint)
-      return
-    }
-
     setSelected(endpoint)
     setConnecting(true)
     setDiscoverError('')
+    setKpExportEndpoint(null)
 
     try {
       // First verify the endpoint is reachable
@@ -43,6 +38,8 @@ export default function FHIRConnect({ onClose }) {
       setDiscoverError(err.message)
       setConnecting(false)
       setSelected(null)
+      // If this endpoint has a manual export fallback, surface it
+      if (endpoint.exportUrl) setKpExportEndpoint(endpoint)
     }
   }, [clientId])
 
@@ -101,32 +98,23 @@ export default function FHIRConnect({ onClose }) {
           </div>
         </div>
 
-        {/* KP Manual Export Guide */}
+        {/* KP Manual Export Fallback — shown only after a failed OAuth attempt */}
         {kpExportEndpoint && (
-          <div className="mx-6 mt-3 px-4 py-4 bg-blue-50 rounded-xl border border-blue-200">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Download className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                <p className="text-sm font-semibold text-blue-900">{kpExportEndpoint.name}</p>
+          <div className="mx-6 mt-2 px-4 py-3 bg-amber-50 rounded-xl border border-amber-200">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-semibold text-amber-900 mb-1">Can't connect automatically?</p>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  Export your FHIR record from KP: sign in → My Health Manager → Medical Records → Download My Health Record → upload the JSON here.
+                </p>
               </div>
-              <button onClick={() => setKpExportEndpoint(null)} className="text-blue-400 hover:text-blue-600 text-xs">✕</button>
+              <button onClick={() => setKpExportEndpoint(null)} className="text-amber-400 hover:text-amber-600 ml-2 text-xs flex-shrink-0">✕</button>
             </div>
-            <p className="text-xs text-blue-800 mb-3 leading-relaxed">
-              Kaiser Permanente uses a staff-only OAuth portal that doesn't support third-party patient apps yet.
-              Export your FHIR health record directly from KP and upload it here:
-            </p>
-            <ol className="text-xs text-blue-800 space-y-1.5 mb-3 pl-4 list-decimal">
-              <li>Go to <strong>healthy.kaiserpermanente.org</strong> and sign in</li>
-              <li>Navigate to <strong>My Health Manager → Medical Records</strong></li>
-              <li>Click <strong>"Download My Health Record"</strong> (FHIR format)</li>
-              <li>Save the <code className="bg-blue-100 px-1 rounded">.json</code> file</li>
-              <li>Come back here and <strong>drag &amp; drop the file</strong> onto the ClinQuilt home screen</li>
-            </ol>
             <a
               href={kpExportEndpoint.exportUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
             >
               <ExternalLink className="w-3 h-3" /> Open KP My Health Manager
             </a>
