@@ -48,7 +48,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://fhir.mayoclinic.org/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'kaiser',
@@ -58,7 +58,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://healthy.kaiserpermanente.org/api/fhir/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
     id: 'cleveland-clinic',
@@ -68,7 +68,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://my.clevelandclinic.org/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'johns-hopkins',
@@ -78,7 +78,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://epicmobile.johnshopkins.edu/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'mass-general',
@@ -88,7 +88,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mypatientgateway.massgeneralbrigham.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'ucla',
@@ -98,7 +98,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mycare.uclahealth.org/fhir-prd/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'ucsf',
@@ -108,7 +108,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mypatient.ucsf.edu/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'stanford',
@@ -118,7 +118,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://stanfordhealthcare.org/bin/fhir/r4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'duke',
@@ -128,7 +128,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mydukehealth.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'vanderbilt',
@@ -138,7 +138,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://myhealth.vanderbilt.edu/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'cedars-sinai',
@@ -148,7 +148,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mycedars.cedars-sinai.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'nyu-langone',
@@ -158,7 +158,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mychartonline.nyumc.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'mount-sinai',
@@ -168,7 +168,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mychart.mountsinai.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'northwestern',
@@ -178,7 +178,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mychart.nm.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'uchicago',
@@ -188,7 +188,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mychartaccess.uchospitals.edu/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'unc',
@@ -198,7 +198,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mychart.unchealthcare.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'emory',
@@ -208,7 +208,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://myhealthatemoryclinic.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'intermountain',
@@ -218,7 +218,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://patient.intermountainhealthcare.org/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'providence',
@@ -228,7 +228,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mypalomar.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'geisinger',
@@ -238,7 +238,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mychart.geisinger.org/MyChart/api/FHIR/R4',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -255,7 +255,7 @@ export const FHIR_ENDPOINTS = [
     authUrl: 'https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/protocols/oauth2/profiles/smart-v1/personas/patient/authorize',
     tokenUrl: 'https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/protocols/oauth2/profiles/smart-v1/token',
     defaultClientId: 'clinquilt-dev',
-    scopes: 'launch/patient openid profile patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/Immunization.read',
+    scopes: 'openid profile patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/Immunization.read',
   },
   {
     id: 'ascension',
@@ -265,7 +265,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://fhir-myrecord.cerner.com/r4/a14114de-eb7e-4f0d-a94f-e3d0a93cd50d',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'commonspirit',
@@ -275,7 +275,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://fhir-myrecord.cerner.com/r4/commonspirit',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
   {
     id: 'hca',
@@ -285,7 +285,7 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://fhir-myrecord.cerner.com/r4/hca',
-    scopes: 'launch/patient openid fhirUser patient/*.read',
+    scopes: 'openid fhirUser patient/*.read',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -301,7 +301,7 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://api.va.gov/services/fhir/v0/r4',
     authUrl: 'https://api.va.gov/oauth2/authorization',
     tokenUrl: 'https://api.va.gov/oauth2/token',
-    scopes: 'patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read launch/patient openid profile',
+    scopes: 'patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read openid profile',
   },
 ]
 
@@ -326,11 +326,10 @@ export function searchEndpoints(query) {
  */
 export function getClientId(endpoint) {
   const isSandbox = endpoint.category === 'sandbox'
-  const nonprodId = import.meta.env.VITE_FHIR_CLIENT_ID_NONPROD
-  const prodId = import.meta.env.VITE_FHIR_CLIENT_ID_PROD
+  const nonprodId = import.meta.env.VITE_FHIR_CLIENT_ID_NONPROD || 'ca1294a3-a413-4d0e-a293-d48cbf74e326'
+  const prodId = import.meta.env.VITE_FHIR_CLIENT_ID_PROD || '256a8cd8-6601-48e0-a41a-d9f31e106b59'
 
   if (endpoint.defaultClientId) return endpoint.defaultClientId
-  if (isSandbox && nonprodId) return nonprodId
-  if (!isSandbox && prodId) return prodId
-  return nonprodId || prodId || 'clinquilt'
+  if (isSandbox) return nonprodId
+  return prodId
 }
