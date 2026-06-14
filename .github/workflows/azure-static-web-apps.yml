@@ -45,8 +45,7 @@ jobs:
           npm run build
         env:
           NODE_ENV: production
-          # Add any other environment variables needed
-          # VITE_APP_VERSION: ${{ github.sha }}
+          VITE_FHIR_CLIENT_ID: ${{ secrets.VITE_FHIR_CLIENT_ID }}
 
       - name: Deploy to Azure Static Web Apps
         id: builddeploy
