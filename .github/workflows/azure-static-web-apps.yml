@@ -45,7 +45,8 @@ jobs:
           npm run build
         env:
           NODE_ENV: production
-          VITE_FHIR_CLIENT_ID: ${{ secrets.VITE_FHIR_CLIENT_ID }}
+          VITE_FHIR_CLIENT_ID_NONPROD: ${{ secrets.VITE_FHIR_CLIENT_ID_NONPROD }}
+          VITE_FHIR_CLIENT_ID_PROD: ${{ secrets.VITE_FHIR_CLIENT_ID_PROD }}
 
       - name: Deploy to Azure Static Web Apps
         id: builddeploy

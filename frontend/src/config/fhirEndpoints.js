@@ -320,12 +320,17 @@ export function searchEndpoints(query) {
 
 /**
  * Get the client_id for an endpoint.
- * Falls back to a generic registered client_id (must be configured per deployment).
+ * Sandbox/non-production endpoints use VITE_FHIR_CLIENT_ID_NONPROD.
+ * Real hospital (production) endpoints use VITE_FHIR_CLIENT_ID_PROD.
+ * Falls back through endpoint.defaultClientId → nonprod → prod → placeholder.
  */
 export function getClientId(endpoint) {
-  return (
-    endpoint.defaultClientId ||
-    import.meta.env.VITE_FHIR_CLIENT_ID ||
-    'clinquilt'
-  )
+  const isSandbox = endpoint.category === 'sandbox'
+  const nonprodId = import.meta.env.VITE_FHIR_CLIENT_ID_NONPROD
+  const prodId = import.meta.env.VITE_FHIR_CLIENT_ID_PROD
+
+  if (endpoint.defaultClientId) return endpoint.defaultClientId
+  if (isSandbox && nonprodId) return nonprodId
+  if (!isSandbox && prodId) return prodId
+  return nonprodId || prodId || 'clinquilt'
 }
