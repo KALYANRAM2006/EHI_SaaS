@@ -57,7 +57,9 @@ export const FHIR_ENDPOINTS = [
     state: 'Multi-state',
     logo: '🏥',
     category: 'health-system',
-    fhirBase: 'https://healthy.kaiserpermanente.org/api/fhir/R4',
+    fhirBase: 'https://healthy.kaiserpermanente.org/mychartcn/api/FHIR/R4',
+    authUrl: 'https://identityauth.kaiserpermanente.org/as/authorization.oauth2',
+    tokenUrl: 'https://identityauth.kaiserpermanente.org/as/token.oauth2',
     scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
