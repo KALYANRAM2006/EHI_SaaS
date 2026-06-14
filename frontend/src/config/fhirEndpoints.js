@@ -33,7 +33,7 @@ export const FHIR_ENDPOINTS = [
     authUrl: 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize',
     tokenUrl: 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token',
     // Uses VITE_FHIR_CLIENT_ID_NONPROD (your registered non-production client ID)
-    scopes: 'launch/patient openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

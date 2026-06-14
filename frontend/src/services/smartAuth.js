@@ -90,7 +90,7 @@ export async function initiateSmartAuth(endpoint, clientId) {
 
   const redirectUri = `${window.location.origin}/fhir-callback`
 
-  // Persist state so the callback can verify and exchange the code
+  // Persist state in localStorage (survives navigation away to Epic and back)
   const smartState = {
     codeVerifier,
     state,
@@ -104,14 +104,14 @@ export async function initiateSmartAuth(endpoint, clientId) {
     redirectUri,
     tokenUrl: smartConfig.token_endpoint,
   }
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(smartState))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(smartState))
 
   // Build authorization URL
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: endpoint.scopes || 'launch/patient openid fhirUser patient/*.read',
+    scope: endpoint.scopes || 'openid fhirUser patient/*.read',
     state,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
@@ -143,7 +143,7 @@ export async function handleSmartCallback(searchParams) {
     throw new Error('No authorization code received from the EHR.')
   }
 
-  const stored = sessionStorage.getItem(STORAGE_KEY)
+  const stored = localStorage.getItem(STORAGE_KEY)
   if (!stored) {
     throw new Error('No pending SMART authorization found. Please try connecting again.')
   }
@@ -173,7 +173,7 @@ export async function handleSmartCallback(searchParams) {
   }
 
   const tokenData = await tokenRes.json()
-  sessionStorage.removeItem(STORAGE_KEY) // clean up
+  localStorage.removeItem(STORAGE_KEY) // clean up
 
   return {
     accessToken: tokenData.access_token,
