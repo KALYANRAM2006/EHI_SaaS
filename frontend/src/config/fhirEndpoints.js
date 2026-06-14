@@ -71,7 +71,7 @@ export const FHIR_ENDPOINTS = [
     category: 'health-system',
     manualExport: true,
     exportUrl: 'https://healthy.kaiserpermanente.org/health/secure/personal-health-record',
-    fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/226/api/FHIR/R4',
+    fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/212/api/FHIR/R4',
     scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
@@ -132,6 +132,18 @@ export const FHIR_ENDPOINTS = [
     manualExport: true,
     exportUrl: 'https://healthy.kaiserpermanente.org/health/secure/personal-health-record',
     fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/200/api/FHIR/R4',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
+  },
+  {
+    id: 'kaiser-hawaii',
+    name: 'Kaiser Permanente - Hawaii / Maui Health System',
+    system: EHR_VENDORS.EPIC,
+    state: 'HI',
+    logo: '🏥',
+    category: 'health-system',
+    manualExport: true,
+    exportUrl: 'https://healthy.kaiserpermanente.org/health/secure/personal-health-record',
+    fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/130/api/FHIR/R4',
     scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
   {
