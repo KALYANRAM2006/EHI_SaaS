@@ -99,22 +99,38 @@ function parseConditions(conditions) {
 
 function parseMedications(medRequests) {
   return (medRequests || []).map(m => {
-    const name =
-      codeText(m.medicationCodeableConcept) ||
-      codeText(m.medication?.concept) ||
-      m.medicationReference?.display ||
-      'Unknown medication'
+    // Resolve medication name — check inline, contained, reference display
+    let name = 'Unknown medication'
+    if (m.medicationCodeableConcept) {
+      name = codeText(m.medicationCodeableConcept)
+    } else if (m.medication?.concept) {
+      name = codeText(m.medication.concept)
+    } else if (m.medicationReference) {
+      if (m.medicationReference.display) {
+        name = m.medicationReference.display
+      } else if (m.medicationReference.reference?.startsWith('#')) {
+        // Look up contained Medication resource
+        const containedId = m.medicationReference.reference.slice(1)
+        const contained = (m.contained || []).find(c => c.id === containedId && c.resourceType === 'Medication')
+        if (contained) name = codeText(contained.code) || name
+      }
+    } else if (m.medication?.reference?.display) {
+      name = m.medication.reference.display
+    }
+    if (!name || name === 'Unknown medication') name = m.contained?.[0]?.code ? codeText(m.contained[0].code) : name
+
     return {
       name,
       rxnorm: m.medicationCodeableConcept?.coding?.find(c => c.system?.includes('rxnorm'))?.code || '',
       status: m.status || '',
       intent: m.intent || '',
-      startDate: formatDate(m.authoredOn || m.dispenseRequest?.validityPeriod?.start),
-      dose: m.dosageInstruction?.[0]?.text || '',
-      route: codeText(m.dosageInstruction?.[0]?.route) || '',
-      frequency: m.dosageInstruction?.[0]?.timing?.code?.text || '',
-      prescriber: m.requester?.display || '',
+      startDate: formatDate(m.authoredOn || m.dateAsserted || m.dispenseRequest?.validityPeriod?.start),
+      dose: m.dosageInstruction?.[0]?.text || m.dosage?.[0]?.text || '',
+      route: codeText(m.dosageInstruction?.[0]?.route || m.dosage?.[0]?.route) || '',
+      frequency: m.dosageInstruction?.[0]?.timing?.code?.text || m.dosage?.[0]?.timing?.code?.text || '',
+      prescriber: m.requester?.display || m.informationSource?.display || '',
       _fhirId: m.id,
+      _resourceType: m.resourceType || 'MedicationRequest',
     }
   })
 }
@@ -266,6 +282,18 @@ function parseDocumentReferences(docs) {
   }))
 }
 
+function parseGoals(goals) {
+  return (goals || []).map(g => ({
+    name: codeText(g.description) || 'Goal',
+    status: g.lifecycleStatus || g.status || '',
+    startDate: formatDate(g.startDate || g.statusDate),
+    target: g.target?.[0]?.measure ? codeText(g.target[0].measure) : '',
+    expressedBy: g.expressedBy?.display || '',
+    note: g.note?.[0]?.text || '',
+    _fhirId: g.id,
+  }))
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Converter
 // ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +313,7 @@ export function fhirResourcesToParsedData(fhirData, endpointName) {
   const immunizations = parseImmunizations(fhirData.immunizations)
   const diagnosticReports = parseDiagnosticReports(fhirData.diagnosticReports)
   const documents = parseDocumentReferences(fhirData.documentReferences)
+  const goals = parseGoals(fhirData.goals)
 
   // Separate vitals from lab results by LOINC category or observation category
   const vitalsCategories = new Set(['vital-signs', 'vital signs'])
@@ -313,6 +342,7 @@ export function fhirResourcesToParsedData(fhirData, endpointName) {
     immunizations,
     diagnosticReports,
     documents,
+    goals,
     orders: [],
     careTeam: [],
     clinicalNotes: [],

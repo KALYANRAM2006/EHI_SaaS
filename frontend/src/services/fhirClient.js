@@ -71,6 +71,8 @@ export async function fetchPatientData(fhirBase, accessToken, patientId) {
     diagnosticReports,
     documentReferences,
     carePlans,
+    medicationStatements,
+    goals,
   ] = await Promise.allSettled([
     fhirGet(fhirBase, `Patient/${pid}`, accessToken),
     getAllBundleEntries(fhirBase, `Condition?patient=${pid}&_count=100`, accessToken),
@@ -83,6 +85,8 @@ export async function fetchPatientData(fhirBase, accessToken, patientId) {
     getAllBundleEntries(fhirBase, `DiagnosticReport?patient=${pid}&_count=100`, accessToken),
     getAllBundleEntries(fhirBase, `DocumentReference?patient=${pid}&_count=50`, accessToken),
     getAllBundleEntries(fhirBase, `CarePlan?patient=${pid}&_count=50`, accessToken),
+    getAllBundleEntries(fhirBase, `MedicationStatement?patient=${pid}&_count=100`, accessToken),
+    getAllBundleEntries(fhirBase, `Goal?patient=${pid}&_count=100`, accessToken),
   ])
 
   const safe = (result) => (result.status === 'fulfilled' ? result.value : [])
@@ -90,7 +94,7 @@ export async function fetchPatientData(fhirBase, accessToken, patientId) {
   return {
     patient: safe(patientResource),
     conditions: safe(conditions),
-    medications: safe(medications),
+    medications: [...safe(medications), ...safe(medicationStatements)],
     allergies: safe(allergies),
     observations: safe(observations),
     encounters: safe(encounters),
@@ -99,5 +103,6 @@ export async function fetchPatientData(fhirBase, accessToken, patientId) {
     diagnosticReports: safe(diagnosticReports),
     documentReferences: safe(documentReferences),
     carePlans: safe(carePlans),
+    goals: safe(goals),
   }
 }
