@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import LandingPage from './pages/LandingPage'
 import Dashboard from './pages/Dashboard'
+import FHIRCallback from './pages/FHIRCallback'
 import { DataProvider, useData } from './context/DataContext'
 import { isDemo, isDemoExpired } from './config/demo'
 import DemoExpiredGate from './components/DemoExpiredGate'
@@ -47,6 +48,7 @@ function AppContent() {
         {/* In demo mode, show landing page with tour — no auto-redirect */}
         <Route path="/" element={<LandingPage onDemoReady={handleDemoTourStart} />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/fhir-callback" element={<FHIRCallback />} />
       </Routes>
 
       {/* Tour and demo UI at app level so it spans across pages */}

@@ -20,8 +20,11 @@ import {
   CheckCircle,
   User,
   Calendar,
+  Building2,
+  Wifi,
 } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
+import FHIRConnect from '../components/FHIRConnect'
 import { useData } from '../context/DataContext'
 import { PrivacyPanel } from '../components/PrivacyBanner'
 import { APP_VERSION } from '../utils/privacy'
@@ -41,6 +44,7 @@ export default function LandingPage({ onDemoReady }) {
   const [signInError, setSignInError] = useState('')
   const [signInLoading, setSignInLoading] = useState(false)
   const [signedInUser, setSignedInUser] = useState('')
+  const [fhirOpen, setFhirOpen] = useState(false)
 
   // Trigger demo tour auto-start when landing page mounts in demo mode
   useEffect(() => {
@@ -459,22 +463,32 @@ export default function LandingPage({ onDemoReady }) {
                   </div>
 
                   {/* CTA Buttons */}
-                  <div className="flex gap-4 justify-center">
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+                    {/* Primary: Connect Hospital */}
+                    <button
+                      onClick={() => setFhirOpen(true)}
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-lg cursor-pointer"
+                      style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}
+                    >
+                      <Building2 className="w-4 h-4" />
+                      Connect Hospital
+                    </button>
+                    {/* Secondary: Browse Files */}
                     <button
                       onClick={() => setShowUpload(true)}
                       data-tour="landing-browse-btn"
-                      className="px-8 py-3 text-sm font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-lg cursor-pointer" style={{boxShadow: '0 4px 14px rgba(59,130,246,0.3)'}}
+                      className="w-full sm:w-auto px-6 py-3 text-sm font-semibold rounded-lg border-2 border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-colors"
                     >
-                      Browse Files
+                      Upload File
                     </button>
                     <button
                       onClick={handleTrySampleData}
                       disabled={loadingSample}
                       data-tour="landing-sample-btn"
-                      className="px-8 py-3 text-sm font-semibold rounded-lg border-2 border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                      className="w-full sm:w-auto px-6 py-3 text-sm font-semibold rounded-lg border-2 border-dashed border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50"
                     >
                       {loadingSample ? (
-                        <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-2 justify-center">
                           <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                           Loading…
                         </span>
@@ -622,6 +636,9 @@ export default function LandingPage({ onDemoReady }) {
 
       {/* Privacy Panel Modal */}
       <PrivacyPanel isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+
+      {/* FHIR Hospital Connection Modal */}
+      {fhirOpen && <FHIRConnect onClose={() => setFhirOpen(false)} />}
 
       {/* Sign In Modal */}
       {signInOpen && (

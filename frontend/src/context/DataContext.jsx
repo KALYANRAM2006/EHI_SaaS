@@ -962,6 +962,97 @@ export function DataProvider({ children }) {
     return testDeidentification(selectedPatient)
   }, [selectedPatient])
 
+  /**
+   * Add a FHIR-sourced dataset returned by fhirResourcesToParsedData().
+   * Merges into existing data if already loaded, otherwise sets as primary.
+   */
+  const addFHIRSource = useCallback(async (fhirParsed, authResult) => {
+    const sourceName = authResult?.endpointName || fhirParsed.sourceLabel || 'FHIR Connection'
+    const currentSources = dataSourcesRef.current || []
+    const newSource = createDataSource(sourceName, currentSources.length)
+    newSource.system = authResult?.endpointSystem || 'FHIR'
+    newSource.fhirBase = authResult?.fhirBase
+
+    // Tag all records with source metadata
+    const tagged = { ...fhirParsed }
+    ALL_CATEGORIES.forEach(cat => {
+      if (Array.isArray(tagged[cat])) {
+        tagged[cat] = tagged[cat].map(r => ({
+          ...r,
+          _source: newSource.id,
+          _sourceName: newSource.name,
+          _sourceColor: newSource.color,
+        }))
+      }
+    })
+
+    // Tag patient
+    if (tagged.patients?.length) {
+      tagged.patients = tagged.patients.map(p => ({
+        ...p,
+        _source: newSource.id,
+        _sourceName: newSource.name,
+        _sourceColor: newSource.color,
+      }))
+    }
+
+    newSource.categories = computeSourceStats(newSource, tagged)
+    newSource.recordCount = Object.values(newSource.categories).reduce((a, b) => a + b, 0)
+    const pat = tagged.patients?.[0]
+    if (pat) {
+      newSource.patient = {
+        name: pat.name || `${pat.firstName || ''} ${pat.lastName || ''}`.trim(),
+        firstName: pat.firstName || '',
+        lastName: pat.lastName || '',
+        birthDate: pat.birthDate || '',
+        sex: pat.sex || '',
+        age: pat.age || '',
+      }
+      newSource.matchStatus = currentSources.length === 0 ? 'first' : 'match'
+    }
+
+    const current = parsedDataRef.current
+    let finalData
+    if (current) {
+      // Merge into existing
+      finalData = { ...current }
+      ALL_CATEGORIES.forEach(cat => {
+        if (Array.isArray(tagged[cat]) && tagged[cat].length > 0) {
+          finalData[cat] = [...(finalData[cat] || []), ...tagged[cat]]
+        }
+      })
+      // Merge patients
+      if (tagged.patients?.length) {
+        const existingIds = new Set((finalData.patients || []).map(p => p.patId))
+        tagged.patients.forEach(p => { if (!existingIds.has(p.patId)) finalData.patients.push(p) })
+      }
+    } else {
+      finalData = tagged
+      setUploadedFiles([{ name: `${sourceName}.fhir`, size: 0, type: 'application/fhir+json' }])
+    }
+
+    finalData.totalRecords = ALL_CATEGORIES.reduce((sum, cat) => sum + (Array.isArray(finalData[cat]) ? finalData[cat].length : 0), 0)
+
+    const updatedSources = [...currentSources, newSource]
+    dataSourcesRef.current = updatedSources
+    parsedDataRef.current = finalData
+
+    setDataSources(updatedSources)
+    setParsedData(finalData)
+    setIsSampleData(false)
+
+    const patient = finalData.patients?.[0]
+    if (patient) {
+      setSelectedPatient(patient)
+      try {
+        const summary = await generateAIHealthSummary(patient, aiConfig)
+        setAiSummary(summary)
+      } catch {
+        setAiSummary(generateAISummary(patient))
+      }
+    }
+  }, [aiConfig])
+
   const value = {
     uploadedFiles,
     rawFiles,
@@ -1004,6 +1095,8 @@ export function DataProvider({ children }) {
     confirmMismatch,
     dismissMismatch,
     removeDataSource,
+    // FHIR SMART Connection
+    addFHIRSource,
   }
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
