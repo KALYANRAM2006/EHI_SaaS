@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Search, Building2, Wifi, ChevronRight, X, AlertCircle, TestTube, Star, ExternalLink, Loader2 } from 'lucide-react'
+import { Search, Building2, Wifi, ChevronRight, X, AlertCircle, TestTube, Star, ExternalLink, Loader2, Download, FileText } from 'lucide-react'
 import { FHIR_ENDPOINTS, searchEndpoints, getClientId } from '../config/fhirEndpoints'
 import { initiateSmartAuth, discoverSmartConfig } from '../services/smartAuth'
 
@@ -20,7 +20,15 @@ export default function FHIRConnect({ onClose }) {
   const sandboxes = results.filter(e => e.category === 'sandbox')
   const hospitals = results.filter(e => e.category !== 'sandbox')
 
+  const [kpExportEndpoint, setKpExportEndpoint] = useState(null)
+
   const handleConnect = useCallback(async (endpoint) => {
+    // KP uses a staff-only OAuth portal — guide user to manual FHIR export instead
+    if (endpoint.manualExport) {
+      setKpExportEndpoint(endpoint)
+      return
+    }
+
     setSelected(endpoint)
     setConnecting(true)
     setDiscoverError('')
@@ -92,6 +100,38 @@ export default function FHIRConnect({ onClose }) {
             />
           </div>
         </div>
+
+        {/* KP Manual Export Guide */}
+        {kpExportEndpoint && (
+          <div className="mx-6 mt-3 px-4 py-4 bg-blue-50 rounded-xl border border-blue-200">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Download className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                <p className="text-sm font-semibold text-blue-900">{kpExportEndpoint.name}</p>
+              </div>
+              <button onClick={() => setKpExportEndpoint(null)} className="text-blue-400 hover:text-blue-600 text-xs">✕</button>
+            </div>
+            <p className="text-xs text-blue-800 mb-3 leading-relaxed">
+              Kaiser Permanente uses a staff-only OAuth portal that doesn't support third-party patient apps yet.
+              Export your FHIR health record directly from KP and upload it here:
+            </p>
+            <ol className="text-xs text-blue-800 space-y-1.5 mb-3 pl-4 list-decimal">
+              <li>Go to <strong>healthy.kaiserpermanente.org</strong> and sign in</li>
+              <li>Navigate to <strong>My Health Manager → Medical Records</strong></li>
+              <li>Click <strong>"Download My Health Record"</strong> (FHIR format)</li>
+              <li>Save the <code className="bg-blue-100 px-1 rounded">.json</code> file</li>
+              <li>Come back here and <strong>drag &amp; drop the file</strong> onto the ClinQuilt home screen</li>
+            </ol>
+            <a
+              href={kpExportEndpoint.exportUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" /> Open KP My Health Manager
+            </a>
+          </div>
+        )}
 
         {/* Error */}
         {discoverError && (
