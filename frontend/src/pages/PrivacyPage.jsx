@@ -79,7 +79,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">9. Contact</h2>
-            <p>For privacy questions or concerns: <a href="mailto:privacy@clinquilt.com" className="text-blue-600 hover:underline">privacy@clinquilt.com</a></p>
+            <p>For privacy questions or concerns: <a href="mailto:kalyanram2006@gmail.com" className="text-blue-600 hover:underline">kalyanram2006@gmail.com</a></p>
           </section>
 
         </div>

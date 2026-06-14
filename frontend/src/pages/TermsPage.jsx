@@ -66,7 +66,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">10. Contact</h2>
-            <p>For questions about these Terms, contact us at: <a href="mailto:support@clinquilt.com" className="text-blue-600 hover:underline">support@clinquilt.com</a></p>
+            <p>For questions about these Terms, contact us at: <a href="mailto:kalyanram2006@gmail.com" className="text-blue-600 hover:underline">kalyanram2006@gmail.com</a></p>
           </section>
 
         </div>
