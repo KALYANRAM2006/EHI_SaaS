@@ -120,7 +120,6 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/200/api/FHIR/R4',
     scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
-  },
   {
     id: 'cleveland-clinic',
     name: 'Cleveland Clinic',
