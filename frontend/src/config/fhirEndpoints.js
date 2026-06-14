@@ -32,7 +32,8 @@ export const FHIR_ENDPOINTS = [
     fhirBase: 'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4',
     authUrl: 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize',
     tokenUrl: 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token',
-    // Uses VITE_FHIR_CLIENT_ID_NONPROD (your registered non-production client ID)
+    // ClinQuilt registered non-production client ID from open.epic.com
+    defaultClientId: 'ca1294a3-a413-4d0e-a293-d48cbf74e326',
     scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
   },
 
