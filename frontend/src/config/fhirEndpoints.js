@@ -117,7 +117,7 @@ export const FHIR_ENDPOINTS = [
     state: 'CA (North)',
     logo: '🏥',
     category: 'health-system',
-    fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/312/api/FHIR/R4',
+    fhirBase: 'https://fhir.kp.org/service/ptnt_care/EpicEdiFhirRoutingSvc/v2014/esb-envlbl/326/api/FHIR/R4',
     authUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/326/oauth2/authorize',
     tokenUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/326/oauth2/token',
     scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read patient/Procedure.read patient/DiagnosticReport.read patient/Immunization.read patient/DocumentReference.read',
