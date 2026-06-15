@@ -160,7 +160,7 @@ export default function Dashboard() {
       const meta = CATEGORY_META[key] || { ...defaultMeta, label: key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()) }
       // Smart preview: show first 2 items with best available name
       const preview = items.slice(0, 2).map(item => {
-        const name = item.name || item.allergen || item.component || item.visitType || item.orderType || item.type || JSON.stringify(item).slice(0, 40)
+        const name = item.name || item.dxName || item.allergen || item.component || item.visitType || item.orderType || item.type || JSON.stringify(item).slice(0, 40)
         const detail = item.value || item.dose || item.dosage || item.reaction || item.date || item.onset || item.contactDate || ''
         return detail ? `${name} — ${detail}` : name
       })
@@ -1619,7 +1619,7 @@ export default function Dashboard() {
                   </div>
                   <div className="p-6">
                     <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={(stats.conditions || []).map(c => ({ name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name, severity: c.severity === 'Moderate' ? 2 : c.severity === 'Mild' ? 1 : 3 }))}>
+                      <BarChart data={(stats.conditions || []).map(c => ({ name: (c.name || c.dxName || 'Unknown').substring(0, 20) + ((c.name || c.dxName || '').length > 20 ? '...' : ''), severity: c.severity === 'Moderate' ? 2 : c.severity === 'Mild' ? 1 : 3 }))}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" height={60} />
                         <YAxis />
