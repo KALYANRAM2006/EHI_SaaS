@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "2052f5eb-ae6d-4ff4-ba06-e1c8477be10d"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.kalyanram2026.clinquiltfrontend",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
