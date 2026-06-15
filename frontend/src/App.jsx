@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import FHIRCallback from './pages/FHIRCallback'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
+import ProviderDirectory from './pages/ProviderDirectory'
 import { DataProvider, useData } from './context/DataContext'
 import { isDemo, isDemoExpired } from './config/demo'
 import DemoExpiredGate from './components/DemoExpiredGate'
@@ -53,6 +54,7 @@ function AppContent() {
         <Route path="/fhir-callback" element={<FHIRCallback />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/provider-directory" element={<ProviderDirectory />} />
       </Routes>
 
       {/* Tour and demo UI at app level so it spans across pages */}

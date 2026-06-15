@@ -404,6 +404,14 @@ export default function Dashboard() {
                   <p className="hidden sm:block text-xs text-gray-500 -mt-1">Dashboard</p>
                 </div>
               </div>
+              <button
+                onClick={() => navigate('/provider-directory')}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+                title="KP Provider Directory & Formulary"
+              >
+                <Stethoscope className="w-3.5 h-3.5" />
+                KP Providers
+              </button>
             </div>
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               <PrivacyBadge onClick={() => setPrivacyOpen(true)} />
