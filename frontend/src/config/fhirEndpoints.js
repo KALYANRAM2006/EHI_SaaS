@@ -38,6 +38,42 @@ export const FHIR_ENDPOINTS = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // SMART HEALTH IT SANDBOX — open, no registration, many test patients
+  // Use this to simulate a second health system connection for testing.
+  // Test patients: https://launch.smarthealthit.org (pick any patient)
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: 'smarthealthit-sandbox',
+    name: 'SMART Health IT Sandbox',
+    system: 'SMART Health IT',
+    state: 'N/A',
+    logo: '🧪',
+    category: 'sandbox',
+    fhirBase: 'https://launch.smarthealthit.org/v/r4/fhir',
+    authUrl: 'https://launch.smarthealthit.org/v/r4/auth/authorize',
+    tokenUrl: 'https://launch.smarthealthit.org/v/r4/auth/token',
+    defaultClientId: 'whatever',
+    scopes: 'openid fhirUser patient/*.read launch/patient',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CERNER (ORACLE HEALTH) SANDBOX — different EHR vendor for multi-source testing
+  // Register at https://code.cerner.com to get a client ID
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: 'cerner-sandbox',
+    name: 'Cerner / Oracle Health Sandbox',
+    system: 'Cerner',
+    state: 'N/A',
+    logo: '🧪',
+    category: 'sandbox',
+    fhirBase: 'https://fhir-myrecord.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d',
+    authUrl: 'https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/protocols/oauth2/profiles/smart-v1/personas/patient/authorize',
+    tokenUrl: 'https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/protocols/oauth2/profiles/smart-v1/personas/patient/token',
+    scopes: 'openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read patient/MedicationRequest.read patient/AllergyIntolerance.read patient/Encounter.read',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // KP PATIENT ACCESS API SANDBOX (CMS / EOB claims data — confidential client)
   // Auth is handled via /api/kp-token Azure Function (secret never in browser).
   // Token URL is TBD — update KP_SANDBOX_TOKEN_URL env var once known.
