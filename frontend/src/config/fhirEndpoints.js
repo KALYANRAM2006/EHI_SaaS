@@ -263,9 +263,9 @@ export const FHIR_ENDPOINTS = [
     state: 'CA',
     logo: '🏥',
     category: 'health-system',
-    fhirBase: 'https://mycedars.cedars-sinai.org/MyChart/api/FHIR/R4',
-    authUrl: 'https://mycedars.cedars-sinai.org/MyChart/oauth2/authorize',
-    tokenUrl: 'https://mycedars.cedars-sinai.org/MyChart/oauth2/token',
+    fhirBase: 'https://cslinkmobile.csmc.edu/fhirproxy/api/FHIR/R4',
+    authUrl: 'https://cslinkmobile.csmc.edu/fhirproxy/oauth2/authorize',
+    tokenUrl: 'https://cslinkmobile.csmc.edu/fhirproxy/oauth2/token',
     scopes: 'openid fhirUser patient/*.read',
   },
   {
