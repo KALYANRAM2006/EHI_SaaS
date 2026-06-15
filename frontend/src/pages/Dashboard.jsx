@@ -73,6 +73,7 @@ export default function Dashboard() {
   const [explorerSearch, setExplorerSearch] = useState('')
   const [expandedExplorer, setExpandedExplorer] = useState({ patient: true })
   const [recordsCategory, setRecordsCategory] = useState(null)
+  const [hideIncomplete, setHideIncomplete] = useState(true)
   const [privacyOpen, setPrivacyOpen] = useState(false)
   const [schemaDescriptions, setSchemaDescriptions] = useState(null)
   const [generatingDescriptions, setGeneratingDescriptions] = useState(false)
@@ -1085,6 +1086,34 @@ export default function Dashboard() {
             .trim()
 
           const items = effectiveCat ? (stats[effectiveCat] || []) : []
+
+          // ── Valid record filter ────────────────────────────────────────────
+          const isValidRecord = (item, cat) => {
+            if (!item || typeof item !== 'object') return false
+            switch (cat) {
+              case 'conditions':
+                return !!(item.dxName || item.dx || item.icd10 || item.snomedCode)
+              case 'medications':
+                return !!(item.name && item.name !== 'Unknown medication')
+              case 'allergies':
+                return !!(item.allergen && item.allergen !== 'Unknown allergen')
+              case 'encounters':
+                return !!(item.contactDate || (item.visitType && item.visitType !== 'Encounter'))
+              case 'labs':
+                return !!(item.component && item.value !== undefined && item.value !== '')
+              case 'procedures':
+                return !!(item.name || item.orderType)
+              case 'immunizations':
+                return !!(item.name || item.cvx)
+              default: {
+                // Generic: at least one non-empty, non-id field
+                const skipKeys = new Set(['id', 'source', 'patId'])
+                return Object.entries(item).some(([k, v]) => !skipKeys.has(k) && v !== null && v !== undefined && v !== '')
+              }
+            }
+          }
+
+          const displayItems = hideIncomplete ? items.filter(item => isValidRecord(item, effectiveCat)) : items
           const columns = getColumns(items)
           const meta = CATEGORY_META[effectiveCat] || { ...defaultMeta, label: (effectiveCat || 'Records').replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()) }
           const CatIcon = meta.icon
@@ -1120,18 +1149,29 @@ export default function Dashboard() {
             </div>
 
             {/* Category header */}
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 bg-gradient-to-br ${meta.gradient} rounded-xl flex items-center justify-center shadow-lg`}>
-                <CatIcon className="w-5 h-5 text-white" />
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 bg-gradient-to-br ${meta.gradient} rounded-xl flex items-center justify-center shadow-lg`}>
+                  <CatIcon className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">{meta.label}</h2>
+                  <p className="text-sm text-gray-500">{displayItems.length} record{displayItems.length !== 1 ? 's' : ''} found{hideIncomplete && displayItems.length < items.length ? ` (${items.length - displayItems.length} incomplete hidden)` : ''}</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">{meta.label}</h2>
-                <p className="text-sm text-gray-500">{items.length} record{items.length !== 1 ? 's' : ''} found</p>
-              </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-600 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={hideIncomplete}
+                  onChange={e => setHideIncomplete(e.target.checked)}
+                  className="w-4 h-4 rounded accent-blue-600"
+                />
+                Hide incomplete records
+              </label>
             </div>
 
             {/* Records table */}
-            {items.length > 0 ? (
+            {displayItems.length > 0 ? (
               <div className="bg-white rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1144,7 +1184,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item, i) => (
+                      {displayItems.map((item, i) => (
                         <tr key={i} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
                           <td className="px-4 py-3 text-gray-400 text-xs font-mono">{i + 1}</td>
                           {columns.map(col => {
