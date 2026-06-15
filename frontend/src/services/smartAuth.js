@@ -103,6 +103,8 @@ export async function initiateSmartAuth(endpoint, clientId) {
     clientId,
     redirectUri,
     tokenUrl: smartConfig.token_endpoint,
+    useServerProxy: endpoint.useServerProxy || false,
+    proxyEnv: endpoint.proxyEnv || 'sandbox',
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(smartState))
 
@@ -155,24 +157,42 @@ export async function handleSmartCallback(searchParams) {
   }
 
   // Exchange authorization code for access token
-  const tokenRes = await fetch(smartState.tokenUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: smartState.redirectUri,
-      client_id: smartState.clientId,
-      code_verifier: smartState.codeVerifier,
-    }),
-  })
-
-  if (!tokenRes.ok) {
-    const body = await tokenRes.text()
-    throw new Error(`Token exchange failed (${tokenRes.status}): ${body}`)
+  // For confidential clients (useServerProxy), route through Azure Function
+  // so the client secret never touches the browser.
+  let tokenData
+  if (smartState.useServerProxy) {
+    const proxyRes = await fetch('/api/kp-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        redirect_uri: smartState.redirectUri,
+        env: smartState.proxyEnv || 'sandbox',
+      }),
+    })
+    if (!proxyRes.ok) {
+      const body = await proxyRes.text()
+      throw new Error(`KP token exchange failed (${proxyRes.status}): ${body}`)
+    }
+    tokenData = await proxyRes.json()
+  } else {
+    const tokenRes = await fetch(smartState.tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: smartState.redirectUri,
+        client_id: smartState.clientId,
+        code_verifier: smartState.codeVerifier,
+      }),
+    })
+    if (!tokenRes.ok) {
+      const body = await tokenRes.text()
+      throw new Error(`Token exchange failed (${tokenRes.status}): ${body}`)
+    }
+    tokenData = await tokenRes.json()
   }
-
-  const tokenData = await tokenRes.json()
   localStorage.removeItem(STORAGE_KEY) // clean up
 
   return {

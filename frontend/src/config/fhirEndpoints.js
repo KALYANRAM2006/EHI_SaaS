@@ -38,6 +38,30 @@ export const FHIR_ENDPOINTS = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // KP PATIENT ACCESS API SANDBOX (CMS / EOB claims data — confidential client)
+  // Auth is handled via /api/kp-token Azure Function (secret never in browser).
+  // Token URL is TBD — update KP_SANDBOX_TOKEN_URL env var once known.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: 'kp-cms-sandbox',
+    name: 'Kaiser Permanente (CMS Sandbox)',
+    system: 'Kaiser Permanente',
+    state: 'All regions',
+    logo: '🧪',
+    category: 'sandbox',
+    fhirBase: 'https://kpx-service-bus.kp.org/service/cdo/siae/healthplankpxv1rc/FHIR/api',
+    // authUrl is discovered from KP dev portal — set to KPPolarisPortal as placeholder
+    // until KP provides their CMS API auth URL
+    authUrl: 'https://fhir.kp.org/KPPolarisPortal/esb-envlbl/326/oauth2/authorize',
+    tokenUrl: '__KP_SANDBOX_TOKEN_URL__', // replaced by Azure Function
+    defaultClientId: 'kpx_cms_sb_da71daf9-5976-4e56-a35e-45f386dcb4c5',
+    // Token exchange is done server-side via /api/kp-token
+    useServerProxy: true,
+    proxyEnv: 'sandbox',
+    scopes: 'openid fhirUser patient/Patient.read patient/ExplanationOfBenefit.read patient/Coverage.read',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // TOP US HEALTH SYSTEMS — EPIC
   // ─────────────────────────────────────────────────────────────────────────
   {

@@ -1,0 +1,11 @@
+{
+  "name": "clinquilt-api",
+  "version": "1.0.0",
+  "description": "Azure Functions API for ClinQuilt — handles confidential OAuth token exchange",
+  "scripts": {
+    "start": "func start"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
