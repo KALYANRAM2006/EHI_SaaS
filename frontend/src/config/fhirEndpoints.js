@@ -264,6 +264,8 @@ export const FHIR_ENDPOINTS = [
     logo: '🏥',
     category: 'health-system',
     fhirBase: 'https://mycedars.cedars-sinai.org/MyChart/api/FHIR/R4',
+    authUrl: 'https://mycedars.cedars-sinai.org/MyChart/oauth2/authorize',
+    tokenUrl: 'https://mycedars.cedars-sinai.org/MyChart/oauth2/token',
     scopes: 'openid fhirUser patient/*.read',
   },
   {
