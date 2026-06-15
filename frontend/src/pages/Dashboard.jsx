@@ -159,9 +159,26 @@ export default function Dashboard() {
     return detected.map(key => {
       const items = stats[key]
       const meta = CATEGORY_META[key] || { ...defaultMeta, label: key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()) }
-      // Smart preview: show first 2 items with best available name
-      const preview = items.slice(0, 2).map(item => {
-        const name = item.name || item.dxName || item.allergen || item.component || item.visitType || item.orderType || item.type || JSON.stringify(item).slice(0, 40)
+
+      // Helper: check if a record has meaningful content
+      const hasContent = (item) => {
+        const name = (item.name || '').trim()
+        const dxName = (item.dxName || '').trim()
+        const allergen = (item.allergen || '').trim()
+        const component = (item.component || '').trim()
+        const visitType = (item.visitType || '').trim()
+        const primary = name || dxName || allergen || component || visitType || (item.orderType || '').trim() || (item.type || '').trim()
+        if (!primary) return false
+        if (name === 'Unknown medication') return false
+        if (allergen === 'Unknown allergen') return false
+        if (visitType === 'Encounter' && !item.contactDate) return false
+        return true
+      }
+
+      // Smart preview: show first 2 valid items with best available name
+      const validItems = items.filter(hasContent)
+      const preview = validItems.slice(0, 2).map(item => {
+        const name = (item.name || item.dxName || item.allergen || item.component || item.visitType || item.orderType || item.type || '').trim()
         const detail = item.value || item.dose || item.dosage || item.reaction || item.date || item.onset || item.contactDate || ''
         return detail ? `${name} — ${detail}` : name
       })
