@@ -28,6 +28,15 @@ export default function FHIRConnect({ onClose }) {
     setDiscoverError('')
     setKpExportEndpoint(null)
 
+    // KP endpoints: their OAuth/Start login page returns 404 for external apps.
+    // Show the manual export panel immediately instead of a broken redirect.
+    if (endpoint.exportUrl) {
+      setConnecting(false)
+      setSelected(null)
+      setKpExportEndpoint(endpoint)
+      return
+    }
+
     try {
       await discoverSmartConfig(endpoint)
       const cid = clientId || getClientId(endpoint)
@@ -36,7 +45,6 @@ export default function FHIRConnect({ onClose }) {
       setDiscoverError(err.message)
       setConnecting(false)
       setSelected(null)
-      if (endpoint.exportUrl) setKpExportEndpoint(endpoint)
     }
   }, [clientId])
 
@@ -103,8 +111,8 @@ export default function FHIRConnect({ onClose }) {
               <button onClick={() => setKpExportEndpoint(null)} className="text-blue-400 hover:text-blue-600 text-xs ml-2">✕</button>
             </div>
             <p className="text-xs text-blue-800 leading-relaxed mb-3">
-              Kaiser Permanente hasn't yet approved third-party FHIR apps — sign-in works but won't redirect back.
-              Instead, export your FHIR record directly from KP:
+              Kaiser Permanente's FHIR login page currently returns a "Page Not Found" error for external apps — their standalone OAuth flow is not yet open to third parties.
+              You can still get your full health record by exporting directly from KP:
             </p>
             <ol className="text-xs text-blue-800 space-y-1.5 mb-3 pl-4 list-decimal">
               <li>Go to <strong>healthy.kaiserpermanente.org</strong> and sign in</li>
